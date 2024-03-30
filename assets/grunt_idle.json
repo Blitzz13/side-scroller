@@ -1,0 +1,135 @@
+{
+  "frames": {
+    "grunt_down.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 26,
+        "h": 53
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 26,
+        "h": 53
+      },
+      "sourceSize": {
+        "w": 26,
+        "h": 53
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "grunt_diagonal_down.png": {
+      "frame": {
+        "x": 0,
+        "y": 53,
+        "w": 42,
+        "h": 52
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 42,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 42,
+        "h": 52
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "grunt_left.png": {
+      "frame": {
+        "x": 26,
+        "y": 0,
+        "w": 50,
+        "h": 51
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 50,
+        "h": 51
+      },
+      "sourceSize": {
+        "w": 50,
+        "h": 51
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "grunt_diagonal_up.png": {
+      "frame": {
+        "x": 0,
+        "y": 105,
+        "w": 38,
+        "h": 50
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 38,
+        "h": 50
+      },
+      "sourceSize": {
+        "w": 38,
+        "h": 50
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "grunt_up.png": {
+      "frame": {
+        "x": 0,
+        "y": 155,
+        "w": 26,
+        "h": 49
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 26,
+        "h": 49
+      },
+      "sourceSize": {
+        "w": 26,
+        "h": 49
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "grunt_idle.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 76,
+      "h": 204
+    },
+    "scale": 1
+  }
+}

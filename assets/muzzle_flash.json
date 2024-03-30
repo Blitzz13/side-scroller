@@ -1,0 +1,159 @@
+{
+  "frames": {
+    "m_5.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 239,
+        "h": 216
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 9,
+        "y": 20,
+        "w": 239,
+        "h": 216
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "m_13.png": {
+      "frame": {
+        "x": 0,
+        "y": 216,
+        "w": 240,
+        "h": 208
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 8,
+        "y": 24,
+        "w": 240,
+        "h": 208
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "m_10.png": {
+      "frame": {
+        "x": 240,
+        "y": 0,
+        "w": 202,
+        "h": 240
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 27,
+        "y": 8,
+        "w": 202,
+        "h": 240
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "m_14.png": {
+      "frame": {
+        "x": 240,
+        "y": 240,
+        "w": 240,
+        "h": 174
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 8,
+        "y": 41,
+        "w": 240,
+        "h": 174
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "m_9.png": {
+      "frame": {
+        "x": 0,
+        "y": 424,
+        "w": 238,
+        "h": 66
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 8,
+        "y": 95,
+        "w": 238,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "m_15.png": {
+      "frame": {
+        "x": 240,
+        "y": 240,
+        "w": 240,
+        "h": 174
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 8,
+        "y": 41,
+        "w": 240,
+        "h": 174
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "muzzle_flash.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 442,
+      "h": 490
+    },
+    "scale": 1
+  }
+}
