@@ -5,6 +5,7 @@ import { MainMenu } from "./scenes/MainMenu";
 import { gameConfig } from "./configs/GameConfig";
 import { BitmapFont } from "pixi.js";
 import { BaseScene } from "./scenes/BaseScene";
+import { EndGame } from "./scenes/EndGame";
 import { Scene } from "./Scene";
 
 const app = new Application<HTMLCanvasElement>({
@@ -34,6 +35,9 @@ function changeScene(scene: Scene): void {
     case Scene.MainMenu:
       currentScene = new MainMenu(app.stage);
       break;
+    case Scene.EndGame:
+      currentScene = new EndGame(app.stage);
+      break;
     default:
       break;
   }
@@ -44,6 +48,7 @@ function registerFonts(): void {
   BitmapFont.from("arial32", {
     fontFamily: "Arial",
     fontSize: 32,
+    lineHeight: 33,
     fill: 0xffffff,
   })
 }

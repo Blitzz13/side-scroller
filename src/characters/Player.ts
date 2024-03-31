@@ -2,7 +2,7 @@ import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
 import { IBullet } from "./interfaces/IBullet";
 import { IEntity } from "./interfaces/IEntity";
 import { gameConfig } from "../configs/GameConfig";
-import { GameEvent } from "../GameEvent";
+import { GameEvent } from "../enums/GameEvent";
 
 export class Player extends Container implements IEntity{
     private _dirextionX: -1 | 0 | 1 = 0;
@@ -16,10 +16,11 @@ export class Player extends Container implements IEntity{
     private _bullets: IBullet[];
     private _shootingTimer;
     private _health;
+    
     constructor(stage: Container) {
         super();
         this._stage = stage;
-        this._health = 100;
+        this._health = 10;
         this._bullets = [];
         this._shootingTimer = 0;
 

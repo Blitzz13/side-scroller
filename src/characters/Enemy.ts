@@ -1,10 +1,11 @@
 import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
-import { GameEvent } from "../GameEvent";
+import { GameEvent } from "../enums/GameEvent";
 import { IEnemyConfig } from "./interfaces/IEnemyConfig";
 import { IBullet } from "./interfaces/IBullet";
 import { gameConfig } from "../configs/GameConfig";
 import { IEntity } from "./interfaces/IEntity";
-import { DeathType } from "../DeathType";
+import { DeathType } from "../enums/DeathType";
+import { EnemyType } from "../enums/EnemyType";
 
 export class Enemy extends Container implements IEntity {
     private _sprite: Sprite;
@@ -19,9 +20,11 @@ export class Enemy extends Container implements IEntity {
     private _meleeDamage: number;
     private _timeSinceLastShot: number;
     private _isDead: boolean;
+    private _type: EnemyType;
 
     constructor(target: Container, stage: Container, config: IEnemyConfig) {
         super();
+        this._type = config.type;
         this._isShooting = true;
         this._isDead = false;
         this._timeSinceLastShot = 0;
@@ -64,6 +67,10 @@ export class Enemy extends Container implements IEntity {
 
     public get damage(): number {
         return this._damage;
+    }
+
+    public get type(): EnemyType {
+        return this._type;
     }
 
     public get meleeDamage(): number {
