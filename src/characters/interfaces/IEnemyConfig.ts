@@ -1,7 +1,9 @@
 import { Point } from "pixi.js";
-import { DeathType } from "../../DeathType";
+import { DeathType } from "../../enums/DeathType";
+import { EnemyType } from "../../enums/EnemyType";
 
 export interface IEnemyConfig {
+    type: EnemyType;
     speed: number;
     damage: number;
     meleeDamage: number;

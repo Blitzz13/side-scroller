@@ -5,8 +5,10 @@ import { gruntConfig } from "../configs/EnemyConfigs";
 import { Environment } from "../Environment";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
-import { GameEvent } from "../GameEvent";
+import { GameEvent } from "../enums/GameEvent";
 import { Scene } from "../Scene";
+import { EnemyType } from "../enums/EnemyType";
+import { saveScore, retrieveScore } from "../Utils";
 
 export class EndlessScene extends BaseScene {
     private _player: Player;
@@ -14,10 +16,12 @@ export class EndlessScene extends BaseScene {
     private _corridor: Environment;
     private _enemies: Enemy[];
     private _spawnInterval: NodeJS.Timeout;
+    private _score: Map<EnemyType, number>;
 
     constructor(stage: Container) {
         super(stage)
         this._enemies = [];
+        this._score = new Map();
 
         this._background = new Environment([
             "frame_0.png",
@@ -40,6 +44,22 @@ export class EndlessScene extends BaseScene {
         this._corridor.startScrolling(1.2);
 
         this._player = new Player(this);
+
+        this._player.on(GameEvent.PLAYER_DIED, () => {
+            for (const key in EnemyType) {
+                const type = EnemyType[key as keyof typeof EnemyType];
+                const savedScore = retrieveScore("highScore")?.get(type) || 0;
+                const currentScore = this._score.get(type) || 0;
+                if (currentScore > savedScore) {
+                    saveScore("highScore",this._score);
+                }
+
+                saveScore("currentScore", this._score);
+            }
+
+            this.emit(Scene.Change, Scene.EndGame);
+        });
+
         this.addChild(this._player);
 
         this._spawnInterval = this.spawnEnemies();
@@ -94,8 +114,8 @@ export class EndlessScene extends BaseScene {
                 if (!enemy.destroyed && pBullet.sprite.getBounds().intersects(enemy.getBounds())) {
                     enemy.kill();
                     this._player.bullets.splice(this._player.bullets.indexOf(pBullet), 1);
-                    this.removeChild(pBullet.sprite);
-                    // pBullet.sprite.destroy();
+                    pBullet.sprite.destroy();
+                    this.setKill(enemy);
                     return;
                 }
             }
@@ -111,6 +131,8 @@ export class EndlessScene extends BaseScene {
             if (enemy.getBounds().intersects(this._player.getBounds())) {
                 this._player.takeDamage(enemy.meleeDamage);
                 enemy.kill();
+                this.setKill(enemy);
+                return;
             }
         }
     }
@@ -136,6 +158,15 @@ export class EndlessScene extends BaseScene {
         Ticker.shared.remove(this.checkForPlayerKills, this);
         Ticker.shared.remove(this.checkIfEnemyOutOfBounds, this);
         Ticker.shared.remove(this.checkForEnemyPlayerCollision, this);
+    }
+
+    private setKill(enemy: Enemy): void {
+        if (!this._score.has(enemy.type)) {
+            this._score.set(enemy.type, 1);
+        } else {
+            const currentValue = this._score.get(enemy.type) as number;
+            this._score.set(enemy.type, currentValue + 1);
+        }
     }
 }
 

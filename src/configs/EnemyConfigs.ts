@@ -1,8 +1,10 @@
 import { Point } from "pixi.js";
 import { IEnemyConfig } from "../characters/interfaces/IEnemyConfig";
-import { DeathType } from "../DeathType";
+import { DeathType } from "../enums/DeathType";
+import { EnemyType } from "../enums/EnemyType";
 
 export const gruntConfig: IEnemyConfig = {
+    type: EnemyType.GRUNT,
     rateOfFire: 100,
     damage: 1,
     meleeDamage: 3,
