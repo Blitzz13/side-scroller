@@ -1,8 +1,10 @@
 import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
+import { IEntity } from "./characters/interfaces/IEntity";
 
-export class Environment extends Container {
+export class Environment extends Container implements IEntity {
     // private bg!: AnimatedSprite;
-    private instances: Container[] = [];
+    private _instances: Container[] = [];
+    private _speed: number = 0;
 
     constructor(texture: string | string[], numEnvironments: number) {
         super();
@@ -20,31 +22,40 @@ export class Environment extends Container {
                 animatedSprite.play();
                 animatedSprite.x = i * animatedSprite.width;
                 this.addChild(animatedSprite);
-                this.instances.push(animatedSprite);
+                this._instances.push(animatedSprite);
             }
         } else {
             for (let i = 0; i < numEnvironments; i++) {
                 const sprite = Sprite.from(texture);
                 sprite.x = i * sprite.width;
                 this.addChild(sprite);
-                this.instances.push(sprite);
+                this._instances.push(sprite);
             }
         }
     }
 
+    public dispose(): void {
+        Ticker.shared.remove(this.moveSprite, this);
+        this.destroy({children: true});
+    }
+
     public startScrolling(speed: number): void {
-            Ticker.shared.add((dt: number) => {
-                for (const env of this.instances) {
-                    env.x -= speed * dt;
-    
-                    if (env.x + env.width <= 0) {
-                        let farthestX = 0;
-                        this.instances.forEach(e => {
-                            farthestX = Math.max(farthestX, e.x + e.width);
-                        });
-                        env.x = farthestX - 10;
-                    }
-                }
-            });
+        this._speed = speed;
+        Ticker.shared.add(this.moveSprite, this);
+    }
+
+    private moveSprite(dt: number): void {
+        for (const env of this._instances) {
+            env.x -= this._speed * dt;
+
+            if (env.x + env.width <= 0) {
+                let farthestX = 0;
+                this._instances.forEach(e => {
+                    farthestX = Math.max(farthestX, e.x + e.width);
+                });
+                env.x = farthestX - 10;
+            }
+        }
+
     }
 }

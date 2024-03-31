@@ -1,0 +1,135 @@
+{
+  "frames": {
+    "doomguy_death_4.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 102,
+        "h": 28
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 42,
+        "w": 102,
+        "h": 28
+      },
+      "sourceSize": {
+        "w": 102,
+        "h": 70
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "doomguy_death_5.png": {
+      "frame": {
+        "x": 102,
+        "y": 0,
+        "w": 102,
+        "h": 28
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 41,
+        "w": 102,
+        "h": 28
+      },
+      "sourceSize": {
+        "w": 102,
+        "h": 70
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "doomguy_death_1.png": {
+      "frame": {
+        "x": 204,
+        "y": 0,
+        "w": 87,
+        "h": 99
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 87,
+        "h": 99
+      },
+      "sourceSize": {
+        "w": 87,
+        "h": 99
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "doomguy_death_2.png": {
+      "frame": {
+        "x": 0,
+        "y": 28,
+        "w": 87,
+        "h": 98
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 87,
+        "h": 98
+      },
+      "sourceSize": {
+        "w": 87,
+        "h": 98
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "doomguy_death_3.png": {
+      "frame": {
+        "x": 98,
+        "y": 28,
+        "w": 71,
+        "h": 85
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 71,
+        "h": 85
+      },
+      "sourceSize": {
+        "w": 71,
+        "h": 85
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "doomguy_death.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 303,
+      "h": 115
+    },
+    "scale": 1
+  }
+}

@@ -1,8 +1,11 @@
 import { Point } from "pixi.js";
+import { DeathType } from "../../DeathType";
 
 export interface IEnemyConfig {
     speed: number;
-    rateOfFireMs: number;
+    damage: number;
+    meleeDamage: number;
+    rateOfFire: number;
     characterTextures: {
         up: string;
         down: string;
@@ -14,4 +17,9 @@ export interface IEnemyConfig {
         scale: Point;
         anchor: Point;
     };
+    death?: {
+        types: Map<DeathType, string[]>;
+        animationSpeed: number;
+        loop: boolean;
+    }
 }
