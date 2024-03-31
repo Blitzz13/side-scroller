@@ -6,7 +6,7 @@ import { gameConfig } from "./configs/GameConfig";
 import { BitmapFont } from "pixi.js";
 import { BaseScene } from "./scenes/BaseScene";
 import { EndGame } from "./scenes/EndGame";
-import { Scene } from "./Scene";
+import { Scene } from "./enums/Scene";
 import { loadGameAssets } from "./Utils";
 
 const app = new Application<HTMLCanvasElement>({

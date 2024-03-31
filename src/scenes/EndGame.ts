@@ -1,8 +1,8 @@
 import { BitmapText, Container, Graphics, RoundedRectangle, Sprite } from "pixi.js";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
-import { Scene } from "../Scene";
-import { Button } from "../Button";
+import { Scene } from "../enums/Scene";
+import { Button } from "../misc/Button";
 import { retrieveScore } from "../Utils";
 import { EnemyType } from "../enums/EnemyType";
 

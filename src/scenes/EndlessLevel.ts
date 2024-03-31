@@ -2,11 +2,11 @@ import { Container, Ticker } from "pixi.js";
 import { Player } from "../characters/Player";
 import { Enemy } from "../characters/Enemy";
 import { gruntConfig, cacodemonConfig } from "../configs/EnemyConfigs";
-import { Environment } from "../Environment";
+import { Environment } from "../misc/Environment";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
 import { GameEvent } from "../enums/GameEvent";
-import { Scene } from "../Scene";
+import { Scene } from "../enums/Scene";
 import { EnemyType } from "../enums/EnemyType";
 import { saveScore, retrieveScore } from "../Utils";
 

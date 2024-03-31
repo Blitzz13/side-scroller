@@ -1,8 +1,8 @@
 import { AnimatedSprite, BitmapText, Container, Graphics, RoundedRectangle, Texture } from "pixi.js";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
-import { Scene } from "../Scene";
-import { Button } from "../Button";
+import { Scene } from "../enums/Scene";
+import { Button } from "../misc/Button";
 
 export class MainMenu extends BaseScene {
     private _playButton: Button;

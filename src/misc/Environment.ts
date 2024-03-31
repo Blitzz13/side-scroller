@@ -1,5 +1,5 @@
 import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
-import { IEntity } from "./characters/interfaces/IEntity";
+import { IEntity } from "../characters/interfaces/IEntity";
 
 export class Environment extends Container implements IEntity {
     // private bg!: AnimatedSprite;
