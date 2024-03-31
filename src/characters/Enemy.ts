@@ -21,10 +21,12 @@ export class Enemy extends Container implements IEntity {
     private _timeSinceLastShot: number;
     private _isDead: boolean;
     private _type: EnemyType;
+    private _health: number;
 
     constructor(target: Container, stage: Container, config: IEnemyConfig) {
         super();
         this._type = config.type;
+        this._health = config.health;
         this._isShooting = true;
         this._isDead = false;
         this._timeSinceLastShot = 0;
@@ -81,16 +83,19 @@ export class Enemy extends Container implements IEntity {
         return this._isDead;
     }
 
-    public kill(force?: boolean): void {
-        this._isDead = true;
-        this._isShooting = false;
-        if (this._deathAnimation && !force) {
-            this._sprite.visible = false;
-            this._deathAnimation.visible = true;
-            this._deathAnimation.play();
-            this._deathAnimation.onComplete = () => setTimeout(() => this.visible = false, 800);
-        } else {
-            this.visible = false;
+    public takeDamage(damage: number): void {
+        this._health -= damage;
+        if (this._health <= 0) {
+            this._isDead = true;
+            this._isShooting = false;
+            if (this._deathAnimation) {
+                this._sprite.visible = false;
+                this._deathAnimation.visible = true;
+                this._deathAnimation.play();
+                this._deathAnimation.onComplete = () => setTimeout(() => this.visible = false, 800);
+            } else {
+                this.visible = false;
+            }
         }
     }
 
@@ -153,7 +158,7 @@ export class Enemy extends Container implements IEntity {
         shot.anchor.copyFrom(this._config.projectile.anchor);
         shot.rotation = angle;
         shot.scale.copyFrom(this._config.projectile.scale);
-        shot.position.set(this.x, this.y);
+        shot.position.set(this.x + this._config.projectile.startPosOffset.x, this.y + this._config.projectile.startPosOffset.y);
         this._stage.addChild(shot);
 
         // Calculate velocity components based on the angle

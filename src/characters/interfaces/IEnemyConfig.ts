@@ -3,6 +3,7 @@ import { DeathType } from "../../enums/DeathType";
 import { EnemyType } from "../../enums/EnemyType";
 
 export interface IEnemyConfig {
+    health: number;
     type: EnemyType;
     speed: number;
     damage: number;
@@ -18,6 +19,7 @@ export interface IEnemyConfig {
         texture: string;
         scale: Point;
         anchor: Point;
+        startPosOffset: Point;
     };
     death?: {
         types: Map<DeathType, string[]>;

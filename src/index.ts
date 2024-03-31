@@ -7,6 +7,7 @@ import { BitmapFont } from "pixi.js";
 import { BaseScene } from "./scenes/BaseScene";
 import { EndGame } from "./scenes/EndGame";
 import { Scene } from "./Scene";
+import { loadGameAssets } from "./Utils";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
@@ -53,74 +54,104 @@ function registerFonts(): void {
   })
 }
 
-async function loadGameAssets(): Promise<void> {
-  const manifest: AssetsManifest = {
-    bundles: [
-      {
-        name: "environment",
-        assets: [
-          {
-            name: "corridor",
-            srcs: "./assets/map2.png",
-          },
-          {
-            name: "background_hell",
-            srcs: "./assets/backgorund_hell.json",
-          },
-        ],
-      },
-      {
-        name: "characters",
-        assets: [
-          {
-            name: "doomguy",
-            srcs: "./assets/doomguy_walking.json",
-          },
-          {
-            name: "doomguy_death",
-            srcs: "./assets/doomguy_death.json",
-          },
-          {
-            name: "grunt_idle",
-            srcs: "./assets/grunt_idle.json",
-          },
-          {
-            name: "grunt_death",
-            srcs: "./assets/grunt_death.json",
-          },
-        ],
-      },
-      {
-        name: "objects",
-        assets: [
-          {
-            name: "bullet",
-            srcs: "./assets/bullet.png",
-          },
-          {
-            name: "muzzle",
-            srcs: "./assets/muzzle_flash.json",
-          },
-        ],
-      },
-    ],
-  };
+// async function loadGameAssets(): Promise<void> {
+//   const manifest: AssetsManifest = {
+//     bundles: [
+//       {
+//         name: "environment",
+//         assets: [
+//           {
+//             name: "corridor",
+//             srcs: "./assets/map2.png",
+//           },
+//           {
+//             name: "background_hell",
+//             srcs: "./assets/backgorund_hell.json",
+//           },
+//           {
+//             name: "main_menu_anim",
+//             srcs: "./assets/main_menu_anim.json",
+//           },
+//         ],
+//       },
+//       {
+//         name: "characters",
+//         assets: [
+//           {
+//             name: "doomguy",
+//             srcs: "./assets/doomguy_walking.json",
+//           },
+//           {
+//             name: "doomguy_death",
+//             srcs: "./assets/doomguy_death.json",
+//           },
+//           {
+//             name: "grunt_idle",
+//             srcs: "./assets/grunt_idle.json",
+//           },
+//           {
+//             name: "grunt_death",
+//             srcs: "./assets/grunt_death.json",
+//           },
+//           {
+//             name: "caocdemon",
+//             srcs: "./assets/cacodemon.json",
+//           },
+//         ],
+//       },
+//       {
+//         name: "objects",
+//         assets: [
+//           {
+//             name: "bullet",
+//             srcs: "./assets/bullet.png",
+//           },
+//           {
+//             name: "muzzle",
+//             srcs: "./assets/muzzle_flash.json",
+//           },
+//           {
+//             name: "green_ball",
+//             srcs: "./assets/green_ball.png",
+//           },
+//         ],
+//       },
+//     ],
+//   };
 
-  await Assets.init({ manifest });
-  await Assets.loadBundle(["environment", "characters", "objects"]);
-}
+//   await Assets.init({ manifest });
+//   await Assets.loadBundle(["environment", "characters", "objects"]);
+// }
 
 function resizeCanvas(): void {
-  const resize = () => {
-    let scale = 1;
+  const cleintWidth = document.documentElement.clientWidth;
+  const clientHeight = document.documentElement.clientHeight;
 
-    scale = window.innerWidth / gameConfig.width;
+  let scale = Math.min(cleintWidth / gameConfig.width, clientHeight / gameConfig.height);
 
-    app.renderer.resize(gameConfig.width * scale, gameConfig.height * scale);
-    app.stage.scale.set(scale);
-  };
+  const newWidth = Math.round(gameConfig.width * scale);
+  const newHeight = Math.round(gameConfig.height * scale);
 
-  resize();
+  app.renderer.resize(newWidth, newHeight);
+  app.stage.scale.set(scale);
 
-  window.addEventListener("resize", resize);
+  const offsetX = (cleintWidth - newWidth) / 2;
+  const offsetY = (clientHeight - newHeight) / 2;
+  app.view.style.position = "absolute";
+  app.view.style.left = `${offsetX}px`;
+  app.view.style.top = `${offsetY}px`;
 }
+
+function requestFullscreen(): void {
+  if (document.fullscreenEnabled) {
+      app.view.requestFullscreen().catch((error) => {
+          console.error('Failed to enter fullscreen:', error);
+      });
+  } else {
+      console.error('Fullscreen is not supported.');
+  }
+}
+
+resizeCanvas();
+app.view.addEventListener('click', requestFullscreen);
+window.addEventListener("resize", resizeCanvas);

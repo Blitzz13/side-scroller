@@ -1,7 +1,7 @@
 import { Container, Ticker } from "pixi.js";
 import { Player } from "../characters/Player";
 import { Enemy } from "../characters/Enemy";
-import { gruntConfig } from "../configs/EnemyConfigs";
+import { gruntConfig, cacodemonConfig } from "../configs/EnemyConfigs";
 import { Environment } from "../Environment";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
@@ -51,7 +51,7 @@ export class EndlessScene extends BaseScene {
                 const savedScore = retrieveScore("highScore")?.get(type) || 0;
                 const currentScore = this._score.get(type) || 0;
                 if (currentScore > savedScore) {
-                    saveScore("highScore",this._score);
+                    saveScore("highScore", this._score);
                 }
 
                 saveScore("currentScore", this._score);
@@ -94,12 +94,20 @@ export class EndlessScene extends BaseScene {
             for (let i = 0; i < numberOfEnemies; i++) {
                 const y = Math.floor(Math.random() * (650 - 300 + 1)) + 300;
                 const x = Math.floor(Math.random() * (2000 - gameConfig.width)) + gameConfig.width;
-                const grunt = new Enemy(this._player, this, gruntConfig);
-                grunt.x = x;
-                grunt.y = y;
-                this.addChild(grunt);
-                this._enemies.push(grunt);
-                grunt.on(GameEvent.PLAYER_HIT, () => this._player.takeDamage(grunt.damage));
+                let enemy: Enemy;
+                const num = Math.floor(Math.random() * 2) + 1;
+
+                if (num === 1) {
+                    enemy = new Enemy(this._player, this, cacodemonConfig);
+                } else {
+                    enemy = new Enemy(this._player, this, gruntConfig);
+                }
+
+                enemy.x = x;
+                enemy.y = y;
+                this.addChild(enemy);
+                this._enemies.push(enemy);
+                enemy.on(GameEvent.PLAYER_HIT, () => this._player.takeDamage(enemy.damage));
             }
         }, 2000);
     }
@@ -112,10 +120,12 @@ export class EndlessScene extends BaseScene {
                 }
 
                 if (!enemy.destroyed && pBullet.sprite.getBounds().intersects(enemy.getBounds())) {
-                    enemy.kill();
+                    enemy.takeDamage(1);
                     this._player.bullets.splice(this._player.bullets.indexOf(pBullet), 1);
                     pBullet.sprite.destroy();
-                    this.setKill(enemy);
+                    if (enemy.isDead) {
+                        this.setKill(enemy);
+                    }
                     return;
                 }
             }
@@ -130,7 +140,7 @@ export class EndlessScene extends BaseScene {
 
             if (enemy.getBounds().intersects(this._player.getBounds())) {
                 this._player.takeDamage(enemy.meleeDamage);
-                enemy.kill();
+                enemy.takeDamage(1);
                 this.setKill(enemy);
                 return;
             }

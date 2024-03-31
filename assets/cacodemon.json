@@ -1,0 +1,207 @@
+{
+  "frames": {
+    "cacodemon_death_3.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 67,
+        "h": 77
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 67,
+        "h": 77
+      },
+      "sourceSize": {
+        "w": 67,
+        "h": 77
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "cacodemon_idle_left.png": {
+      "frame": {
+        "x": 0,
+        "y": 77,
+        "w": 62,
+        "h": 75
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 62,
+        "h": 75
+      },
+      "sourceSize": {
+        "w": 62,
+        "h": 75
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "cacodemon_death_5.png": {
+      "frame": {
+        "x": 0,
+        "y": 152,
+        "w": 75,
+        "h": 49
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 28,
+        "w": 75,
+        "h": 49
+      },
+      "sourceSize": {
+        "w": 75,
+        "h": 77
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "cacodemon_idle_down.png": {
+      "frame": {
+        "x": 0,
+        "y": 227,
+        "w": 63,
+        "h": 71
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 63,
+        "h": 71
+      },
+      "sourceSize": {
+        "w": 63,
+        "h": 71
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "cacodemon_death_4.png": {
+      "frame": {
+        "x": 49,
+        "y": 152,
+        "w": 69,
+        "h": 66
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 11,
+        "w": 69,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 70,
+        "h": 77
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "cacodemon_death_1.png": {
+      "frame": {
+        "x": 62,
+        "y": 77,
+        "w": 63,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 63,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 63,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "cacodemon_death_2.png": {
+      "frame": {
+        "x": 115,
+        "y": 0,
+        "w": 63,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 63,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 63,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "cacodemon_idle_up.png": {
+      "frame": {
+        "x": 125,
+        "y": 67,
+        "w": 63,
+        "h": 66
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 63,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 63,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "cacodemon.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 188,
+      "h": 298
+    },
+    "scale": 1
+  }
+}

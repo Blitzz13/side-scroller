@@ -12,10 +12,28 @@ export class EndGame extends BaseScene {
     constructor(stage: Container) {
         super(stage)
 
+        const scoreContainer = this.createCurrentScore("currentScore", "Current Casualties");
+        scoreContainer.y = 100;
+        const highScoreContainer = this.createCurrentScore("highScore", "Best run");
+        highScoreContainer.y = scoreContainer.y + scoreContainer.height + 10;
         this._mainMenuButton = new Button(new RoundedRectangle(0, 0, 210, 55, 15), "Main Menu");
+        this._mainMenuButton.x = gameConfig.width / 2 - this._mainMenuButton.width / 2;
+        this._mainMenuButton.y = highScoreContainer.y + highScoreContainer.height + 10;
+        this._mainMenuButton.eventMode = 'static';
+        this._mainMenuButton.on("pointerdown", () => {
+            this.emit(Scene.Change, Scene.MainMenu);
+        })
 
-        const currentScore = retrieveScore("currentScore");
-        const casualtiesText = new BitmapText("Casualties", {
+        this.addChild(this._mainMenuButton);
+    }
+
+    public dispose(): void {
+        this.destroy({ children: true });
+    }
+
+    private createCurrentScore(scoreKey: string, text: string): Container {
+        const currentScore = retrieveScore(scoreKey);
+        const casualtiesText = new BitmapText(text, {
             fontName: "arial32",
         });
 
@@ -24,7 +42,6 @@ export class EndGame extends BaseScene {
         const scoreContainer = new Container();
         scoreContainer.addChild(casualtiesText);
         scoreContainer.x = gameConfig.width / 2 - scoreContainer.width / 2;
-        scoreContainer.y = 200;
         for (const key in EnemyType) {
             const type = EnemyType[key as keyof typeof EnemyType];
             const kills = currentScore?.get(type) || 0;
@@ -37,6 +54,10 @@ export class EndGame extends BaseScene {
                 case EnemyType.GRUNT:
                     sprite = Sprite.from("grunt_down.png");
                     sprite.scale.set(0.7);
+                    break;
+                case EnemyType.CACODEMON:
+                    sprite = Sprite.from("cacodemon_idle_down.png");
+                    sprite.scale.set(0.44);
                     break;
                 default:
                     break;
@@ -52,33 +73,13 @@ export class EndGame extends BaseScene {
             }
 
             spriteTextContainer.addChild(text);
+            spriteTextContainer.y = scoreContainer.height; 
             scoreContainer.addChild(spriteTextContainer);
             spriteTextContainer.x = scoreContainer.width / 2 - spriteTextContainer.width / 2; 
             lastText = text;
         }
 
-        this._mainMenuButton.x = gameConfig.width / 2 - this._mainMenuButton.width / 2;
-        this._mainMenuButton.y = scoreContainer.y + scoreContainer.height + 10;
-        this._mainMenuButton.eventMode = 'static';
-        this._mainMenuButton.on("pointerdown", () => {
-            this.emit(Scene.Change, Scene.MainMenu);
-        })
-
         this.addChild(scoreContainer);
-        this.addChild(this._mainMenuButton);
-
-
-        // text.anchor.set(0.5);
-        // text.position.set(this._playButton.width / 2, this._playButton.height / 2)
-        // this._playButton.eventMode = 'static';
-        // this._playButton.on("pointerdown", () => {
-        //    this.emit(Scene.Change, Scene.Endless);
-        // })
-        // this.addChild(this._playButton);
-        // this._playButton.addChild(text);
-    }
-
-    public dispose(): void {
-        this.destroy({ children: true });
+        return scoreContainer;
     }
 }
