@@ -1,22 +1,42 @@
 import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
 import { IBullet } from "./interfaces/IBullet";
+import { IEntity } from "./interfaces/IEntity";
 import { gameConfig } from "../configs/GameConfig";
+import { GameEvent } from "../GameEvent";
 
-export class Player extends Container {
+export class Player extends Container implements IEntity{
     private _dirextionX: -1 | 0 | 1 = 0;
     private _dirextionY: -1 | 0 | 1 = 0;
     private _speed = 6;
     private _isShooting = false;
-    private _sprite: AnimatedSprite;
+    private _walkingAnimation: AnimatedSprite;
+    private _deathAnimation: AnimatedSprite;
     private _muzzleFlash: AnimatedSprite;
     private _stage: Container;
     private _bullets: IBullet[];
-
+    private _shootingTimer;
+    private _health;
     constructor(stage: Container) {
         super();
         this._stage = stage;
+        this._health = 100;
         this._bullets = [];
-        this._sprite = new AnimatedSprite([
+        this._shootingTimer = 0;
+
+        this._deathAnimation = new AnimatedSprite([
+            Texture.from("doomguy_death_1.png"),
+            Texture.from("doomguy_death_2.png"),
+            Texture.from("doomguy_death_3.png"),
+            Texture.from("doomguy_death_4.png"),
+            Texture.from("doomguy_death_5.png"),
+        ]);
+
+        this._deathAnimation.scale.set(0.6);
+        this._deathAnimation.loop = false;
+        this._deathAnimation.animationSpeed = 0.1;
+        this._deathAnimation.visible = false;
+
+        this._walkingAnimation = new AnimatedSprite([
             Texture.from("tile000.png"),
             Texture.from("tile001.png"),
             Texture.from("tile002.png"),
@@ -24,10 +44,10 @@ export class Player extends Container {
             Texture.from("tile005.png"),
         ]);
 
-        this._sprite.scale.set(0.6);
-        this._sprite.loop = true;
-        this._sprite.animationSpeed = 0.1;
-        this._sprite.play();
+        this._walkingAnimation.scale.set(0.6);
+        this._walkingAnimation.loop = true;
+        this._walkingAnimation.animationSpeed = 0.1;
+        this._walkingAnimation.play();
 
         this._muzzleFlash = new AnimatedSprite([
             Texture.from("m_9.png"),
@@ -42,49 +62,62 @@ export class Player extends Container {
         this._muzzleFlash.position.set(50, 5);
         this._muzzleFlash.visible = false;
 
-        this.addChild(this._sprite);
+        this.addChild(this._walkingAnimation);
+        this.addChild(this._deathAnimation);
         this.addChild(this._muzzleFlash);
         this.addEvents();
 
-        this.y = 720 / 2 - this._sprite.height / 2;
-        this.enableShooting();
-        this.moveBullets();
-        this.handlePlayerMovement();
+        this.y = 720 / 2 - this._walkingAnimation.height / 2;
+        Ticker.shared.add(this.moveBullets, this);
+        Ticker.shared.add(this.enableShooting, this);
+        Ticker.shared.add(this.handlePlayerMovement, this);
+    }
+
+    public dispose(): void {
+        Ticker.shared.remove(this.moveBullets, this);
+        Ticker.shared.remove(this.enableShooting, this);
+        Ticker.shared.remove(this.handlePlayerMovement, this);
+        this.removeEvents();
+        this.destroy({children: true});
     }
 
     public get isShooting(): boolean {
         return this._isShooting;
     }
 
-    public get bullets():IBullet[]{
+    public get bullets(): IBullet[] {
         return this._bullets;
     }
 
-    public takeDamage(): void {
-        // console.log("Player Damaged");
+    public takeDamage(damage: number): void {
+        this._health -= damage;
+
+        if (this._health <= 0) {
+            this._walkingAnimation.visible = false;
+            this._deathAnimation.visible = true;
+            this._deathAnimation.play();
+            this.removeEvents();
+            this.emit(GameEvent.PLAYER_DIED);
+        }
     }
 
-    private handlePlayerMovement(): void {
-        Ticker.shared.add((dt: number) => {
-            this.x += this._dirextionX * this._speed * dt;
+    private handlePlayerMovement(dt: number): void {
+        this.x += this._dirextionX * this._speed * dt;
 
-            if (this.y < 237) {
-                this.y = 237;
-            } else if (this.y > 611) {
-                this.y = 611;
-            } else {
-                this.y += this._dirextionY * this._speed * dt;
-            }
-        });
+        if (this.y < 237) {
+            this.y = 237;
+        } else if (this.y > 611) {
+            this.y = 611;
+        } else {
+            this.y += this._dirextionY * this._speed * dt;
+        }
     }
 
-    private enableShooting(): void {
-        let shootingTimer = 0;
-        Ticker.shared.add((dt: number) => {
-            shootingTimer += dt;
+    private enableShooting(dt: number): void {
+            this._shootingTimer += dt;
 
-            if (this._isShooting && shootingTimer >= 10) {
-                shootingTimer = 0;
+            if (this._isShooting && this._shootingTimer >= 10) {
+                this._shootingTimer = 0;
 
                 const bullet = Sprite.from("bullet");
                 bullet.scale.set(0.1, 0.1);
@@ -97,73 +130,69 @@ export class Player extends Container {
                     velocityY: 0,
                 });
             }
-        });
     }
 
-    private moveBullets() {
-         Ticker.shared.add((dt: number) => {
-            for (const bullet of this._bullets) {
-                bullet.sprite.x += bullet.velocityX * dt;
-    
-                // Remove the bullet when it goes off the screen
-                if (bullet.sprite.position.x > gameConfig.width) {
-                    this._stage.removeChild(bullet.sprite);
-                }
+    private moveBullets(dt: number) {
+        for (const bullet of this._bullets) {
+            bullet.sprite.x += bullet.velocityX * dt;
+
+            // Remove the bullet when it goes off the screen
+            if (bullet.sprite.position.x > gameConfig.width) {
+                this._stage.removeChild(bullet.sprite);
             }
-        });
+        }
     }
 
     private addEvents(): void {
-        window.addEventListener("keydown", (e) => {
-            if (e.key === "d") {
-                this._dirextionX = 1;
-            }
+        window.addEventListener("keydown", this.keydownHandler.bind(this));
+        window.addEventListener("keyup", this.keyupHandler.bind(this));
+    }
 
-            if (e.key === "a") {
-                this._dirextionX = -1;
-            }
+    private removeEvents(): void {
+        window.removeEventListener("keydown", this.keydownHandler);
+        window.removeEventListener("keyup", this.keyupHandler);
+    }
 
-            if (e.key === "w") {
-                this._dirextionY = -1;
-            }
-
-            if (e.key === "s") {
-                this._dirextionY = 1;
-            }
-
-            if (e.key === " " && !this._isShooting) {
-                this._isShooting = true;
-                this._muzzleFlash.play();
-                this._muzzleFlash.loop = true;
-                this._muzzleFlash.visible = true;
-            }
-
-            // if (this._dirextionX !== 0 || this._dirextionY !== 0) {
-            //     this._sprite.play();
-            // }
-        });
-
-        window.addEventListener("keyup", (e) => {
-            if (e.key === "d" || e.key === "a") {
-                this._dirextionX = 0;
-            }
-
-            if (e.key === "w" || e.key === "s") {
-                this._dirextionY = 0;
-            }
-
-            if (e.key === " ") {
-                this._isShooting = false;
-                this._muzzleFlash.stop();
-                this._muzzleFlash.loop = false;
-                this._muzzleFlash.currentFrame = 0;
-                this._muzzleFlash.visible = false;
-            }
-
-            // if (this._dirextionX === 0 || this._dirextionY === 0) {
-            //     this._sprite.stop();
-            //     this._sprite.currentFrame = 0;
-            // }
-        });
+    private keydownHandler(e: KeyboardEvent) {
+        if (e.key === "d") {
+            this._dirextionX = 1;
+        }
+    
+        if (e.key === "a") {
+            this._dirextionX = -1;
+        }
+    
+        if (e.key === "w") {
+            this._dirextionY = -1;
+        }
+    
+        if (e.key === "s") {
+            this._dirextionY = 1;
+        }
+    
+        if (e.key === " " && !this._isShooting) {
+            this._isShooting = true;
+            this._muzzleFlash.play();
+            this._muzzleFlash.loop = true;
+            this._muzzleFlash.visible = true;
+        }
+    }
+    
+    private keyupHandler(e: KeyboardEvent) {
+        if (e.key === "d" || e.key === "a") {
+            this._dirextionX = 0;
+        }
+    
+        if (e.key === "w" || e.key === "s") {
+            this._dirextionY = 0;
+        }
+    
+        if (e.key === " ") {
+            this._isShooting = false;
+            this._muzzleFlash.stop();
+            this._muzzleFlash.loop = false;
+            this._muzzleFlash.currentFrame = 0;
+            this._muzzleFlash.visible = false;
+        }
     }
 }

@@ -1,24 +1,52 @@
 import "./style.css";
-import { AnimatedSprite, Application, Assets, AssetsManifest, Sprite, Texture } from "pixi.js";
-import { EndlessLevel } from "./EndlessLevel";
+import { Application, Assets, AssetsManifest, Sprite, Texture, Ticker } from "pixi.js";
+import { EndlessScene } from "./scenes/EndlessLevel";
+import { MainMenu } from "./scenes/MainMenu";
 import { gameConfig } from "./configs/GameConfig";
+import { BitmapFont } from "pixi.js";
+import { BaseScene } from "./scenes/BaseScene";
+import { Scene } from "./Scene";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
-  width:  gameConfig.width,
+  width: gameConfig.width,
   height: gameConfig.height,
 });
 
 // For pixi debug utils
 (globalThis as any).__PIXI_APP__ = app;
-
+let currentScene: BaseScene;
 window.onload = async (): Promise<void> => {
   await loadGameAssets();
+  registerFonts();
   document.body.appendChild(app.view);
   resizeCanvas();
   app.stage.interactive = true;
-  new EndlessLevel(app.stage);
+  changeScene(Scene.MainMenu);
 };
+
+function changeScene(scene: Scene): void {
+  currentScene?.dispose();
+  switch (scene) {
+    case Scene.Endless:
+      currentScene = new EndlessScene(app.stage);
+      break;
+    case Scene.MainMenu:
+      currentScene = new MainMenu(app.stage);
+      break;
+    default:
+      break;
+  }
+  currentScene.on(Scene.Change, changeScene);
+}
+
+function registerFonts(): void {
+  BitmapFont.from("arial32", {
+    fontFamily: "Arial",
+    fontSize: 32,
+    fill: 0xffffff,
+  })
+}
 
 async function loadGameAssets(): Promise<void> {
   const manifest: AssetsManifest = {
@@ -44,8 +72,16 @@ async function loadGameAssets(): Promise<void> {
             srcs: "./assets/doomguy_walking.json",
           },
           {
+            name: "doomguy_death",
+            srcs: "./assets/doomguy_death.json",
+          },
+          {
             name: "grunt_idle",
             srcs: "./assets/grunt_idle.json",
+          },
+          {
+            name: "grunt_death",
+            srcs: "./assets/grunt_death.json",
           },
         ],
       },
