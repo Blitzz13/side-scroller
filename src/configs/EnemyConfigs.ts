@@ -59,11 +59,11 @@ export const cacodemonConfig: IEnemyConfig = {
     death: {
         types: new Map([
             [DeathType.SHOT, [
-                "cacodemin_death_1.png",
-                "cacodemin_death_2.png",
-                "cacodemin_death_3.png",
-                "cacodemin_death_4.png",
-                "cacodemin_death_5.png",
+                "cacodemon_death_1.png",
+                "cacodemon_death_2.png",
+                "cacodemon_death_3.png",
+                "cacodemon_death_4.png",
+                "cacodemon_death_5.png",
             ]],
         ]),
         animationSpeed: 0.2,
