@@ -4,7 +4,7 @@ import { IEntity } from "./interfaces/IEntity";
 import { gameConfig } from "../configs/GameConfig";
 import { GameEvent } from "../enums/GameEvent";
 
-export class Player extends Container implements IEntity{
+export class Player extends Container implements IEntity {
     private _dirextionX: -1 | 0 | 1 = 0;
     private _dirextionY: -1 | 0 | 1 = 0;
     private _speed = 6;
@@ -16,11 +16,12 @@ export class Player extends Container implements IEntity{
     private _bullets: IBullet[];
     private _shootingTimer;
     private _health;
-    
-    constructor(stage: Container) {
+    private keydownHandlerBound = this.handleKeydown.bind(this);
+    private keyupHandlerBound = this.handleKeyup.bind(this);
+    constructor(sceneStage: Container) {
         super();
-        this._stage = stage;
-        this._health = 10;
+        this._stage = sceneStage;
+        this._health = 100;
         this._bullets = [];
         this._shootingTimer = 0;
 
@@ -79,7 +80,7 @@ export class Player extends Container implements IEntity{
         Ticker.shared.remove(this.enableShooting, this);
         Ticker.shared.remove(this.handlePlayerMovement, this);
         this.removeEvents();
-        this.destroy({children: true});
+        this.destroy({ children: true });
     }
 
     public get isShooting(): boolean {
@@ -90,16 +91,26 @@ export class Player extends Container implements IEntity{
         return this._bullets;
     }
 
-    public takeDamage(damage: number): void {
+    public get health(): number {
+        return this._health;
+    }
+
+    public takeDamage(damage: number): number {
         this._health -= damage;
 
         if (this._health <= 0) {
             this._walkingAnimation.visible = false;
             this._deathAnimation.visible = true;
+            this._muzzleFlash.visible = false;
             this._deathAnimation.play();
             this.removeEvents();
+            this._speed = 0;
+            this._isShooting = false;
             this.emit(GameEvent.PLAYER_DIED);
+            this._health = 0;
         }
+
+        return this._health;
     }
 
     private handlePlayerMovement(dt: number): void {
@@ -115,22 +126,22 @@ export class Player extends Container implements IEntity{
     }
 
     private enableShooting(dt: number): void {
-            this._shootingTimer += dt;
+        this._shootingTimer += dt;
 
-            if (this._isShooting && this._shootingTimer >= 10) {
-                this._shootingTimer = 0;
+        if (this._isShooting && this._shootingTimer >= 10) {
+            this._shootingTimer = 0;
 
-                const bullet = Sprite.from("bullet");
-                bullet.scale.set(0.1, 0.1);
-                bullet.position.set(this.position.x + 30, this.position.y + 14);
+            const bullet = Sprite.from("bullet");
+            bullet.scale.set(0.1, 0.1);
+            bullet.position.set(this.position.x + 30, this.position.y + 14);
 
-                this._stage.addChild(bullet);
-                this._bullets.push({
-                    sprite: bullet,
-                    velocityX: 18,
-                    velocityY: 0,
-                });
-            }
+            this._stage.addChild(bullet);
+            this._bullets.push({
+                sprite: bullet,
+                velocityX: 18,
+                velocityY: 0,
+            });
+        }
     }
 
     private moveBullets(dt: number) {
@@ -145,32 +156,32 @@ export class Player extends Container implements IEntity{
     }
 
     private addEvents(): void {
-        window.addEventListener("keydown", this.keydownHandler.bind(this));
-        window.addEventListener("keyup", this.keyupHandler.bind(this));
+        window.addEventListener("keydown", this.keydownHandlerBound);
+        window.addEventListener("keyup", this.keyupHandlerBound);
     }
 
     private removeEvents(): void {
-        window.removeEventListener("keydown", this.keydownHandler);
-        window.removeEventListener("keyup", this.keyupHandler);
+        window.removeEventListener("keydown", this.keydownHandlerBound);
+        window.removeEventListener("keyup", this.keyupHandlerBound);
     }
 
-    private keydownHandler(e: KeyboardEvent) {
+    private handleKeydown(e: KeyboardEvent) {
         if (e.key === "d") {
             this._dirextionX = 1;
         }
-    
+
         if (e.key === "a") {
             this._dirextionX = -1;
         }
-    
+
         if (e.key === "w") {
             this._dirextionY = -1;
         }
-    
+
         if (e.key === "s") {
             this._dirextionY = 1;
         }
-    
+
         if (e.key === " " && !this._isShooting) {
             this._isShooting = true;
             this._muzzleFlash.play();
@@ -178,16 +189,16 @@ export class Player extends Container implements IEntity{
             this._muzzleFlash.visible = true;
         }
     }
-    
-    private keyupHandler(e: KeyboardEvent) {
+
+    private handleKeyup(e: KeyboardEvent) {
         if (e.key === "d" || e.key === "a") {
             this._dirextionX = 0;
         }
-    
+
         if (e.key === "w" || e.key === "s") {
             this._dirextionY = 0;
         }
-    
+
         if (e.key === " ") {
             this._isShooting = false;
             this._muzzleFlash.stop();

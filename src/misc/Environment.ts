@@ -1,5 +1,5 @@
 import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
-import { IEntity } from "./characters/interfaces/IEntity";
+import { IEntity } from "../characters/interfaces/IEntity";
 
 export class Environment extends Container implements IEntity {
     // private bg!: AnimatedSprite;
@@ -36,7 +36,7 @@ export class Environment extends Container implements IEntity {
 
     public dispose(): void {
         Ticker.shared.remove(this.moveSprite, this);
-        this.destroy({children: true});
+        this.destroy({ children: true });
     }
 
     public startScrolling(speed: number): void {

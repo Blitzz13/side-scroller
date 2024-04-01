@@ -20,6 +20,7 @@ export class Enemy extends Container implements IEntity {
     private _meleeDamage: number;
     private _timeSinceLastShot: number;
     private _isDead: boolean;
+    private _isMoving: boolean;
     private _type: EnemyType;
     private _health: number;
 
@@ -28,6 +29,7 @@ export class Enemy extends Container implements IEntity {
         this._type = config.type;
         this._health = config.health;
         this._isShooting = true;
+        this._isMoving = true;
         this._isDead = false;
         this._timeSinceLastShot = 0;
         this._damage = config.damage;
@@ -71,6 +73,10 @@ export class Enemy extends Container implements IEntity {
         return this._damage;
     }
 
+    public set isMoving(value: boolean) {
+        this._isMoving = value;
+    }
+
     public get type(): EnemyType {
         return this._type;
     }
@@ -107,7 +113,9 @@ export class Enemy extends Container implements IEntity {
     }
 
     private move(dt: number): void {
-        this.x -= this._speed * dt;
+        if (this._isMoving) {
+            this.x -= this._speed * dt;
+        }
     }
 
     private updateSpriteTexture(): void {

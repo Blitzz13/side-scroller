@@ -1,8 +1,9 @@
 import { AnimatedSprite, BitmapText, Container, Graphics, RoundedRectangle, Texture } from "pixi.js";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
-import { Scene } from "../Scene";
-import { Button } from "../Button";
+import { Scene } from "../enums/Scene";
+import { Button } from "../misc/Button";
+import { getDoomguyAnimation } from "../Utils";
 
 export class MainMenu extends BaseScene {
     private _playButton: Button;
@@ -17,25 +18,21 @@ export class MainMenu extends BaseScene {
             textures.push(texture);
         }
 
-        const animation = new AnimatedSprite(textures);
-        animation.play();
-        animation.loop = true;
-        animation.animationSpeed = 0.4;
-        animation.scale.set(1.6);
+        const animation = getDoomguyAnimation();
         this.addChild(animation);
-        
+
         this._playButton.x = gameConfig.width / 2 - this._playButton.width / 2;
-        this._playButton.y = gameConfig.height / 2 - this._playButton.height / 2;
+        this._playButton.y = gameConfig.height / 1.5 - this._playButton.height / 2;
 
         this._playButton.eventMode = 'static';
         this._playButton.on("pointerdown", () => {
-           this.emit(Scene.Change, Scene.Endless);
+            this.emit(Scene.Change, Scene.Endless);
         })
 
         this.addChild(this._playButton);
     }
 
     public dispose(): void {
-        this.destroy({children: true})
+        this.destroy({ children: true });
     }
 }

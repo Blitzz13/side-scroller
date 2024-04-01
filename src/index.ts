@@ -6,7 +6,7 @@ import { gameConfig } from "./configs/GameConfig";
 import { BitmapFont } from "pixi.js";
 import { BaseScene } from "./scenes/BaseScene";
 import { EndGame } from "./scenes/EndGame";
-import { Scene } from "./Scene";
+import { Scene } from "./enums/Scene";
 import { loadGameAssets } from "./Utils";
 
 const app = new Application<HTMLCanvasElement>({
@@ -24,7 +24,7 @@ window.onload = async (): Promise<void> => {
   document.body.appendChild(app.view);
   resizeCanvas();
   app.stage.interactive = true;
-  changeScene(Scene.MainMenu);
+  changeScene(Scene.EndGame);
 };
 
 function changeScene(scene: Scene): void {
@@ -51,7 +51,7 @@ function registerFonts(): void {
     fontSize: 32,
     lineHeight: 33,
     fill: 0xffffff,
-  })
+  });
 }
 
 // async function loadGameAssets(): Promise<void> {
@@ -153,5 +153,5 @@ function requestFullscreen(): void {
 }
 
 resizeCanvas();
-app.view.addEventListener('click', requestFullscreen);
+// app.view.addEventListener('click', requestFullscreen);
 window.addEventListener("resize", resizeCanvas);
