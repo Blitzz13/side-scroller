@@ -1,6 +1,6 @@
 import { Container } from "pixi.js";
 
-export abstract class BaseScene extends Container{
+export abstract class BaseScene extends Container {
     private _stage: Container;
     constructor(stage: Container) {
         super();

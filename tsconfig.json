@@ -13,7 +13,7 @@
         "lib": ["ES2022", "DOM"]
     },
     "include": [
-        "./src/index.ts",
+        "./src",
         "webpack.config.ts",
         "webpack.dev.ts",
     ]

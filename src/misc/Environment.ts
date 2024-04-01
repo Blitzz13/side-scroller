@@ -36,7 +36,7 @@ export class Environment extends Container implements IEntity {
 
     public dispose(): void {
         Ticker.shared.remove(this.moveSprite, this);
-        this.destroy({children: true});
+        this.destroy({ children: true });
     }
 
     public startScrolling(speed: number): void {

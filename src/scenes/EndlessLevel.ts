@@ -8,7 +8,9 @@ import { BaseScene } from "./BaseScene";
 import { GameEvent } from "../enums/GameEvent";
 import { Scene } from "../enums/Scene";
 import { EnemyType } from "../enums/EnemyType";
+import { HUD } from "../ui/HUD";
 import { saveScore, retrieveScore } from "../Utils";
+import { InGameMenu } from "../ui/InGameMenu";
 
 export class EndlessScene extends BaseScene {
     private _player: Player;
@@ -17,11 +19,22 @@ export class EndlessScene extends BaseScene {
     private _enemies: Enemy[];
     private _spawnInterval: NodeJS.Timeout;
     private _score: Map<EnemyType, number>;
+    private _hud: HUD;
+    private _inGameMenu: InGameMenu;
+    private _isPaused: boolean;
+    private _gameContainer: Container;
+    private _keyboardHandler = this.handleKeyboardEvents.bind(this);
 
     constructor(stage: Container) {
         super(stage)
         this._enemies = [];
+        this._isPaused = false;
         this._score = new Map();
+        this._hud = new HUD();
+        this._gameContainer = new Container();
+        this._inGameMenu = new InGameMenu();
+        this._player = new Player(this._gameContainer);
+        this._corridor = new Environment("corridor", 2);
 
         this._background = new Environment([
             "frame_0.png",
@@ -33,57 +46,37 @@ export class EndlessScene extends BaseScene {
             "frame_7.png"
         ], 4);
 
-        this._corridor = new Environment("corridor", 2);
         this._corridor.y = 230;
         this._corridor.scale.set(0.7);
-
-        this.addChild(this._background);
-        this.addChild(this._corridor);
-
         this._background.startScrolling(0.6);
         this._corridor.startScrolling(1.2);
-
-        this._player = new Player(this);
-
-        this._player.on(GameEvent.PLAYER_DIED, () => {
-            for (const key in EnemyType) {
-                const type = EnemyType[key as keyof typeof EnemyType];
-                const savedScore = retrieveScore("highScore")?.get(type) || 0;
-                const currentScore = this._score.get(type) || 0;
-                if (currentScore > savedScore) {
-                    saveScore("highScore", this._score);
-                }
-
-                saveScore("currentScore", this._score);
-            }
-
-            this.emit(Scene.Change, Scene.EndGame);
-        });
-
-        this.addChild(this._player);
-
+        this._hud.health = this._player.health;
         this._spawnInterval = this.spawnEnemies();
         this.initTickerOperations();
 
-        window.addEventListener("keydown", (e) => {
-            if (e.key === "Escape") {
-                this.emit(Scene.Change, Scene.MainMenu);
-            }
-        });
+        this._gameContainer.addChild(this._player);
+        this.addChild(this._background);
+        this.addChild(this._corridor);
+        this.addChild(this._gameContainer);
+        this.addChild(this._hud);
+        this.addChild(this._inGameMenu);
+        this.addEvents();
     }
 
     public dispose(): void {
         clearInterval(this._spawnInterval);
-
         this.removeTickerOperations();
 
         this._enemies.forEach(function (enemy: Enemy) {
             enemy.dispose(true);
         }.bind(this));
+
         this._player.dispose();
         this._background.dispose();
         this._corridor.dispose();
-
+        this._hud.dispose();
+        this._inGameMenu.dispose();
+        window.removeEventListener("keydown", this._keyboardHandler);
         this.destroy({ children: true });
     }
 
@@ -98,18 +91,28 @@ export class EndlessScene extends BaseScene {
                 const num = Math.floor(Math.random() * 2) + 1;
 
                 if (num === 1) {
-                    enemy = new Enemy(this._player, this, cacodemonConfig);
+                    enemy = new Enemy(this._player, this._gameContainer, cacodemonConfig);
                 } else {
-                    enemy = new Enemy(this._player, this, gruntConfig);
+                    enemy = new Enemy(this._player, this._gameContainer, gruntConfig);
                 }
 
                 enemy.x = x;
                 enemy.y = y;
-                this.addChild(enemy);
+
+                this._gameContainer.addChild(enemy);
                 this._enemies.push(enemy);
-                enemy.on(GameEvent.PLAYER_HIT, () => this._player.takeDamage(enemy.damage));
+
+                enemy.on(GameEvent.PLAYER_HIT, () => {
+                    this._hud.health = this._player.takeDamage(enemy.damage)
+                });
             }
         }, 2000);
+    }
+
+    private handleKeyboardEvents(e: KeyboardEvent): void {
+        if (e.key === "Escape") {
+            this.handlePauseGame();
+        }
     }
 
     private checkForPlayerKills(): void {
@@ -139,9 +142,11 @@ export class EndlessScene extends BaseScene {
             }
 
             if (enemy.getBounds().intersects(this._player.getBounds())) {
-                this._player.takeDamage(enemy.meleeDamage);
+                this._hud.health = this._player.takeDamage(enemy.meleeDamage);
                 enemy.takeDamage(1);
-                this.setKill(enemy);
+                if (enemy.isDead) {
+                    this.setKill(enemy);
+                }
                 return;
             }
         }
@@ -177,6 +182,53 @@ export class EndlessScene extends BaseScene {
             const currentValue = this._score.get(enemy.type) as number;
             this._score.set(enemy.type, currentValue + 1);
         }
+
+        this._hud.updateKills(enemy.type, this._score.get(enemy.type) || 0);
+    }
+
+    private handlePauseGame(): void {
+        this._isPaused = !this._isPaused;
+        this._inGameMenu.visible = this._isPaused;
+        Ticker.shared.speed = this._isPaused ? 0 : 1;
+        if (this._isPaused) {
+            clearInterval(this._spawnInterval);
+        } else {
+            this._spawnInterval = this.spawnEnemies();
+        }
+    }
+
+    private addEvents(): void {
+        this._inGameMenu.on(GameEvent.QUIT_GAME, () => {
+            this.emit(Scene.Change, Scene.MainMenu);
+            Ticker.shared.speed = 1;
+        });
+
+        this._inGameMenu.on(GameEvent.RESUME_GAME, this.handlePauseGame, this);
+
+        this._player.on(GameEvent.PLAYER_DIED, this.setScore, this);
+
+        window.addEventListener("keydown", this._keyboardHandler);
+    }
+
+    private setScore(): void {
+        for (const key in EnemyType) {
+            const type = EnemyType[key as keyof typeof EnemyType];
+            const savedScore = retrieveScore("highScore")?.get(type) || 0;
+            const currentScore = this._score.get(type) || 0;
+            if (currentScore > savedScore) {
+                saveScore("highScore", this._score);
+            }
+
+            saveScore("currentScore", this._score);
+        }
+
+        for (const enemy of this._enemies) {
+            enemy.isMoving = false;
+        }
+
+        this._background.startScrolling(0);
+        this._corridor.startScrolling(0);
+        setTimeout(() => this.emit(Scene.Change, Scene.EndGame), 1500);
     }
 }
 
