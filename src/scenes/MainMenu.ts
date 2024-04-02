@@ -1,9 +1,8 @@
-import { AnimatedSprite, BitmapText, Container, Graphics, RoundedRectangle, Texture } from "pixi.js";
+import { AnimatedSprite, BitmapText, Container, Graphics, RoundedRectangle, Sprite, Texture } from "pixi.js";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
 import { Scene } from "../enums/Scene";
 import { Button } from "../misc/Button";
-import { getDoomguyAnimation } from "../Utils";
 
 export class MainMenu extends BaseScene {
     private _playButton: Button;
@@ -12,14 +11,10 @@ export class MainMenu extends BaseScene {
 
         this._playButton = new Button(new RoundedRectangle(0, 0, 210, 55, 15), "Play Endless");
 
-        const textures: Texture[] = [];
-        for (let i = 0; i < 100; i++) {
-            const texture = Texture.from(`frame_${i.toString().padStart(3, "0")}.png`);
-            textures.push(texture);
-        }
-
-        const animation = getDoomguyAnimation();
-        this.addChild(animation);
+        const background = Sprite.from("menu_background");
+        background.position.set(-3, -3);
+        background.scale.set(1.2);
+        this.addChild(background);
 
         this._playButton.x = gameConfig.width / 2 - this._playButton.width / 2;
         this._playButton.y = gameConfig.height / 1.5 - this._playButton.height / 2;

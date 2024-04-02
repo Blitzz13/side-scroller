@@ -1,76 +1,53 @@
-import { AnimatedSprite, BitmapText, Container, Texture } from "pixi.js";
+import { AnimatedSprite, BitmapText, Container, Sprite, Texture } from "pixi.js";
 import { IEntity } from "../characters/interfaces/IEntity";
 import { gameConfig } from "../configs/GameConfig";
 import { Scoreboard } from "../misc/Scoreboard";
 import { EnemyType } from "../enums/EnemyType";
+import { commonScoreboardConfig } from "../configs/ScoreboardConfig";
+import { IHUDConfig } from "../configs/interfaces/IHUDConfig";
 
 export class HUD extends Container implements IEntity {
-    private _health: BitmapText;
+    private _healthText: BitmapText;
+    private _config: IHUDConfig;
+    private _ammoText: BitmapText;
     private _score: Scoreboard;
-    private _head: AnimatedSprite;
-    constructor() {
+    private _icon: Sprite;
+    private _ammoIcon: Sprite;
+    constructor(playerIcon: string, ammoIcon: string, config: IHUDConfig) {
         super();
-        this._health = new BitmapText("0", {
-            fontName: "arial32"
+        this._config = config;
+        this._healthText = new BitmapText("0", {
+            fontName: config.fontName
         });
 
-        this._head = new AnimatedSprite([
-            Texture.from("gh_straight.png"),
-            Texture.from("gh_left.png"),
-            Texture.from("gh_right.png"),
-        ]);
+        this._ammoText = new BitmapText("0", {
+            fontName: config.fontName
+        });
 
-        this._head.animationSpeed = 0.007;
-        this._head.loop = true;
-        this._head.scale.set(0.5);
-        this._head.play();
+        this._icon = Sprite.from(playerIcon);
+        this._icon.scale.copyFrom(config.playerIconScale);
+        this._icon.position.copyFrom(config.iconPosition);
 
-        this._score = new Scoreboard("Casualties");
-        this._score.x = 1100;
+        this._ammoIcon = Sprite.from(ammoIcon);
+        this._ammoIcon.scale.copyFrom(config.ammoIconScale);
 
-        this.addChild(this._health);
-        this.addChild(this._head);
+        this._score = new Scoreboard("Casualties", commonScoreboardConfig);
+        this._score.position.copyFrom(config.scorePosition);
+
+        this.addChild(this._healthText);
+        this.addChild(this._ammoText);
+        this.addChild(this._icon);
+        this.addChild(this._ammoIcon);
         this.addChild(this._score);
         this.setPositions();
     }
-    
+
     public set health(health: number) {
-        this._health.text = `${health}`;
-        // this.setPositions();
-        if (health <= 75 && health > 50) {
-            this._head.textures = [
-                Texture.from("h_straight.png"),
-                Texture.from("h_left.png"),
-                Texture.from("h_right.png"),
-            ];
+        this._healthText.text = `${health}`;
+    }
 
-            this._head.gotoAndPlay(0);
-        } else if (health <= 50 && health > 25) {
-            this._head.textures = [
-                Texture.from("uh_straight.png"),
-                Texture.from("uh_left.png"),
-                Texture.from("uh_right.png"),
-            ];
-
-            this._head.gotoAndPlay(0);
-        }
-        else if (health <= 25 && health > 10) {
-            this._head.textures = [
-                Texture.from("bh_straight.png"),
-                Texture.from("bh_left.png"),
-                Texture.from("bh_right.png"),
-            ];
-
-            this._head.gotoAndPlay(0);
-        } else if (health <= 10) {
-            this._head.textures = [
-                Texture.from("vbh_straight.png"),
-                Texture.from("vbh_left.png"),
-                Texture.from("vbh_right.png"),
-            ];
-
-            this._head.gotoAndPlay(0);
-        }
+    public set ammo(ammo: number) {
+        this._ammoText.text = `${ammo}`;
     }
 
     public dispose(): void {
@@ -83,7 +60,11 @@ export class HUD extends Container implements IEntity {
 
 
     private setPositions(): void {
-        this._health.x = this._head.x + this._head.width;
-        this._health.y = this._head.y + this._head.height / 2 - this._health.height / 2;
+        this._healthText.x = this._icon.x + this._icon.width + this._config.iconTextGap.x;
+        this._healthText.y = this._icon.y + this._icon.height / 2 - this._healthText.textHeight / 2 + this._config.iconTextGap.y;
+        this._ammoIcon.x = this._icon.x;
+        this._ammoIcon.y = this._icon.y + this._icon.height + this._config.distanceBetweenRows;
+        this._ammoText.x = this._healthText.x;
+        this._ammoText.y = this._ammoIcon.y;
     }
 }

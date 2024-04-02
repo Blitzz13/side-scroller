@@ -1,6 +1,5 @@
 import { AssetsManifest, Assets, BitmapText, Container, Sprite, AnimatedSprite, Texture } from "pixi.js";
 import { EnemyType } from "./enums/EnemyType";
-import { gameConfig } from "./configs/GameConfig";
 
 export function saveScore(key: string, score: Map<EnemyType, number>) {
   const scoreObject = Object.fromEntries(score);
@@ -18,19 +17,14 @@ export function retrieveScore(key: string): Map<EnemyType, number> | null {
   return null;
 }
 
-export function getDoomguyAnimation(): AnimatedSprite {
+export function getTextureArrayFromStrings(textureStrings: string[]): Texture[] {
   const textures: Texture[] = [];
-  for (let i = 0; i < 100; i++) {
-    const texture = Texture.from(`frame_${i.toString().padStart(3, "0")}.png`);
+  for (const string of textureStrings) {
+    const texture = Texture.from(string);
     textures.push(texture);
   }
 
-  const animation = new AnimatedSprite(textures);
-  animation.play();
-  animation.loop = true;
-  animation.animationSpeed = 0.4;
-  animation.scale.set(1.6);
-  return animation;
+  return textures;
 }
 
 export async function loadGameAssets(): Promise<void> {
@@ -40,46 +34,38 @@ export async function loadGameAssets(): Promise<void> {
         name: "environment",
         assets: [
           {
-            name: "corridor",
-            srcs: "./assets/map2.png",
+            name: "outdoors_area",
+            srcs: "./assets/outdoors_area.jpg",
           },
           {
-            name: "background_hell",
-            srcs: "./assets/backgorund_hell.json",
-          },
-          {
-            name: "main_menu_anim",
-            srcs: "./assets/main_menu_anim.json",
-          },
+            name: "menu_background",
+            srcs: "./assets/menu_background.png",
+          }
         ],
       },
       {
         name: "characters",
         assets: [
           {
-            name: "doomguy",
-            srcs: "./assets/doomguy_walking.json",
+            name: "x_wing",
+            srcs: "./assets/x_wing.png",
           },
           {
-            name: "doomguy_death",
-            srcs: "./assets/doomguy_death.json",
+            name: "y_wing",
+            srcs: "./assets/y_wing.png",
           },
           {
-            name: "grunt_idle",
-            srcs: "./assets/grunt_idle.json",
+            name: "laser",
+            srcs: "./assets/laser.png",
           },
           {
-            name: "grunt_death",
-            srcs: "./assets/grunt_death.json",
+            name: "at_st",
+            srcs: "./assets/at_st.json",
           },
           {
-            name: "caocdemon",
-            srcs: "./assets/cacodemon.json",
-          },
-          {
-            name: "portrait",
-            srcs: "./assets/ui_portrait.json",
-          },
+            name: "viper_droid",
+            srcs: "./assets/viper_droid.json",
+          }
         ],
       },
       {
@@ -88,10 +74,6 @@ export async function loadGameAssets(): Promise<void> {
           {
             name: "bullet",
             srcs: "./assets/bullet.png",
-          },
-          {
-            name: "muzzle",
-            srcs: "./assets/muzzle_flash.json",
           },
           {
             name: "green_ball",
