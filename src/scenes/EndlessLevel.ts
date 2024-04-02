@@ -1,7 +1,7 @@
 import { Container, Ticker } from "pixi.js";
 import { Player } from "../characters/Player";
 import { Enemy } from "../characters/Enemy";
-import { gruntConfig, cacodemonConfig } from "../configs/EnemyConfigs";
+import { atStConfig } from "../configs/EnemyConfigs";
 import { Environment } from "../misc/Environment";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
@@ -11,10 +11,11 @@ import { EnemyType } from "../enums/EnemyType";
 import { HUD } from "../ui/HUD";
 import { saveScore, retrieveScore } from "../Utils";
 import { InGameMenu } from "../ui/InGameMenu";
+import { yWingConfig } from "../configs/PlayerConfigs";
+import { commonHudConfig } from "../configs/HUDConfigs";
 
-export class EndlessScene extends BaseScene {
+export class FlyingScene extends BaseScene {
     private _player: Player;
-    private _background: Environment;
     private _corridor: Environment;
     private _enemies: Enemy[];
     private _spawnInterval: NodeJS.Timeout;
@@ -30,32 +31,26 @@ export class EndlessScene extends BaseScene {
         this._enemies = [];
         this._isPaused = false;
         this._score = new Map();
-        this._hud = new HUD();
+        this._hud = new HUD(yWingConfig.icon, yWingConfig.projectile, commonHudConfig);
         this._gameContainer = new Container();
         this._inGameMenu = new InGameMenu();
-        this._player = new Player(this._gameContainer);
-        this._corridor = new Environment("corridor", 2);
+        this._player = new Player(this._gameContainer, yWingConfig);
+        this._player.on(GameEvent.PLAYER_SHOT, () => {
+            this._hud.ammo = this._player.ammo;
+        });
+        
+        this._corridor = new Environment("outdoors_area", 2);
 
-        this._background = new Environment([
-            "frame_0.png",
-            "frame_1.png",
-            "frame_2.png",
-            "frame_3.png",
-            "frame_5.png",
-            "frame_6.png",
-            "frame_7.png"
-        ], 4);
-
-        this._corridor.y = 230;
-        this._corridor.scale.set(0.7);
-        this._background.startScrolling(0.6);
-        this._corridor.startScrolling(1.2);
+        this._hud.ammo = this._player.ammo;
+        this._corridor.y = 0;
+        this._corridor.scale.set(0.75);
+        this._corridor.startScrolling(2.9);
         this._hud.health = this._player.health;
         this._spawnInterval = this.spawnEnemies();
         this.initTickerOperations();
 
         this._gameContainer.addChild(this._player);
-        this.addChild(this._background);
+
         this.addChild(this._corridor);
         this.addChild(this._gameContainer);
         this.addChild(this._hud);
@@ -72,7 +67,6 @@ export class EndlessScene extends BaseScene {
         }.bind(this));
 
         this._player.dispose();
-        this._background.dispose();
         this._corridor.dispose();
         this._hud.dispose();
         this._inGameMenu.dispose();
@@ -82,18 +76,18 @@ export class EndlessScene extends BaseScene {
 
     private spawnEnemies(): NodeJS.Timeout {
         return setInterval(() => {
-            const numberOfEnemies = Math.floor(Math.random() * 3) + 1;
+            const numberOfEnemies = Math.floor(Math.random() * 1) + 1;
 
             for (let i = 0; i < numberOfEnemies; i++) {
-                const y = Math.floor(Math.random() * (650 - 300 + 1)) + 300;
+                const y = 650;
                 const x = Math.floor(Math.random() * (2000 - gameConfig.width)) + gameConfig.width;
                 let enemy: Enemy;
                 const num = Math.floor(Math.random() * 2) + 1;
 
                 if (num === 1) {
-                    enemy = new Enemy(this._player, this._gameContainer, cacodemonConfig);
+                    enemy = new Enemy(this._player, this._gameContainer, atStConfig);
                 } else {
-                    enemy = new Enemy(this._player, this._gameContainer, gruntConfig);
+                    enemy = new Enemy(this._player, this._gameContainer, atStConfig);
                 }
 
                 enemy.x = x;
@@ -226,7 +220,6 @@ export class EndlessScene extends BaseScene {
             enemy.isMoving = false;
         }
 
-        this._background.startScrolling(0);
         this._corridor.startScrolling(0);
         setTimeout(() => this.emit(Scene.Change, Scene.EndGame), 1500);
     }

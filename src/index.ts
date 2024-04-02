@@ -1,6 +1,5 @@
 import "./style.css";
-import { Application, Assets, AssetsManifest, Sprite, Texture, Ticker } from "pixi.js";
-import { EndlessScene } from "./scenes/EndlessLevel";
+import { Application, Ticker } from "pixi.js";
 import { MainMenu } from "./scenes/MainMenu";
 import { gameConfig } from "./configs/GameConfig";
 import { BitmapFont } from "pixi.js";
@@ -8,6 +7,7 @@ import { BaseScene } from "./scenes/BaseScene";
 import { EndGame } from "./scenes/EndGame";
 import { Scene } from "./enums/Scene";
 import { loadGameAssets } from "./Utils";
+import { FlyingScene as EndlessLevel } from "./scenes/EndlessLevel";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
@@ -24,14 +24,14 @@ window.onload = async (): Promise<void> => {
   document.body.appendChild(app.view);
   resizeCanvas();
   app.stage.interactive = true;
-  changeScene(Scene.EndGame);
+  changeScene(Scene.MainMenu);
 };
 
 function changeScene(scene: Scene): void {
   currentScene?.dispose();
   switch (scene) {
     case Scene.Endless:
-      currentScene = new EndlessScene(app.stage);
+      currentScene = new EndlessLevel(app.stage);
       break;
     case Scene.MainMenu:
       currentScene = new MainMenu(app.stage);
@@ -42,6 +42,8 @@ function changeScene(scene: Scene): void {
     default:
       break;
   }
+
+  Ticker.shared.speed = 1;
   currentScene.on(Scene.Change, changeScene);
 }
 
@@ -53,75 +55,6 @@ function registerFonts(): void {
     fill: 0xffffff,
   });
 }
-
-// async function loadGameAssets(): Promise<void> {
-//   const manifest: AssetsManifest = {
-//     bundles: [
-//       {
-//         name: "environment",
-//         assets: [
-//           {
-//             name: "corridor",
-//             srcs: "./assets/map2.png",
-//           },
-//           {
-//             name: "background_hell",
-//             srcs: "./assets/backgorund_hell.json",
-//           },
-//           {
-//             name: "main_menu_anim",
-//             srcs: "./assets/main_menu_anim.json",
-//           },
-//         ],
-//       },
-//       {
-//         name: "characters",
-//         assets: [
-//           {
-//             name: "doomguy",
-//             srcs: "./assets/doomguy_walking.json",
-//           },
-//           {
-//             name: "doomguy_death",
-//             srcs: "./assets/doomguy_death.json",
-//           },
-//           {
-//             name: "grunt_idle",
-//             srcs: "./assets/grunt_idle.json",
-//           },
-//           {
-//             name: "grunt_death",
-//             srcs: "./assets/grunt_death.json",
-//           },
-//           {
-//             name: "caocdemon",
-//             srcs: "./assets/cacodemon.json",
-//           },
-//         ],
-//       },
-//       {
-//         name: "objects",
-//         assets: [
-//           {
-//             name: "bullet",
-//             srcs: "./assets/bullet.png",
-//           },
-//           {
-//             name: "muzzle",
-//             srcs: "./assets/muzzle_flash.json",
-//           },
-//           {
-//             name: "green_ball",
-//             srcs: "./assets/green_ball.png",
-//           },
-//         ],
-//       },
-//     ],
-//   };
-
-//   await Assets.init({ manifest });
-//   await Assets.loadBundle(["environment", "characters", "objects"]);
-// }
 
 function resizeCanvas(): void {
   const cleintWidth = document.documentElement.clientWidth;

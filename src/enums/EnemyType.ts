@@ -1,4 +1,3 @@
 export enum EnemyType {
-    GRUNT = "grunt",
-    CACODEMON = "cacodemon",
+    AT_ST = "atSt",
 }

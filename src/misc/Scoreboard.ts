@@ -1,11 +1,14 @@
 import { BitmapText, Container, Graphics, Sprite } from "pixi.js";
 import { EnemyType } from "../enums/EnemyType";
+import { IScoreBoardConfig } from "../configs/interfaces/IScoreboardConfig";
 
 export class Scoreboard extends Container {
     private _scoreMap: Map<EnemyType, BitmapText>;
+    private _config: IScoreBoardConfig;
 
-    constructor(title: string) {
+    constructor(title: string, config: IScoreBoardConfig) {
         super();
+        this._config = config;
         this._scoreMap = new Map();
         const titleText = new BitmapText(title, {
             fontName: "arial32",
@@ -20,26 +23,22 @@ export class Scoreboard extends Container {
                 fontName: "arial32",
             });
 
-            text.anchor.set(1, 0);
+            text.anchor.copyFrom(config.scoreTextAnchor);
 
             this._scoreMap.set(type, text);
 
             let sprite: Sprite | null = null;
             switch (type) {
-                case EnemyType.GRUNT:
-                    sprite = Sprite.from("grunt_down.png");
-                    sprite.scale.set(0.7);
-                    break;
-                case EnemyType.CACODEMON:
-                    sprite = Sprite.from("cacodemon_idle_down.png");
-                    sprite.scale.set(0.44);
+                case EnemyType.AT_ST:
+                    sprite = Sprite.from("at_st_down.png");
+                    sprite.scale.set(0.34);
                     break;
                 default:
                     break;
             }
 
             const spriteTextContainer = new Container();
-            spriteTextContainer.y = titleText.height + 10;
+            spriteTextContainer.y = titleText.height;
 
             if (sprite) {
                 if (biggestSprite.width < sprite.width) {
@@ -57,10 +56,17 @@ export class Scoreboard extends Container {
         }
 
         const graphics = new Graphics();
-        graphics.beginFill(0x000000, 0.7);
-        graphics.lineStyle({ width: 2, color: 0x919191 });
-        graphics.drawRoundedRect(0, 0, scoreContainer.width, scoreContainer.height, 12);
-        graphics.x -= 10;
+        graphics.beginFill(config.backgroundColor, config.backgroundAlpha);
+        graphics.lineStyle(config.backgroundLineStyles);
+        const size = config.backgroundSize;
+
+        graphics.drawRoundedRect(0, 0,
+            size?.width ? size.width : scoreContainer.width,
+            size?.height ? size.height : scoreContainer.height,
+            config.radius);
+
+        graphics.x -= config.backgroundOffset.x;
+        graphics.y -= config.backgroundOffset.y;
         this.addChild(graphics);
         this.addChild(scoreContainer);
         this.updateTextPos(biggestSprite);
@@ -78,7 +84,7 @@ export class Scoreboard extends Container {
             const type = EnemyType[key as keyof typeof EnemyType];
             const text = this._scoreMap.get(type);
             if (text) {
-                text.x = sprite.x;
+                text.x = sprite.x - this._config.textSpritegGap;
             }
         }
     }

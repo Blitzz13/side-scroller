@@ -3,19 +3,23 @@ import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
 import { Scene } from "../enums/Scene";
 import { Button } from "../misc/Button";
-import { getDoomguyAnimation, retrieveScore } from "../Utils";
+import { retrieveScore } from "../Utils";
 import { EnemyType } from "../enums/EnemyType";
 import { Scoreboard } from "../misc/Scoreboard";
+import { commonScoreboardConfig } from "../configs/ScoreboardConfig";
 
 
 export class EndGame extends BaseScene {
     constructor(stage: Container) {
         super(stage)
-        const animation = getDoomguyAnimation();
+        const background = Sprite.from("menu_background");
+        background.position.set(-3, -3);
+        background.scale.set(1.2);
+        this.addChild(background);
         const currentScore = retrieveScore("currentScore");
         const highScore = retrieveScore("highScore");
-        const scoreContainer = new Scoreboard("Current Run");
-        const highScoreContainer = new Scoreboard("Best run");
+        const scoreContainer = new Scoreboard("Current Run", commonScoreboardConfig);
+        const highScoreContainer = new Scoreboard("Best run", commonScoreboardConfig);
 
         this.setScore(currentScore, scoreContainer);
         this.setScore(highScore, highScoreContainer);
@@ -44,7 +48,6 @@ export class EndGame extends BaseScene {
             this.emit(Scene.Change, Scene.Endless);
         });
 
-        this.addChild(animation);
         this.addChild(scoreContainer);
         this.addChild(highScoreContainer);
         this.addChild(retryButton);

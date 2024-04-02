@@ -1,10 +1,9 @@
 import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
 import { GameEvent } from "../enums/GameEvent";
-import { IEnemyConfig } from "./interfaces/IEnemyConfig";
+import { IEnemyConfig } from "../configs/interfaces/IEnemyConfig";
 import { IBullet } from "./interfaces/IBullet";
 import { gameConfig } from "../configs/GameConfig";
 import { IEntity } from "./interfaces/IEntity";
-import { DeathType } from "../enums/DeathType";
 import { EnemyType } from "../enums/EnemyType";
 
 export class Enemy extends Container implements IEntity {
@@ -37,19 +36,17 @@ export class Enemy extends Container implements IEntity {
 
         if (config.death) {
             const textures = [];
-            const shotDeathAnim: string[] | undefined = config.death.types.get(DeathType.SHOT);
-            if (shotDeathAnim) {
-                for (const texture of shotDeathAnim) {
-                    textures.push(Texture.from(texture));
-                }
-
-                this._deathAnimation = new AnimatedSprite(textures);
-                this._deathAnimation.anchor.set(0.5);
-                this._deathAnimation.loop = false;
-                this._deathAnimation.animationSpeed = 0.2;
-                this._deathAnimation.visible = false;
-                this.addChild(this._deathAnimation);
+            const deathAnim = config.death.animation;
+            for (const texture of deathAnim) {
+                textures.push(Texture.from(texture));
             }
+
+            this._deathAnimation = new AnimatedSprite(textures);
+            this._deathAnimation.anchor.set(0.5);
+            this._deathAnimation.loop = false;
+            this._deathAnimation.animationSpeed = 0.2;
+            this._deathAnimation.visible = false;
+            this.addChild(this._deathAnimation);
         }
 
         this._config = config;
@@ -60,9 +57,7 @@ export class Enemy extends Container implements IEntity {
         this._sprite = Sprite.from(config.characterTextures.left);
         this._sprite.anchor.set(0.5, 0.5);
         this.addChild(this._sprite);
-        // this._shootingInterval = setInterval(() => this.shoot(), config.rateOfFireMs);
-        // this._updateTextureInterval = this.updateSpriteTexture();
-        // Add the updateBulletPosition function to the ticker
+
         Ticker.shared.add(this.updateBulletPosition, this);
         Ticker.shared.add(this.updateSpriteTexture, this);
         Ticker.shared.add(this.shoot, this);
@@ -109,7 +104,11 @@ export class Enemy extends Container implements IEntity {
         if (force) {
             Ticker.shared.remove(this.updateBulletPosition, this);
         }
-        this.clear();
+        
+        Ticker.shared.remove(this.updateSpriteTexture, this);
+        Ticker.shared.remove(this.move, this);
+        Ticker.shared.remove(this.shoot, this);
+        this.destroy({ children: true });
     }
 
     private move(dt: number): void {
@@ -206,12 +205,4 @@ export class Enemy extends Container implements IEntity {
             Ticker.shared.remove(this.updateBulletPosition, this);
         }
     };
-
-    private clear(): void {
-        Ticker.shared.remove(this.updateSpriteTexture, this);
-        Ticker.shared.remove(this.move, this);
-        Ticker.shared.remove(this.shoot, this);
-        console.log("Removed tickers from enemy...");
-        this.destroy({ children: true });
-    }
 }

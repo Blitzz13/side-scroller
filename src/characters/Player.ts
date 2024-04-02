@@ -1,86 +1,69 @@
-import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
+import { AnimatedSprite, Container, Sprite, Ticker } from "pixi.js";
 import { IBullet } from "./interfaces/IBullet";
 import { IEntity } from "./interfaces/IEntity";
 import { gameConfig } from "../configs/GameConfig";
 import { GameEvent } from "../enums/GameEvent";
+import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
+import { getTextureArrayFromStrings } from "../Utils";
 
 export class Player extends Container implements IEntity {
     private _dirextionX: -1 | 0 | 1 = 0;
     private _dirextionY: -1 | 0 | 1 = 0;
-    private _speed = 6;
-    private _isShooting = false;
-    private _walkingAnimation: AnimatedSprite;
-    private _deathAnimation: AnimatedSprite;
-    private _muzzleFlash: AnimatedSprite;
+    private _speed: number;
+    private _isShooting: boolean;
+    private _playerAnimation: AnimatedSprite | Sprite;
+    private _deathAnimation?: AnimatedSprite;
     private _stage: Container;
     private _bullets: IBullet[];
-    private _shootingTimer;
-    private _health;
-    private keydownHandlerBound = this.handleKeydown.bind(this);
-    private keyupHandlerBound = this.handleKeyup.bind(this);
-    constructor(sceneStage: Container) {
+    private _shootingTimer: number;
+    private _health: number;
+    private _ammo: number;
+    private _config: IPlayerConfig;
+    private _keydownHandlerBound = this.handleKeydown.bind(this);
+    private _keyupHandlerBound = this.handleKeyup.bind(this);
+
+    constructor(sceneStage: Container, config: IPlayerConfig) {
         super();
+        this._config = config;
         this._stage = sceneStage;
-        this._health = 100;
+        this._ammo = this._config.startingProjectilesNumber;
+        this._health = config.health;
+        this._speed = config.movementSpeed;
+        this._isShooting = false;
         this._bullets = [];
         this._shootingTimer = 0;
 
-        this._deathAnimation = new AnimatedSprite([
-            Texture.from("doomguy_death_1.png"),
-            Texture.from("doomguy_death_2.png"),
-            Texture.from("doomguy_death_3.png"),
-            Texture.from("doomguy_death_4.png"),
-            Texture.from("doomguy_death_5.png"),
-        ]);
+        if (config.deathAnimation) {
+            this._deathAnimation = new AnimatedSprite(getTextureArrayFromStrings(config.deathAnimation.frames));
 
-        this._deathAnimation.scale.set(0.6);
-        this._deathAnimation.loop = false;
-        this._deathAnimation.animationSpeed = 0.1;
-        this._deathAnimation.visible = false;
+            this._deathAnimation.scale.copyFrom(config.deathAnimation.scale);
+            this._deathAnimation.loop = config.deathAnimation.loop;
+            this._deathAnimation.animationSpeed = config.deathAnimation.speed;
+            this._deathAnimation.visible = false;
+            this.addChild(this._deathAnimation);
+        }
 
-        this._walkingAnimation = new AnimatedSprite([
-            Texture.from("tile000.png"),
-            Texture.from("tile001.png"),
-            Texture.from("tile002.png"),
-            Texture.from("tile003.png"),
-            Texture.from("tile005.png"),
-        ]);
+        if (typeof config.moving !== "string") {
+            this._playerAnimation = new AnimatedSprite(getTextureArrayFromStrings(config.moving.frames));
+            this._playerAnimation.scale.copyFrom(config.playerScale);
+            if (this._playerAnimation instanceof AnimatedSprite) {
+                this._playerAnimation.loop = config.moving.loop;
+                this._playerAnimation.animationSpeed = config.moving.speed;
+                this._playerAnimation.play();
+            }
+        } else {
+            this._playerAnimation = Sprite.from(config.moving);
+        }
 
-        this._walkingAnimation.scale.set(0.6);
-        this._walkingAnimation.loop = true;
-        this._walkingAnimation.animationSpeed = 0.1;
-        this._walkingAnimation.play();
-
-        this._muzzleFlash = new AnimatedSprite([
-            Texture.from("m_9.png"),
-            Texture.from("m_15.png"),
-            Texture.from("m_10.png"),
-            Texture.from("m_13.png"),
-            Texture.from("m_5.png"),
-        ]);
-
-        this._muzzleFlash.animationSpeed = 0.2;
-        this._muzzleFlash.scale.set(0.1);
-        this._muzzleFlash.position.set(50, 5);
-        this._muzzleFlash.visible = false;
-
-        this.addChild(this._walkingAnimation);
-        this.addChild(this._deathAnimation);
-        this.addChild(this._muzzleFlash);
         this.addEvents();
+        this.addChild(this._playerAnimation);
 
-        this.y = 720 / 2 - this._walkingAnimation.height / 2;
-        Ticker.shared.add(this.moveBullets, this);
-        Ticker.shared.add(this.enableShooting, this);
+        this.position.copyFrom(config.spawnCoords);
+        Ticker.shared.add(this.moveProjectiles, this);
         Ticker.shared.add(this.handlePlayerMovement, this);
-    }
-
-    public dispose(): void {
-        Ticker.shared.remove(this.moveBullets, this);
-        Ticker.shared.remove(this.enableShooting, this);
-        Ticker.shared.remove(this.handlePlayerMovement, this);
-        this.removeEvents();
-        this.destroy({ children: true });
+        if (config.canShoot) {
+            Ticker.shared.add(this.shoot, this);
+        }
     }
 
     public get isShooting(): boolean {
@@ -95,14 +78,28 @@ export class Player extends Container implements IEntity {
         return this._health;
     }
 
+    public get ammo(): number {
+        return this._ammo;
+    }
+
+    public dispose(): void {
+        Ticker.shared.remove(this.moveProjectiles, this);
+        Ticker.shared.remove(this.shoot, this);
+        Ticker.shared.remove(this.handlePlayerMovement, this);
+        this.removeEvents();
+        this.destroy({ children: true });
+    }
+
     public takeDamage(damage: number): number {
         this._health -= damage;
 
         if (this._health <= 0) {
-            this._walkingAnimation.visible = false;
-            this._deathAnimation.visible = true;
-            this._muzzleFlash.visible = false;
-            this._deathAnimation.play();
+            this._playerAnimation.visible = false;
+            if (this._deathAnimation) {
+                this._deathAnimation.visible = true;
+                this._deathAnimation.play();
+            }
+
             this.removeEvents();
             this._speed = 0;
             this._isShooting = false;
@@ -114,55 +111,71 @@ export class Player extends Container implements IEntity {
     }
 
     private handlePlayerMovement(dt: number): void {
-        this.x += this._dirextionX * this._speed * dt;
+        const x = this._dirextionX * this._speed * dt;
+        const y = this._dirextionY * this._speed * dt;
 
-        if (this.y < 237) {
-            this.y = 237;
-        } else if (this.y > 611) {
-            this.y = 611;
+        if (this.x + x > this._config.playerMaxBoundaries.x - this._playerAnimation.width) {
+            this.x = this._config.playerMaxBoundaries.x - this._playerAnimation.width;
+        } else if (this.x + x < this._config.playerMinBoundaries.x){
+            this.x = this._config.playerMinBoundaries.x;
         } else {
-            this.y += this._dirextionY * this._speed * dt;
+            this.x += x;
+        }
+
+        if (this.y + y < this._config.playerMinBoundaries.y) {
+            this.y = this._config.playerMinBoundaries.y;
+        } else if (this.y + y > this._config.playerMaxBoundaries.y) {
+            this.y = this._config.playerMaxBoundaries.y;
+        } else {
+            this.y += y;
         }
     }
 
-    private enableShooting(dt: number): void {
+    private shoot(dt: number): void {
         this._shootingTimer += dt;
-
-        if (this._isShooting && this._shootingTimer >= 10) {
+    
+        if (this._isShooting && this._shootingTimer >= this._config.timeBetweenShots && this._ammo > 0) {
             this._shootingTimer = 0;
-
-            const bullet = Sprite.from("bullet");
-            bullet.scale.set(0.1, 0.1);
-            bullet.position.set(this.position.x + 30, this.position.y + 14);
-
+    
+            const bullet = Sprite.from(this._config.projectile);
+            bullet.scale.copyFrom(this._config.projectileScale);
+            bullet.position.set(this.position.x + this._config.projectileSpawnOffset.x, this.position.y + this._config.projectileSpawnOffset.y);
+    
             this._stage.addChild(bullet);
+    
             this._bullets.push({
                 sprite: bullet,
-                velocityX: 18,
-                velocityY: 0,
+                velocityX: this._config.projectileVelocity.x,
+                velocityY: this._config.projectileVelocity.y,
             });
+
+            this._ammo -= 1;
+            this.emit(GameEvent.PLAYER_SHOT);
         }
     }
+    
 
-    private moveBullets(dt: number) {
+    private moveProjectiles(dt: number) {
         for (const bullet of this._bullets) {
             bullet.sprite.x += bullet.velocityX * dt;
+            bullet.sprite.y += bullet.velocityY * dt;
 
-            // Remove the bullet when it goes off the screen
-            if (bullet.sprite.position.x > gameConfig.width) {
+            bullet.velocityY += this._config.projectileGravity * Ticker.shared.speed;
+
+            if (bullet.sprite.position.x > gameConfig.width || bullet.sprite.position.y > gameConfig.height) {
                 this._stage.removeChild(bullet.sprite);
             }
         }
     }
 
     private addEvents(): void {
-        window.addEventListener("keydown", this.keydownHandlerBound);
-        window.addEventListener("keyup", this.keyupHandlerBound);
+        window.addEventListener("keydown", this._keydownHandlerBound);
+        window.addEventListener("keyup", this._keyupHandlerBound);
     }
 
     private removeEvents(): void {
-        window.removeEventListener("keydown", this.keydownHandlerBound);
-        window.removeEventListener("keyup", this.keyupHandlerBound);
+        window.removeEventListener("keydown", this._keydownHandlerBound);
+        window.removeEventListener("keyup", this._keyupHandlerBound);
     }
 
     private handleKeydown(e: KeyboardEvent) {
@@ -182,11 +195,10 @@ export class Player extends Container implements IEntity {
             this._dirextionY = 1;
         }
 
-        if (e.key === " " && !this._isShooting) {
-            this._isShooting = true;
-            this._muzzleFlash.play();
-            this._muzzleFlash.loop = true;
-            this._muzzleFlash.visible = true;
+        if (this._config.canShoot) {
+            if (e.key === " " && !this._isShooting && Ticker.shared.speed > 0) {
+                this._isShooting = true;
+            }
         }
     }
 
@@ -199,12 +211,10 @@ export class Player extends Container implements IEntity {
             this._dirextionY = 0;
         }
 
-        if (e.key === " ") {
-            this._isShooting = false;
-            this._muzzleFlash.stop();
-            this._muzzleFlash.loop = false;
-            this._muzzleFlash.currentFrame = 0;
-            this._muzzleFlash.visible = false;
+        if (this._config.canShoot) {
+            if (e.key === " ") {
+                this._isShooting = false;
+            }
         }
     }
 }
