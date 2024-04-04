@@ -2,6 +2,7 @@ import { Point } from "pixi.js";
 import { IAnimationConfig } from "./IAnimationConfig";
 
 export interface IPlayerConfig {
+    damage: number;
     timeBetweenShots: number;
     health: number;
     startingProjectilesNumber: number;

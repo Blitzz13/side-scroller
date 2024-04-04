@@ -18,6 +18,7 @@ export class Player extends Container implements IEntity {
     private _shootingTimer: number;
     private _health: number;
     private _ammo: number;
+    private _damage: number;
     private _config: IPlayerConfig;
     private _keydownHandlerBound = this.handleKeydown.bind(this);
     private _keyupHandlerBound = this.handleKeyup.bind(this);
@@ -26,7 +27,8 @@ export class Player extends Container implements IEntity {
         super();
         this._config = config;
         this._stage = sceneStage;
-        this._ammo = this._config.startingProjectilesNumber;
+        this._ammo = config.startingProjectilesNumber;
+        this._damage = config.damage;
         this._health = config.health;
         this._speed = config.movementSpeed;
         this._isShooting = false;
@@ -68,6 +70,10 @@ export class Player extends Container implements IEntity {
 
     public get isShooting(): boolean {
         return this._isShooting;
+    }
+
+    public get damage(): number {
+        return this._damage;
     }
 
     public get bullets(): IBullet[] {

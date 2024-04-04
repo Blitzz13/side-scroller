@@ -33,6 +33,10 @@ export class Scoreboard extends Container {
                     sprite = Sprite.from("at_st_down.png");
                     sprite.scale.set(0.34);
                     break;
+                case EnemyType.VIPER_DROID:
+                    sprite = Sprite.from("viper_droid_1.png");
+                    sprite.scale.set(0.64);
+                    break;
                 default:
                     break;
             }

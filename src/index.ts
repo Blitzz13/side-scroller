@@ -7,13 +7,15 @@ import { BaseScene } from "./scenes/BaseScene";
 import { EndGame } from "./scenes/EndGame";
 import { Scene } from "./enums/Scene";
 import { loadGameAssets } from "./Utils";
-import { FlyingScene as EndlessLevel } from "./scenes/EndlessLevel";
+import { EndlessLevel } from "./scenes/EndlessLevel";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
   width: gameConfig.width,
   height: gameConfig.height,
 });
+
+let currentScale = 1;
 
 // For pixi debug utils
 (globalThis as any).__PIXI_APP__ = app;
@@ -31,13 +33,13 @@ function changeScene(scene: Scene): void {
   currentScene?.dispose();
   switch (scene) {
     case Scene.Endless:
-      currentScene = new EndlessLevel(app.stage);
+      currentScene = new EndlessLevel(app.stage, currentScale);
       break;
     case Scene.MainMenu:
-      currentScene = new MainMenu(app.stage);
+      currentScene = new MainMenu(app.stage, currentScale);
       break;
     case Scene.EndGame:
-      currentScene = new EndGame(app.stage);
+      currentScene = new EndGame(app.stage, currentScale);
       break;
     default:
       break;
@@ -61,12 +63,16 @@ function resizeCanvas(): void {
   const clientHeight = document.documentElement.clientHeight;
 
   let scale = Math.min(cleintWidth / gameConfig.width, clientHeight / gameConfig.height);
-
+  currentScale = scale;
+  
   const newWidth = Math.round(gameConfig.width * scale);
   const newHeight = Math.round(gameConfig.height * scale);
 
   app.renderer.resize(newWidth, newHeight);
   app.stage.scale.set(scale);
+  if (currentScene) {
+    currentScene.appScale = scale;
+  }
 
   const offsetX = (cleintWidth - newWidth) / 2;
   const offsetY = (clientHeight - newHeight) / 2;
@@ -77,11 +83,11 @@ function resizeCanvas(): void {
 
 function requestFullscreen(): void {
   if (document.fullscreenEnabled) {
-      app.view.requestFullscreen().catch((error) => {
-          console.error('Failed to enter fullscreen:', error);
-      });
+    app.view.requestFullscreen().catch((error) => {
+      console.error('Failed to enter fullscreen:', error);
+    });
   } else {
-      console.error('Fullscreen is not supported.');
+    console.error('Fullscreen is not supported.');
   }
 }
 

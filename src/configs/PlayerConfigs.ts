@@ -3,6 +3,7 @@ import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
 import { gameConfig } from "./GameConfig";
 
 export const xWingConfig: IPlayerConfig = {
+    damage: 1,
     timeBetweenShots: 10,
     moving: "x_wing",
     icon: "x_wing",
@@ -22,6 +23,7 @@ export const xWingConfig: IPlayerConfig = {
 }
 
 export const yWingConfig: IPlayerConfig = {
+    damage: 1,
     timeBetweenShots: 10,
     startingProjectilesNumber: 15,
     canShoot: true,
