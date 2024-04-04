@@ -2,8 +2,8 @@ import { Point } from "pixi.js";
 import { IEnemyConfig } from "./interfaces/IEnemyConfig";
 import { EnemyType } from "../enums/EnemyType";
 
-
 export const atStConfig: IEnemyConfig = {
+    faceTarget: true,
     health: 1,
     type: EnemyType.AT_ST,
     rateOfFire: 300,
@@ -33,4 +33,18 @@ export const atStConfig: IEnemyConfig = {
         animationSpeed: 0.1,
         loop: false,
     }
+}
+
+export const viperDroidConfig: IEnemyConfig = {
+    health: 1,
+    type: EnemyType.VIPER_DROID,
+    rateOfFire: 0,
+    damage: 0,
+    meleeDamage: 1,
+    speed: 6,
+    characterTextures: {
+        left: "viper_droid_1.png",
+        down: "viper_droid_1.png",
+        up: "viper_droid_1.png",
+    },
 }

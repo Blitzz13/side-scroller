@@ -59,9 +59,19 @@ export class Enemy extends Container implements IEntity {
         this.addChild(this._sprite);
 
         Ticker.shared.add(this.updateBulletPosition, this);
-        Ticker.shared.add(this.updateSpriteTexture, this);
-        Ticker.shared.add(this.shoot, this);
         Ticker.shared.add(this.move, this);
+        
+        if (config.faceTarget) {
+            Ticker.shared.add(this.updateSpriteTexture, this);
+        }
+
+        if (config.projectile) {
+            Ticker.shared.add(this.shoot, this);
+        }
+    }
+
+    public get collider(): Sprite {
+        return this._sprite;
     }
 
     public get damage(): number {
@@ -105,9 +115,15 @@ export class Enemy extends Container implements IEntity {
             Ticker.shared.remove(this.updateBulletPosition, this);
         }
         
-        Ticker.shared.remove(this.updateSpriteTexture, this);
+        if (this._config.faceTarget) {
+            Ticker.shared.remove(this.updateSpriteTexture, this);
+        }
+
+        if (this._config.projectile) {
+            Ticker.shared.remove(this.shoot, this);
+        }
+        
         Ticker.shared.remove(this.move, this);
-        Ticker.shared.remove(this.shoot, this);
         this.destroy({ children: true });
     }
 
@@ -146,41 +162,43 @@ export class Enemy extends Container implements IEntity {
     }
 
     private shoot(dt: number): void {
-        this._timeSinceLastShot += dt;
-
-        if (this._timeSinceLastShot < this._config.rateOfFire) {
-            return;
+        if (this._config.projectile) {
+            this._timeSinceLastShot += dt;
+    
+            if (this._timeSinceLastShot < this._config.rateOfFire) {
+                return;
+            }
+    
+            if (this.x > gameConfig.width || !this._isShooting) {
+                return;
+            }
+    
+            // Calculate the angle between the enemy and the target
+            const distanceX = this._target.x - this.x;
+            const distanceY = this._target.y + this._target.height / 2 - this.y;
+            const angle = Math.atan2(distanceY, distanceX);
+    
+            const shot = Sprite.from(this._config.projectile.texture);
+            shot.anchor.copyFrom(this._config.projectile.anchor);
+            shot.rotation = angle;
+            shot.scale.copyFrom(this._config.projectile.scale);
+            shot.position.set(this.x + this._config.projectile.startPosOffset.x, this.y + this._config.projectile.startPosOffset.y);
+            this._stage.addChild(shot);
+    
+            // Calculate velocity components based on the angle
+            const bulletSpeed = this._config.projectile.speed;
+            const velocityX = bulletSpeed * Math.cos(angle);
+            const velocityY = bulletSpeed * Math.sin(angle);
+    
+            const bullet: IBullet = {
+                sprite: shot,
+                velocityX: velocityX,
+                velocityY: velocityY
+            }
+    
+            this._bullets.push(bullet);
+            this._timeSinceLastShot = 0;
         }
-
-        if (this.x > gameConfig.width || !this._isShooting) {
-            return;
-        }
-
-        // Calculate the angle between the enemy and the target
-        const distanceX = this._target.x - this.x;
-        const distanceY = this._target.y + this._target.height / 2 - this.y;
-        const angle = Math.atan2(distanceY, distanceX);
-
-        const shot = Sprite.from(this._config.projectile.texture);
-        shot.anchor.copyFrom(this._config.projectile.anchor);
-        shot.rotation = angle;
-        shot.scale.copyFrom(this._config.projectile.scale);
-        shot.position.set(this.x + this._config.projectile.startPosOffset.x, this.y + this._config.projectile.startPosOffset.y);
-        this._stage.addChild(shot);
-
-        // Calculate velocity components based on the angle
-        const bulletSpeed = this._config.projectile.speed;
-        const velocityX = bulletSpeed * Math.cos(angle);
-        const velocityY = bulletSpeed * Math.sin(angle);
-
-        const bullet: IBullet = {
-            sprite: shot,
-            velocityX: velocityX,
-            velocityY: velocityY
-        }
-
-        this._bullets.push(bullet);
-        this._timeSinceLastShot = 0;
     }
 
     private updateBulletPosition(dt: number): void {

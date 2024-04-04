@@ -1,4 +1,4 @@
-import { BitmapText, Container, Graphics, RoundedRectangle, Sprite } from "pixi.js";
+import { Container, RoundedRectangle, Sprite } from "pixi.js";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
 import { Scene } from "../enums/Scene";
@@ -10,8 +10,8 @@ import { commonScoreboardConfig } from "../configs/ScoreboardConfig";
 
 
 export class EndGame extends BaseScene {
-    constructor(stage: Container) {
-        super(stage)
+    constructor(stage: Container, scale: number) {
+        super(stage, scale)
         const background = Sprite.from("menu_background");
         background.position.set(-3, -3);
         background.scale.set(1.2);

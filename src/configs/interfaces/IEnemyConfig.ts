@@ -1,5 +1,4 @@
 import { Point } from "pixi.js";
-import { DeathType } from "../../enums/DeathType";
 import { EnemyType } from "../../enums/EnemyType";
 
 export interface IEnemyConfig {
@@ -14,7 +13,8 @@ export interface IEnemyConfig {
         down: string;
         left: string;
     }
-    projectile: {
+    faceTarget?: boolean;
+    projectile?: {
         speed: number;
         texture: string;
         scale: Point;

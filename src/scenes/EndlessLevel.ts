@@ -1,7 +1,7 @@
-import { Container, Ticker } from "pixi.js";
+import { Container, Rectangle, Ticker } from "pixi.js";
 import { Player } from "../characters/Player";
 import { Enemy } from "../characters/Enemy";
-import { atStConfig } from "../configs/EnemyConfigs";
+import { atStConfig, viperDroidConfig } from "../configs/EnemyConfigs";
 import { Environment } from "../misc/Environment";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
@@ -14,7 +14,7 @@ import { InGameMenu } from "../ui/InGameMenu";
 import { yWingConfig } from "../configs/PlayerConfigs";
 import { commonHudConfig } from "../configs/HUDConfigs";
 
-export class FlyingScene extends BaseScene {
+export class EndlessLevel extends BaseScene {
     private _player: Player;
     private _corridor: Environment;
     private _enemies: Enemy[];
@@ -25,9 +25,8 @@ export class FlyingScene extends BaseScene {
     private _isPaused: boolean;
     private _gameContainer: Container;
     private _keyboardHandler = this.handleKeyboardEvents.bind(this);
-
-    constructor(stage: Container) {
-        super(stage)
+    constructor(stage: Container, scale: number) {
+        super(stage, scale)
         this._enemies = [];
         this._isPaused = false;
         this._score = new Map();
@@ -38,8 +37,8 @@ export class FlyingScene extends BaseScene {
         this._player.on(GameEvent.PLAYER_SHOT, () => {
             this._hud.ammo = this._player.ammo;
         });
-        
-        this._corridor = new Environment("outdoors_area", 2);
+
+        this._corridor = new Environment("outdoors_area", 3);
 
         this._hud.ammo = this._player.ammo;
         this._corridor.y = 0;
@@ -86,12 +85,13 @@ export class FlyingScene extends BaseScene {
 
                 if (num === 1) {
                     enemy = new Enemy(this._player, this._gameContainer, atStConfig);
+                    enemy.y = y;
                 } else {
-                    enemy = new Enemy(this._player, this._gameContainer, atStConfig);
+                    enemy = new Enemy(this._player, this._gameContainer, viperDroidConfig);
+                    enemy.y = Math.floor(Math.random() * 501);
                 }
 
                 enemy.x = x;
-                enemy.y = y;
 
                 this._gameContainer.addChild(enemy);
                 this._enemies.push(enemy);
@@ -116,10 +116,18 @@ export class FlyingScene extends BaseScene {
                     continue;
                 }
 
-                if (!enemy.destroyed && pBullet.sprite.getBounds().intersects(enemy.getBounds())) {
-                    enemy.takeDamage(1);
+                // Fixes an issue with getBounds when scaling the stage
+                const bulletBounds = new Rectangle(
+                    pBullet.sprite.x * this.appScale,
+                    pBullet.sprite.y * this.appScale,
+                    pBullet.sprite.width * this.appScale,
+                    pBullet.sprite.height * this.appScale);
+
+                if (!enemy.destroyed && bulletBounds.intersects(enemy.getBounds())) {
+                    enemy.takeDamage(this._player.damage);
                     this._player.bullets.splice(this._player.bullets.indexOf(pBullet), 1);
                     pBullet.sprite.destroy();
+
                     if (enemy.isDead) {
                         this.setKill(enemy);
                     }

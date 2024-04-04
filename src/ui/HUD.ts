@@ -1,6 +1,5 @@
-import { AnimatedSprite, BitmapText, Container, Sprite, Texture } from "pixi.js";
+import { BitmapText, Container, Sprite } from "pixi.js";
 import { IEntity } from "../characters/interfaces/IEntity";
-import { gameConfig } from "../configs/GameConfig";
 import { Scoreboard } from "../misc/Scoreboard";
 import { EnemyType } from "../enums/EnemyType";
 import { commonScoreboardConfig } from "../configs/ScoreboardConfig";
