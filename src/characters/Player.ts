@@ -221,19 +221,19 @@ export class Player extends Container implements IEntity {
     }
 
     private handleKeydown(e: KeyboardEvent) {
-        if (e.key === "d") {
+        if (e.key === "d" || e.key === "ArrowRight") {
             this._dirextionX = 1;
         }
 
-        if (e.key === "a") {
+        if (e.key === "a" || e.key === "ArrowLeft") {
             this._dirextionX = -1;
         }
 
-        if (e.key === "w") {
+        if (e.key === "w" || e.key === "ArrowUp") {
             this._dirextionY = -1;
         }
 
-        if (e.key === "s") {
+        if (e.key === "s" || e.key === "ArrowDown") {
             this._dirextionY = 1;
         }
 
@@ -245,11 +245,11 @@ export class Player extends Container implements IEntity {
     }
 
     private handleKeyup(e: KeyboardEvent) {
-        if (e.key === "d" || e.key === "a") {
+        if (e.key === "d" || e.key === "a" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
             this._dirextionX = 0;
         }
 
-        if (e.key === "w" || e.key === "s") {
+        if (e.key === "w" || e.key === "s" || e.key === "ArrowUp" || e.key === "ArrowDown") {
             this._dirextionY = 0;
         }
 

@@ -15,7 +15,7 @@ const ammo: IPickUpConfig = {
 }
 
 const health: IPickUpConfig = {
-    scale: new Point(0.09, 0.09),
+    scale: new Point(0.05, 0.05),
     type: PickUpType.HEALTH,
     amount: 2,
     speed: 4,

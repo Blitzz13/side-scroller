@@ -88,7 +88,7 @@ export class EndlessLevel extends BaseScene {
 
     private spawnEnemies(): NodeJS.Timeout {
         return setInterval(() => {
-            const numberOfEnemies = Math.floor(Math.random() * 1) + 1;
+            const numberOfEnemies = getRandomInt(1, 3);
 
             for (let i = 0; i < numberOfEnemies; i++) {
                 const enemyId = Math.floor(Math.random() * enemyConfigs.length);
