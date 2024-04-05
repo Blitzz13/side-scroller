@@ -1,5 +1,6 @@
 import { Point } from "pixi.js";
 import { EnemyType } from "../../enums/EnemyType";
+import { ISpawnRange } from "./ISpawnRange";
 
 export interface IEnemyConfig {
     health: number;
@@ -8,6 +9,7 @@ export interface IEnemyConfig {
     damage: number;
     meleeDamage: number;
     rateOfFire: number;
+    spawnRange: ISpawnRange;
     characterTextures: {
         up: string;
         down: string;

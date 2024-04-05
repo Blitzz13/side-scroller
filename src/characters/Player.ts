@@ -20,6 +20,9 @@ export class Player extends Container implements IEntity {
     private _ammo: number;
     private _damage: number;
     private _config: IPlayerConfig;
+    private _ammoTimeout!: NodeJS.Timeout;
+    private _healthTimeout!: NodeJS.Timeout;
+    private _damageTimeout!: NodeJS.Timeout;
     private _keydownHandlerBound = this.handleKeydown.bind(this);
     private _keyupHandlerBound = this.handleKeyup.bind(this);
 
@@ -88,7 +91,26 @@ export class Player extends Container implements IEntity {
         return this._ammo;
     }
 
+    public set ammo(value: number) {
+        this._playerAnimation.tint = 0x0000ff;
+        this._ammoTimeout = setTimeout(() => {
+            this._playerAnimation.tint = 0xffffff; // Reset tint to original color
+        }, 200);
+        this._ammo = value;
+    }
+
     public dispose(): void {
+        if (this._ammoTimeout) {
+            clearTimeout(this._ammoTimeout);
+        }
+
+        if (this._damageTimeout) {
+            clearTimeout(this._damageTimeout);
+        }
+
+        if (this._healthTimeout) {
+            clearTimeout(this._healthTimeout);
+        }
         Ticker.shared.remove(this.moveProjectiles, this);
         Ticker.shared.remove(this.shoot, this);
         Ticker.shared.remove(this.handlePlayerMovement, this);
@@ -111,8 +133,22 @@ export class Player extends Container implements IEntity {
             this._isShooting = false;
             this.emit(GameEvent.PLAYER_DIED);
             this._health = 0;
+        } else {
+            this._playerAnimation.tint = 0xff0000;
+            this._damageTimeout = setTimeout(() => {
+                this._playerAnimation.tint = 0xffffff; // Reset tint to original color
+            }, 100);
         }
 
+        return this._health;
+    }
+
+    public heal(hp: number): number {
+        this._health += hp;
+        this._playerAnimation.tint = 0x00ff00;
+        this._healthTimeout = setTimeout(() => {
+            this._playerAnimation.tint = 0xffffff; // Reset tint to original color
+        }, 200);
         return this._health;
     }
 
@@ -122,7 +158,7 @@ export class Player extends Container implements IEntity {
 
         if (this.x + x > this._config.playerMaxBoundaries.x - this._playerAnimation.width) {
             this.x = this._config.playerMaxBoundaries.x - this._playerAnimation.width;
-        } else if (this.x + x < this._config.playerMinBoundaries.x){
+        } else if (this.x + x < this._config.playerMinBoundaries.x) {
             this.x = this._config.playerMinBoundaries.x;
         } else {
             this.x += x;
@@ -139,16 +175,16 @@ export class Player extends Container implements IEntity {
 
     private shoot(dt: number): void {
         this._shootingTimer += dt;
-    
+
         if (this._isShooting && this._shootingTimer >= this._config.timeBetweenShots && this._ammo > 0) {
             this._shootingTimer = 0;
-    
+
             const bullet = Sprite.from(this._config.projectile);
             bullet.scale.copyFrom(this._config.projectileScale);
             bullet.position.set(this.position.x + this._config.projectileSpawnOffset.x, this.position.y + this._config.projectileSpawnOffset.y);
-    
+
             this._stage.addChild(bullet);
-    
+
             this._bullets.push({
                 sprite: bullet,
                 velocityX: this._config.projectileVelocity.x,
@@ -159,7 +195,7 @@ export class Player extends Container implements IEntity {
             this.emit(GameEvent.PLAYER_SHOT);
         }
     }
-    
+
 
     private moveProjectiles(dt: number) {
         for (const bullet of this._bullets) {

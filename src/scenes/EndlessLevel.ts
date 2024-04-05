@@ -1,7 +1,7 @@
-import { Container, Rectangle, Ticker } from "pixi.js";
+import { Container, Point, Rectangle, Ticker } from "pixi.js";
 import { Player } from "../characters/Player";
 import { Enemy } from "../characters/Enemy";
-import { atStConfig, viperDroidConfig } from "../configs/EnemyConfigs";
+import { enemyConfigs } from "../configs/EnemyConfigs";
 import { Environment } from "../misc/Environment";
 import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
@@ -9,25 +9,32 @@ import { GameEvent } from "../enums/GameEvent";
 import { Scene } from "../enums/Scene";
 import { EnemyType } from "../enums/EnemyType";
 import { HUD } from "../ui/HUD";
-import { saveScore, retrieveScore } from "../Utils";
+import { saveScore, retrieveScore, getRandomInt } from "../Utils";
 import { InGameMenu } from "../ui/InGameMenu";
 import { yWingConfig } from "../configs/PlayerConfigs";
 import { commonHudConfig } from "../configs/HUDConfigs";
+import { PickUp } from "../misc/PickUp";
+import { PickUpType } from "../enums/PickUpType";
+import { pickUps } from "../configs/PickUpConfigs";
 
 export class EndlessLevel extends BaseScene {
     private _player: Player;
     private _corridor: Environment;
     private _enemies: Enemy[];
-    private _spawnInterval: NodeJS.Timeout;
+    private _pickUps: PickUp[];
+    private _enemySpawnInterval: NodeJS.Timeout;
+    private _pickUpSpawnInterval: NodeJS.Timeout;
     private _score: Map<EnemyType, number>;
     private _hud: HUD;
     private _inGameMenu: InGameMenu;
     private _isPaused: boolean;
     private _gameContainer: Container;
     private _keyboardHandler = this.handleKeyboardEvents.bind(this);
+
     constructor(stage: Container, scale: number) {
         super(stage, scale)
         this._enemies = [];
+        this._pickUps = [];
         this._isPaused = false;
         this._score = new Map();
         this._hud = new HUD(yWingConfig.icon, yWingConfig.projectile, commonHudConfig);
@@ -45,7 +52,8 @@ export class EndlessLevel extends BaseScene {
         this._corridor.scale.set(0.75);
         this._corridor.startScrolling(2.9);
         this._hud.health = this._player.health;
-        this._spawnInterval = this.spawnEnemies();
+        this._enemySpawnInterval = this.spawnEnemies();
+        this._pickUpSpawnInterval = this.spawnPickUps();
         this.initTickerOperations();
 
         this._gameContainer.addChild(this._player);
@@ -58,11 +66,16 @@ export class EndlessLevel extends BaseScene {
     }
 
     public dispose(): void {
-        clearInterval(this._spawnInterval);
+        clearInterval(this._enemySpawnInterval);
+        clearInterval(this._pickUpSpawnInterval);
         this.removeTickerOperations();
 
         this._enemies.forEach(function (enemy: Enemy) {
             enemy.dispose(true);
+        }.bind(this));
+
+        this._pickUps.forEach(function (pickUp: PickUp) {
+            pickUp.dispose();
         }.bind(this));
 
         this._player.dispose();
@@ -78,20 +91,11 @@ export class EndlessLevel extends BaseScene {
             const numberOfEnemies = Math.floor(Math.random() * 1) + 1;
 
             for (let i = 0; i < numberOfEnemies; i++) {
-                const y = 650;
-                const x = Math.floor(Math.random() * (2000 - gameConfig.width)) + gameConfig.width;
-                let enemy: Enemy;
-                const num = Math.floor(Math.random() * 2) + 1;
+                const enemyId = Math.floor(Math.random() * enemyConfigs.length);
+                let enemy: Enemy = new Enemy(this._player, this._gameContainer, enemyConfigs[enemyId]);
 
-                if (num === 1) {
-                    enemy = new Enemy(this._player, this._gameContainer, atStConfig);
-                    enemy.y = y;
-                } else {
-                    enemy = new Enemy(this._player, this._gameContainer, viperDroidConfig);
-                    enemy.y = Math.floor(Math.random() * 501);
-                }
-
-                enemy.x = x;
+                enemy.x = getRandomInt(enemy.spawnRange.min.x, enemy.spawnRange.max.x);
+                enemy.y = getRandomInt(enemy.spawnRange.min.y, enemy.spawnRange.max.y);
 
                 this._gameContainer.addChild(enemy);
                 this._enemies.push(enemy);
@@ -100,7 +104,21 @@ export class EndlessLevel extends BaseScene {
                     this._hud.health = this._player.takeDamage(enemy.damage)
                 });
             }
-        }, 2000);
+        }, getRandomInt(2000, 4000));
+    }
+
+    private spawnPickUps(): NodeJS.Timeout {
+        return setInterval(() => {
+            const pickUpIndex = getRandomInt(0, pickUps.length);
+            const pickUp = new PickUp(pickUps[pickUpIndex]);
+
+            pickUp.x = getRandomInt(pickUp.spawnRange.min.x, pickUp.spawnRange.max.x);
+            pickUp.y = getRandomInt(pickUp.spawnRange.min.y, pickUp.spawnRange.max.y);
+
+            this._pickUps.push(pickUp);
+
+            this._gameContainer.addChild(pickUp);
+        }, getRandomInt(10000, 20000));
     }
 
     private handleKeyboardEvents(e: KeyboardEvent): void {
@@ -154,6 +172,27 @@ export class EndlessLevel extends BaseScene {
         }
     }
 
+    private checkForPickUp(): void {
+        for (const pickUp of this._pickUps) {
+            if (pickUp.getBounds().intersects(this._player.getBounds())) {
+                switch (pickUp.type) {
+                    case PickUpType.AMMO:
+                        this._player.ammo += pickUp.pickUp();
+                        this._hud.ammo = this._player.ammo;
+                        break;
+                    case PickUpType.HEALTH:
+                        this._hud.health = this._player.heal(pickUp.pickUp());
+                    default:
+                        break;
+                }
+
+                this._pickUps.splice(this._pickUps.indexOf(pickUp), 1);
+                pickUp.dispose();
+                return;
+            }
+        }
+    }
+
     private checkIfEnemyOutOfBounds(): void {
         for (const enemy of this._enemies) {
             if (enemy.x + enemy.width <= 0) {
@@ -164,17 +203,31 @@ export class EndlessLevel extends BaseScene {
         }
     }
 
+    private checkIfPickUpIsOutOfBounds(): void {
+        for (const pickUp of this._pickUps) {
+            if (pickUp.x + pickUp.width <= 0) {
+                pickUp.dispose();
+                this._pickUps.splice(this._pickUps.indexOf(pickUp), 1);
+                return;
+            }
+        }
+    }
+
 
     private initTickerOperations(): void {
         Ticker.shared.add(this.checkForPlayerKills, this);
         Ticker.shared.add(this.checkIfEnemyOutOfBounds, this);
         Ticker.shared.add(this.checkForEnemyPlayerCollision, this);
+        Ticker.shared.add(this.checkForPickUp, this);
+        Ticker.shared.add(this.checkIfPickUpIsOutOfBounds, this);
     }
 
     private removeTickerOperations(): void {
         Ticker.shared.remove(this.checkForPlayerKills, this);
         Ticker.shared.remove(this.checkIfEnemyOutOfBounds, this);
         Ticker.shared.remove(this.checkForEnemyPlayerCollision, this);
+        Ticker.shared.remove(this.checkForPickUp, this);
+        Ticker.shared.remove(this.checkIfPickUpIsOutOfBounds, this);
     }
 
     private setKill(enemy: Enemy): void {
@@ -193,9 +246,11 @@ export class EndlessLevel extends BaseScene {
         this._inGameMenu.visible = this._isPaused;
         Ticker.shared.speed = this._isPaused ? 0 : 1;
         if (this._isPaused) {
-            clearInterval(this._spawnInterval);
+            clearInterval(this._enemySpawnInterval);
+            clearInterval(this._pickUpSpawnInterval);
         } else {
-            this._spawnInterval = this.spawnEnemies();
+            this._enemySpawnInterval = this.spawnEnemies();
+            this._pickUpSpawnInterval = this.spawnPickUps();
         }
     }
 
@@ -232,32 +287,3 @@ export class EndlessLevel extends BaseScene {
         setTimeout(() => this.emit(Scene.Change, Scene.EndGame), 1500);
     }
 }
-
-//auto moove player
-        // let moveright = true;
-        // let movedown = true;
-        // Ticker.shared.add((dt: number) => {
-        //     if (this._player.x >= 400) {
-        //         moveright = false;
-        //     } else if (this._player.x <= 70) {
-        //         moveright = true;
-        //     }
-
-        //     if (this._player.y <= 320) {
-        //         movedown = true;
-        //     } else if (this._player.y >= 470) {
-        //         movedown = false;
-        //     }
-
-        //     if (moveright) {
-        //         this._player.x += 6 * dt;
-        //     } else {
-        //         this._player.x -= 6 * dt;
-        //     }
-
-        //     if (movedown) {
-        //         this._player.y += 6 * dt;
-        //     } else {
-        //         this._player.y -= 6 * dt;
-        //     }
-        // })

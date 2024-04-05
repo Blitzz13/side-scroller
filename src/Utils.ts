@@ -27,6 +27,14 @@ export function getTextureArrayFromStrings(textureStrings: string[]): Texture[] 
   return textures;
 }
 
+export function getRandomInt(min: number, max: number) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  const asd = Math.floor(Math.random() * (max - min)) + min;
+  console.log(asd);
+  return asd;
+}
+
 export async function loadGameAssets(): Promise<void> {
   const manifest: AssetsManifest = {
     bundles: [
@@ -35,11 +43,11 @@ export async function loadGameAssets(): Promise<void> {
         assets: [
           {
             name: "outdoors_area",
-            srcs: "./assets/outdoors_area.jpg",
+            src: "./assets/outdoors_area.jpg",
           },
           {
             name: "menu_background",
-            srcs: "./assets/menu_background.png",
+            src: "./assets/menu_background.png",
           }
         ],
       },
@@ -48,23 +56,23 @@ export async function loadGameAssets(): Promise<void> {
         assets: [
           {
             name: "x_wing",
-            srcs: "./assets/x_wing.png",
+            src: "./assets/x_wing.png",
           },
           {
             name: "y_wing",
-            srcs: "./assets/y_wing.png",
+            src: "./assets/y_wing.png",
           },
           {
             name: "laser",
-            srcs: "./assets/laser.png",
+            src: "./assets/laser.png",
           },
           {
             name: "at_st",
-            srcs: "./assets/at_st.json",
+            src: "./assets/at_st.json",
           },
           {
             name: "viper_droid",
-            srcs: "./assets/viper_droid.json",
+            src: "./assets/viper_droid.json",
           }
         ],
       },
@@ -73,12 +81,20 @@ export async function loadGameAssets(): Promise<void> {
         assets: [
           {
             name: "bullet",
-            srcs: "./assets/bullet.png",
+            src: "./assets/bullet.png",
           },
           {
             name: "green_ball",
-            srcs: "./assets/green_ball.png",
+            src: "./assets/green_ball.png",
           },
+          {
+            name: "ammo",
+            src: "./assets/ammo.png",
+          },
+          {
+            name: "health",
+            src: "./assets/health.png",
+          }
         ],
       },
     ],
