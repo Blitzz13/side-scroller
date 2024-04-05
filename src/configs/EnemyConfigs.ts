@@ -2,7 +2,7 @@ import { Point } from "pixi.js";
 import { IEnemyConfig } from "./interfaces/IEnemyConfig";
 import { EnemyType } from "../enums/EnemyType";
 
-export const atStConfig: IEnemyConfig = {
+const atStConfig: IEnemyConfig = {
     faceTarget: true,
     health: 1,
     type: EnemyType.AT_ST,
@@ -32,10 +32,14 @@ export const atStConfig: IEnemyConfig = {
         ],
         animationSpeed: 0.1,
         loop: false,
-    }
+    },
+    spawnRange: {
+        min: new Point(1280, 650),
+        max: new Point(2000, 650),
+    },
 }
 
-export const viperDroidConfig: IEnemyConfig = {
+const viperDroidConfig: IEnemyConfig = {
     health: 1,
     type: EnemyType.VIPER_DROID,
     rateOfFire: 0,
@@ -47,4 +51,14 @@ export const viperDroidConfig: IEnemyConfig = {
         down: "viper_droid_1.png",
         up: "viper_droid_1.png",
     },
+    spawnRange: {
+        min: new Point(1280, 100),
+        max: new Point(2000, 580),
+    },
 }
+
+
+export const enemyConfigs: IEnemyConfig[] = [
+    atStConfig,
+    viperDroidConfig,
+]
