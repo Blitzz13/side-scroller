@@ -49,6 +49,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/at_st.json",
           },
           {
+            name: "at_at",
+            src: "./assets/at_at.json",
+          },
+          {
             name: "viper_droid",
             src: "./assets/viper_droid.json",
           }

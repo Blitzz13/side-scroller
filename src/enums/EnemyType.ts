@@ -1,4 +1,5 @@
 export enum EnemyType {
+    VIPER_DROID = "viperDroid",
     AT_ST = "atSt",
-    VIPER_DROID = "viperDroid"
+    AT_AT = "atAt",
 }
