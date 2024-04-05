@@ -35,71 +35,7 @@ export function getRandomInt(min: number, max: number) {
   return asd;
 }
 
-export async function loadGameAssets(): Promise<void> {
-  const manifest: AssetsManifest = {
-    bundles: [
-      {
-        name: "environment",
-        assets: [
-          {
-            name: "outdoors_area",
-            src: "./assets/outdoors_area.jpg",
-          },
-          {
-            name: "menu_background",
-            src: "./assets/menu_background.png",
-          }
-        ],
-      },
-      {
-        name: "characters",
-        assets: [
-          {
-            name: "x_wing",
-            src: "./assets/x_wing.png",
-          },
-          {
-            name: "y_wing",
-            src: "./assets/y_wing.png",
-          },
-          {
-            name: "laser",
-            src: "./assets/laser.png",
-          },
-          {
-            name: "at_st",
-            src: "./assets/at_st.json",
-          },
-          {
-            name: "viper_droid",
-            src: "./assets/viper_droid.json",
-          }
-        ],
-      },
-      {
-        name: "objects",
-        assets: [
-          {
-            name: "bullet",
-            src: "./assets/bullet.png",
-          },
-          {
-            name: "green_ball",
-            src: "./assets/green_ball.png",
-          },
-          {
-            name: "ammo",
-            src: "./assets/ammo.png",
-          },
-          {
-            name: "health",
-            src: "./assets/health.png",
-          }
-        ],
-      },
-    ],
-  };
-
+export async function loadGameAssets(manifest: AssetsManifest): Promise<void> {
   await Assets.init({ manifest });
-  await Assets.loadBundle(["environment", "characters", "objects"]);
+  await Assets.loadBundle(manifest.bundles.map(x => x.name));
 }

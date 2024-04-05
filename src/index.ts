@@ -1,8 +1,7 @@
 import "./style.css";
 import { Application, Ticker } from "pixi.js";
 import { MainMenu } from "./scenes/MainMenu";
-import { gameConfig } from "./configs/GameConfig";
-import { BitmapFont } from "pixi.js";
+import { gameConfig, manifest, registerFonts } from "./configs/GameConfig";
 import { BaseScene } from "./scenes/BaseScene";
 import { EndGame } from "./scenes/EndGame";
 import { Scene } from "./enums/Scene";
@@ -21,7 +20,7 @@ let currentScale = 1;
 (globalThis as any).__PIXI_APP__ = app;
 let currentScene: BaseScene;
 window.onload = async (): Promise<void> => {
-  await loadGameAssets();
+  await loadGameAssets(manifest);
   registerFonts();
   document.body.appendChild(app.view);
   resizeCanvas();
@@ -47,15 +46,6 @@ function changeScene(scene: Scene): void {
 
   Ticker.shared.speed = 1;
   currentScene.on(Scene.Change, changeScene);
-}
-
-function registerFonts(): void {
-  BitmapFont.from("arial32", {
-    fontFamily: "Arial",
-    fontSize: 32,
-    lineHeight: 33,
-    fill: 0xffffff,
-  });
 }
 
 function resizeCanvas(): void {
