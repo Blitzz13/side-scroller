@@ -1,7 +1,7 @@
 import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
-import { IEntity } from "../characters/interfaces/IEntity";
+import { IDisposable } from "../characters/interfaces/IDisposable";
 
-export class Environment extends Container implements IEntity {
+export class Environment extends Container implements IDisposable {
     // private bg!: AnimatedSprite;
     private _instances: Container[] = [];
     private _speed: number = 0;

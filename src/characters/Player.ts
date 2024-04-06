@@ -1,12 +1,13 @@
 import { AnimatedSprite, Container, Sprite, Ticker } from "pixi.js";
 import { IBullet } from "./interfaces/IBullet";
-import { IEntity } from "./interfaces/IEntity";
+import { IDisposable } from "./interfaces/IDisposable";
 import { gameConfig } from "../configs/GameConfig";
 import { GameEvent } from "../enums/GameEvent";
 import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
 import { getTextureArrayFromStrings } from "../Utils";
+import { sound } from "@pixi/sound";
 
-export class Player extends Container implements IEntity {
+export class Player extends Container implements IDisposable {
     private _dirextionX: -1 | 0 | 1 = 0;
     private _dirextionY: -1 | 0 | 1 = 0;
     private _speed: number;
@@ -68,6 +69,13 @@ export class Player extends Container implements IEntity {
         Ticker.shared.add(this.handlePlayerMovement, this);
         if (config.canShoot) {
             Ticker.shared.add(this.shoot, this);
+        }
+
+        const idleSound = this._config.soundConfig.idleSound;
+        if (idleSound) {
+            sound.play(idleSound.src, {
+                loop: idleSound.loop,
+            });
         }
     }
 
@@ -133,6 +141,11 @@ export class Player extends Container implements IEntity {
             this._isShooting = false;
             this.emit(GameEvent.PLAYER_DIED);
             this._health = 0;
+            const deathSound = this._config.soundConfig.deathSound;
+            sound.play(deathSound.src, {
+                volume: deathSound.volume,
+                loop: deathSound.loop,
+            });
         } else {
             this._playerAnimation.tint = 0xff0000;
             this._damageTimeout = setTimeout(() => {
@@ -178,7 +191,7 @@ export class Player extends Container implements IEntity {
 
         if (this._isShooting && this._shootingTimer >= this._config.timeBetweenShots && this._ammo > 0) {
             this._shootingTimer = 0;
-
+            sound.play("bomb_sound", { volume: 2 });
             const bullet = Sprite.from(this._config.projectile);
             bullet.scale.copyFrom(this._config.projectileScale);
             bullet.position.set(this.position.x + this._config.projectileSpawnOffset.x, this.position.y + this._config.projectileSpawnOffset.y);

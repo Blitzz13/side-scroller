@@ -15,6 +15,7 @@
     "author": "Ivan Nihtyanov",
     "license": "MIT",
     "dependencies": {
+        "@pixi/sound": "5.2.3",
         "core-js": "^3.34.0",
         "pixi.js": "^7.4.2"
     },

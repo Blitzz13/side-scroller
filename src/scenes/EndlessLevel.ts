@@ -16,6 +16,7 @@ import { commonHudConfig } from "../configs/HUDConfigs";
 import { PickUp } from "../misc/PickUp";
 import { PickUpType } from "../enums/PickUpType";
 import { pickUps } from "../configs/PickUpConfigs";
+import { sound } from "@pixi/sound";
 
 export class EndlessLevel extends BaseScene {
     private _player: Player;
@@ -62,10 +63,12 @@ export class EndlessLevel extends BaseScene {
         this.addChild(this._gameContainer);
         this.addChild(this._hud);
         this.addChild(this._inGameMenu);
+        sound.play("battle_theme", { loop: true });
         this.addEvents();
     }
 
     public dispose(): void {
+        sound.stopAll();
         clearInterval(this._enemySpawnInterval);
         clearInterval(this._pickUpSpawnInterval);
         this.removeTickerOperations();
@@ -186,6 +189,13 @@ export class EndlessLevel extends BaseScene {
                         break;
                 }
 
+                const pickUpSound = pickUp.sound;
+
+                sound.play(pickUpSound.src, {
+                    loop: pickUpSound.loop,
+                    volume: pickUpSound.volume
+                });
+                
                 this._pickUps.splice(this._pickUps.indexOf(pickUp), 1);
                 pickUp.dispose();
                 return;

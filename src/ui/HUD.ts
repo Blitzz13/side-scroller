@@ -1,11 +1,11 @@
 import { BitmapText, Container, Sprite } from "pixi.js";
-import { IEntity } from "../characters/interfaces/IEntity";
+import { IDisposable } from "../characters/interfaces/IDisposable";
 import { Scoreboard } from "../misc/Scoreboard";
 import { EnemyType } from "../enums/EnemyType";
 import { commonScoreboardConfig } from "../configs/ScoreboardConfig";
 import { IHUDConfig } from "../configs/interfaces/IHUDConfig";
 
-export class HUD extends Container implements IEntity {
+export class HUD extends Container implements IDisposable {
     private _healthText: BitmapText;
     private _config: IHUDConfig;
     private _ammoText: BitmapText;

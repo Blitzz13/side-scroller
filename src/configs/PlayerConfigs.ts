@@ -1,6 +1,25 @@
 import { Point } from "pixi.js";
 import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
 import { gameConfig } from "./GameConfig";
+import { IEntitySoundConfig } from "./interfaces/IEntitySoundConfig";
+
+const commonSoundConfig: IEntitySoundConfig = {
+    idleSound: {
+        src: "engine_loop",
+        loop: true,
+        volume: 1
+    },
+    deathSound: {
+        src: "explosion_sound",
+        loop: false,
+        volume: 1
+    },
+    shootSounds: [{
+        src: "bomb_sound",
+        loop: false,
+        volume: 2,
+    }],
+}
 
 export const xWingConfig: IPlayerConfig = {
     damage: 1,
@@ -20,6 +39,7 @@ export const xWingConfig: IPlayerConfig = {
     playerScale: new Point(0.8, 0.8),
     playerMaxBoundaries: new Point(gameConfig.width, 580),
     playerMinBoundaries: new Point(0, 100),
+    soundConfig: commonSoundConfig,
 }
 
 export const yWingConfig: IPlayerConfig = {
@@ -40,4 +60,5 @@ export const yWingConfig: IPlayerConfig = {
     playerScale: new Point(0.8, 0.8),
     playerMaxBoundaries: new Point(gameConfig.width, 580),
     playerMinBoundaries: new Point(0, 100),
+    soundConfig: commonSoundConfig,
 }

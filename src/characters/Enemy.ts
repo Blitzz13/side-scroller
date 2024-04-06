@@ -3,11 +3,13 @@ import { GameEvent } from "../enums/GameEvent";
 import { IEnemyConfig } from "../configs/interfaces/IEnemyConfig";
 import { IBullet } from "./interfaces/IBullet";
 import { gameConfig } from "../configs/GameConfig";
-import { IEntity } from "./interfaces/IEntity";
+import { IDisposable } from "./interfaces/IDisposable";
 import { EnemyType } from "../enums/EnemyType";
 import { ISpawnRange } from "../configs/interfaces/ISpawnRange";
+import { sound } from "@pixi/sound";
+import { getRandomInt } from "../Utils";
 
-export class Enemy extends Container implements IEntity {
+export class Enemy extends Container implements IDisposable {
     private _sprite: Sprite;
     private _deathAnimation?: AnimatedSprite;
     private _target: Container;
@@ -102,6 +104,12 @@ export class Enemy extends Container implements IEntity {
     public takeDamage(damage: number): void {
         this._health -= damage;
         if (this._health <= 0) {
+            const deathSound = this._config.soundConfig.deathSound;
+            sound.play(deathSound.src, {
+                volume: deathSound.volume,
+                loop: deathSound.loop,
+            });
+            
             this._isDead = true;
             this._isShooting = false;
             if (this._deathAnimation) {
@@ -176,6 +184,15 @@ export class Enemy extends Container implements IEntity {
 
             if (this.x > gameConfig.width || !this._isShooting) {
                 return;
+            }
+
+            if (this._config.soundConfig.shootSounds) {
+                const index = getRandomInt(0, this._config.soundConfig.shootSounds.length);
+                const soundToPlay = this._config.soundConfig.shootSounds[index];
+                sound.play(soundToPlay.src, {
+                    volume: soundToPlay.volume,
+                    loop: soundToPlay.loop,
+                });
             }
 
             // Calculate the angle between the enemy and the target

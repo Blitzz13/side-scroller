@@ -1,5 +1,6 @@
 import { Point } from "pixi.js";
 import { IAnimationConfig } from "./IAnimationConfig";
+import { IEntitySoundConfig } from "./IEntitySoundConfig";
 
 export interface IPlayerConfig {
     damage: number;
@@ -19,5 +20,6 @@ export interface IPlayerConfig {
     projectileScale: Point;
     playerMaxBoundaries: Point;
     playerMinBoundaries: Point;
+    soundConfig: IEntitySoundConfig;
     deathAnimation?: IAnimationConfig;
 }
