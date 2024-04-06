@@ -1,4 +1,4 @@
-import { AssetsManifest, Assets, BitmapText, Container, Sprite, AnimatedSprite, Texture } from "pixi.js";
+import { AssetsManifest, Assets, Texture } from "pixi.js";
 import { EnemyType } from "./enums/EnemyType";
 
 export function saveScore(key: string, score: Map<EnemyType, number>) {

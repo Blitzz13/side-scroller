@@ -1,10 +1,10 @@
 import { Container, RoundedRectangle } from "pixi.js";
-import { IEntity } from "../characters/interfaces/IEntity";
+import { IDisposable } from "../characters/interfaces/IDisposable";
 import { Button } from "../misc/Button";
 import { GameEvent } from "../enums/GameEvent";
 import { gameConfig } from "../configs/GameConfig";
 
-export class InGameMenu extends Container implements IEntity {
+export class InGameMenu extends Container implements IDisposable {
 
     constructor() {
         super();

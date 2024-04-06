@@ -3,6 +3,7 @@ import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
 import { Scene } from "../enums/Scene";
 import { Button } from "../misc/Button";
+import { Sound, sound } from "@pixi/sound";
 
 export class MainMenu extends BaseScene {
     private _playButton: Button;
@@ -10,6 +11,8 @@ export class MainMenu extends BaseScene {
         super(stage, scale)
 
         this._playButton = new Button(new RoundedRectangle(0, 0, 210, 55, 15), "Play");
+
+        sound.play("menu_theme", { loop: true });
 
         const background = Sprite.from("menu_background");
         background.position.set(-3, -3);
@@ -28,6 +31,7 @@ export class MainMenu extends BaseScene {
     }
 
     public dispose(): void {
+        sound.stopAll();
         this.destroy({ children: true });
     }
 }

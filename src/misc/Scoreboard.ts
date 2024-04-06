@@ -44,7 +44,7 @@ export class Scoreboard extends Container {
                 default:
                     break;
             }
-
+         
             const spriteTextContainer = new Container();
             spriteTextContainer.y = titleText.height;
 

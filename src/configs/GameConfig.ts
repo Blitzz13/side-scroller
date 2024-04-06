@@ -1,21 +1,74 @@
 import { AssetsManifest, BitmapFont } from "pixi.js";
 
 export const gameConfig = {
-    width: 1280,
-    height: 720
+  width: 1280,
+  height: 720
 }
 
 export function registerFonts(): void {
-    BitmapFont.from("arial32", {
-      fontFamily: "Arial",
-      fontSize: 32,
-      lineHeight: 33,
-      fill: 0xffffff,
-    });
-  }
+  BitmapFont.from("arial32", {
+    fontFamily: "Arial",
+    fontSize: 32,
+    lineHeight: 33,
+    fill: 0xffffff,
+  });
+}
 
 export const manifest: AssetsManifest = {
     bundles: [
+      {
+        name: "sounds",
+        assets: [
+          {
+            alias: "menu_theme",
+            src: "./assets/sounds/menu_theme.mp3"
+          },
+          {
+            alias: "repair_sound",
+            src: "./assets/sounds/repair_sound.mp3"
+          },
+          {
+            alias: "reload_sound",
+            src: "./assets/sounds/reload_sound.mp3"
+          },
+          {
+            alias: "battle_theme",
+            src: "./assets/sounds/battle_theme.mp3"
+          },
+          {
+            alias: "bomb_sound",
+            src: "./assets/sounds/bomb_sound.mp3"
+          },
+          {
+            alias: "explosion_sound",
+            src: "./assets/sounds/explosion_sound.mp3"
+          },
+          {
+            alias: "engine_loop",
+            src: "./assets/sounds/flying_loop.mp3"
+          },
+          {
+            alias: "end_theme",
+            src: "./assets/sounds/end_theme.mp3"
+          },
+          {
+            alias: "blaster_1",
+            src: "./assets/sounds/blaster_1.mp3"
+          },
+          {
+            alias: "blaster_2",
+            src: "./assets/sounds/blaster_2.mp3"
+          },
+          {
+            alias: "blaster_3",
+            src: "./assets/sounds/blaster_3.mp3"
+          },
+          {
+            alias: "blaster_4",
+            src: "./assets/sounds/blaster_4.mp3"
+          },
+        ]
+      },
       {
         name: "environment",
         assets: [

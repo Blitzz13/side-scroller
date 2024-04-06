@@ -7,6 +7,7 @@ import { retrieveScore } from "../Utils";
 import { EnemyType } from "../enums/EnemyType";
 import { Scoreboard } from "../misc/Scoreboard";
 import { commonScoreboardConfig } from "../configs/ScoreboardConfig";
+import { sound } from "@pixi/sound";
 
 
 export class EndGame extends BaseScene {
@@ -39,7 +40,7 @@ export class EndGame extends BaseScene {
 
         retryButton.eventMode = 'static';
         mainMenuButton.eventMode = 'static';
-
+        sound.play("end_theme");
         mainMenuButton.on("pointerdown", () => {
             this.emit(Scene.Change, Scene.MainMenu);
         });
@@ -55,6 +56,7 @@ export class EndGame extends BaseScene {
     }
 
     public dispose(): void {
+        sound.stopAll();
         this.destroy({ children: true });
     }
 

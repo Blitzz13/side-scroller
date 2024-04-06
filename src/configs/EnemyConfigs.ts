@@ -1,6 +1,37 @@
 import { Point } from "pixi.js";
 import { IEnemyConfig } from "./interfaces/IEnemyConfig";
 import { EnemyType } from "../enums/EnemyType";
+import { IEntitySoundConfig } from "./interfaces/IEntitySoundConfig";
+
+const walkersSoundConfig: IEntitySoundConfig ={
+    deathSound: {
+        src: "explosion_sound",
+        loop: false,
+        volume: 1
+    },
+    shootSounds: [
+        {
+            src: "blaster_1",
+            loop: false,
+            volume: 1
+        },
+        {
+            src: "blaster_2",
+            loop: false,
+            volume: 1
+        },
+        {
+            src: "blaster_3",
+            loop: false,
+            volume: 1
+        },
+        {
+            src: "blaster_4",
+            loop: false,
+            volume: 1
+        },
+    ],
+}
 
 const atStConfig: IEnemyConfig = {
     faceTarget: true,
@@ -37,6 +68,7 @@ const atStConfig: IEnemyConfig = {
         min: new Point(1280, 650),
         max: new Point(2000, 650),
     },
+    soundConfig: walkersSoundConfig
 }
 
 const atAtConfig: IEnemyConfig = {
@@ -81,6 +113,7 @@ const atAtConfig: IEnemyConfig = {
         min: new Point(1280, 610),
         max: new Point(2000, 610),
     },
+    soundConfig: walkersSoundConfig,
 }
 
 const viperDroidConfig: IEnemyConfig = {
@@ -99,6 +132,13 @@ const viperDroidConfig: IEnemyConfig = {
         min: new Point(1280, 100),
         max: new Point(2000, 580),
     },
+    soundConfig: {
+        deathSound: {
+            src: "explosion_sound",
+            loop: false,
+            volume: 1
+        },
+    }
 }
 
 
