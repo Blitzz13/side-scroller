@@ -166,7 +166,7 @@ export class EndlessLevel extends BaseScene {
 
             if (enemy.getBounds().intersects(this._player.getBounds())) {
                 this._hud.health = this._player.takeDamage(enemy.meleeDamage);
-                enemy.takeDamage(1);
+                enemy.takeDamage(this._player.damage);
                 if (enemy.isDead) {
                     this.setKill(enemy);
                 }
@@ -291,6 +291,10 @@ export class EndlessLevel extends BaseScene {
 
         for (const enemy of this._enemies) {
             enemy.isMoving = false;
+        }
+
+        for (const pickUp of this._pickUps) {
+            pickUp.isMoving = false;
         }
 
         this._corridor.startScrolling(0);

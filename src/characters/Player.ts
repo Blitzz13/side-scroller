@@ -4,7 +4,7 @@ import { IDisposable } from "./interfaces/IDisposable";
 import { gameConfig } from "../configs/GameConfig";
 import { GameEvent } from "../enums/GameEvent";
 import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
-import { getTextureArrayFromStrings } from "../Utils";
+import { getTextureArrayFromStrings, setTintToSprite } from "../Utils";
 import { sound } from "@pixi/sound";
 
 export class Player extends Container implements IDisposable {
@@ -13,7 +13,7 @@ export class Player extends Container implements IDisposable {
     private _speed: number;
     private _isShooting: boolean;
     private _playerAnimation: AnimatedSprite | Sprite;
-    private _deathAnimation?: AnimatedSprite;
+    private _deathAnimation: AnimatedSprite;
     private _stage: Container;
     private _bullets: IBullet[];
     private _shootingTimer: number;
@@ -39,15 +39,14 @@ export class Player extends Container implements IDisposable {
         this._bullets = [];
         this._shootingTimer = 0;
 
-        if (config.deathAnimation) {
-            this._deathAnimation = new AnimatedSprite(getTextureArrayFromStrings(config.deathAnimation.frames));
+        this._deathAnimation = new AnimatedSprite(getTextureArrayFromStrings(config.deathAnimation.frames));
 
-            this._deathAnimation.scale.copyFrom(config.deathAnimation.scale);
-            this._deathAnimation.loop = config.deathAnimation.loop;
-            this._deathAnimation.animationSpeed = config.deathAnimation.speed;
-            this._deathAnimation.visible = false;
-            this.addChild(this._deathAnimation);
-        }
+        this._deathAnimation.scale.copyFrom(config.deathAnimation.scale);
+        this._deathAnimation.loop = config.deathAnimation.loop;
+        this._deathAnimation.animationSpeed = config.deathAnimation.speed;
+        this._deathAnimation.position.copyFrom(config.deathAnimation.position);
+        this._deathAnimation.visible = false;
+        this.addChild(this._deathAnimation);
 
         if (typeof config.moving !== "string") {
             this._playerAnimation = new AnimatedSprite(getTextureArrayFromStrings(config.moving.frames));
@@ -100,10 +99,7 @@ export class Player extends Container implements IDisposable {
     }
 
     public set ammo(value: number) {
-        this._playerAnimation.tint = 0x0000ff;
-        this._ammoTimeout = setTimeout(() => {
-            this._playerAnimation.tint = 0xffffff; // Reset tint to original color
-        }, 200);
+        this._ammoTimeout = setTintToSprite(this._playerAnimation, 0x0000ff, 200);
         this._ammo = value;
     }
 
@@ -131,9 +127,11 @@ export class Player extends Container implements IDisposable {
 
         if (this._health <= 0) {
             this._playerAnimation.visible = false;
-            if (this._deathAnimation) {
-                this._deathAnimation.visible = true;
-                this._deathAnimation.play();
+            this._deathAnimation.visible = true;
+            this._deathAnimation.play();
+
+            this._deathAnimation.onComplete = () => {
+                this._deathAnimation.visible = false;
             }
 
             this.removeEvents();
@@ -147,10 +145,7 @@ export class Player extends Container implements IDisposable {
                 loop: deathSound.loop,
             });
         } else {
-            this._playerAnimation.tint = 0xff0000;
-            this._damageTimeout = setTimeout(() => {
-                this._playerAnimation.tint = 0xffffff; // Reset tint to original color
-            }, 100);
+            this._damageTimeout = setTintToSprite(this._playerAnimation, 0xff0000, 100);
         }
 
         return this._health;
@@ -158,10 +153,7 @@ export class Player extends Container implements IDisposable {
 
     public heal(hp: number): number {
         this._health += hp;
-        this._playerAnimation.tint = 0x00ff00;
-        this._healthTimeout = setTimeout(() => {
-            this._playerAnimation.tint = 0xffffff; // Reset tint to original color
-        }, 200);
+        this._healthTimeout = setTintToSprite(this._playerAnimation, 0x00ff00, 200);
         return this._health;
     }
 

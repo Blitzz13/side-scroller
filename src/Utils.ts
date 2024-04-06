@@ -1,4 +1,4 @@
-import { AssetsManifest, Assets, Texture } from "pixi.js";
+import { AssetsManifest, Assets, Texture, Sprite, AnimatedSprite } from "pixi.js";
 import { EnemyType } from "./enums/EnemyType";
 
 export function saveScore(key: string, score: Map<EnemyType, number>) {
@@ -33,6 +33,13 @@ export function getRandomInt(min: number, max: number) {
   const asd = Math.floor(Math.random() * (max - min)) + min;
   console.log(asd);
   return asd;
+}
+
+export function setTintToSprite(container: Sprite | AnimatedSprite, tint: number, timout: number): NodeJS.Timeout {
+  container.tint = tint;
+  return setTimeout(() => {
+    container.tint = 0xffffff;
+  }, timout);
 }
 
 export async function loadGameAssets(manifest: AssetsManifest): Promise<void> {

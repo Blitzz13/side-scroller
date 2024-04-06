@@ -6,7 +6,8 @@ import { PickUpType } from "../enums/PickUpType";
 import { ISoundConfig } from "../configs/interfaces/ISoundConfig";
 
 export class PickUp extends Container implements IDisposable {
-    private _config: IPickUpConfig
+    private _config: IPickUpConfig;
+    private _isMoving: boolean;
     constructor(config: IPickUpConfig) {
         super();
         this._config = config;
@@ -14,6 +15,7 @@ export class PickUp extends Container implements IDisposable {
         const sprite = Sprite.from(config.texture);
         this.addChild(sprite);
         Ticker.shared.add(this.move, this);
+        this._isMoving = true;
     }
 
     public get type(): PickUpType {
@@ -28,6 +30,10 @@ export class PickUp extends Container implements IDisposable {
         return this._config.spawnRange;
     }
 
+    public set isMoving(value: boolean) {
+        this._isMoving = value;
+    }
+
     public pickUp(): number {
         return this._config.amount;
     }
@@ -38,6 +44,8 @@ export class PickUp extends Container implements IDisposable {
     }
 
     private move(dt: number): void {
-        this.x -= this._config.speed * dt;
+        if (this._isMoving) {
+            this.x -= this._config.speed * dt;
+        }
     }
 }

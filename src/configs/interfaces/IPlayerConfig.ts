@@ -21,5 +21,5 @@ export interface IPlayerConfig {
     playerMaxBoundaries: Point;
     playerMinBoundaries: Point;
     soundConfig: IEntitySoundConfig;
-    deathAnimation?: IAnimationConfig;
+    deathAnimation: IAnimationConfig;
 }
