@@ -2,6 +2,7 @@ import { Point } from "pixi.js";
 import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
 import { gameConfig } from "./GameConfig";
 import { IEntitySoundConfig } from "./interfaces/IEntitySoundConfig";
+import { IAnimationConfig } from "./interfaces/IAnimationConfig";
 
 const commonSoundConfig: IEntitySoundConfig = {
     idleSound: {
@@ -40,6 +41,7 @@ export const xWingConfig: IPlayerConfig = {
     playerMaxBoundaries: new Point(gameConfig.width, 580),
     playerMinBoundaries: new Point(0, 100),
     soundConfig: commonSoundConfig,
+    deathAnimation: getExplosionConfig(),
 }
 
 export const yWingConfig: IPlayerConfig = {
@@ -61,4 +63,21 @@ export const yWingConfig: IPlayerConfig = {
     playerMaxBoundaries: new Point(gameConfig.width, 580),
     playerMinBoundaries: new Point(0, 100),
     soundConfig: commonSoundConfig,
+    deathAnimation: getExplosionConfig(),
+}
+
+function getExplosionConfig(): IAnimationConfig {
+    const frames = [];
+    for (let i = 0; i <= 16; i++) {
+        const element = `explosion_${i.toString().padStart(2, "0")}.png`;
+        frames.push(element);
+    }
+
+    return {
+        frames: frames,
+        loop: false,
+        position: new Point(0, -20),
+        scale: new Point(0.6, 0.6),
+        speed: 0.4,
+    };
 }

@@ -2,6 +2,7 @@ import { Point } from "pixi.js";
 import { EnemyType } from "../../enums/EnemyType";
 import { ISpawnRange } from "./ISpawnRange";
 import { IEntitySoundConfig } from "./IEntitySoundConfig";
+import { IAnimationConfig } from "./IAnimationConfig";
 
 export interface IEnemyConfig {
     health: number;
@@ -25,9 +26,6 @@ export interface IEnemyConfig {
         anchor: Point;
         startPosOffset: Point;
     };
-    death?: {
-        animation: string[];
-        animationSpeed: number;
-        loop: boolean;
-    }
+    death: IAnimationConfig;
+    removeAfterDeath?: boolean;
 }

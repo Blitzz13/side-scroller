@@ -2,8 +2,9 @@ import { Point } from "pixi.js";
 import { IEnemyConfig } from "./interfaces/IEnemyConfig";
 import { EnemyType } from "../enums/EnemyType";
 import { IEntitySoundConfig } from "./interfaces/IEntitySoundConfig";
+import { IAnimationConfig } from "./interfaces/IAnimationConfig";
 
-const walkersSoundConfig: IEntitySoundConfig ={
+const walkersSoundConfig: IEntitySoundConfig = {
     deathSound: {
         src: "explosion_sound",
         loop: false,
@@ -54,15 +55,17 @@ const atStConfig: IEnemyConfig = {
         startPosOffset: new Point(-10, -5),
     },
     death: {
-        animation: [
+        frames: [
             "at_st_death_1.png",
             "at_st_death_2.png",
             "at_st_death_3.png",
             "at_st_death_4.png",
             "at_st_death_5.png",
         ],
-        animationSpeed: 0.1,
+        speed: 0.2,
         loop: false,
+        scale: new Point(1, 1),
+        position: new Point(),
     },
     spawnRange: {
         min: new Point(1280, 650),
@@ -92,7 +95,7 @@ const atAtConfig: IEnemyConfig = {
         startPosOffset: new Point(-10, 8),
     },
     death: {
-        animation: [
+        frames: [
             "at_at_death_1.png",
             "at_at_death_2.png",
             "at_at_death_3.png",
@@ -106,8 +109,10 @@ const atAtConfig: IEnemyConfig = {
             "at_at_death_11.png",
             "at_at_death_12.png",
         ],
-        animationSpeed: 0.1,
+        speed: 0.2,
         loop: false,
+        scale: new Point(1, 1),
+        position: new Point(),
     },
     spawnRange: {
         min: new Point(1280, 610),
@@ -117,8 +122,9 @@ const atAtConfig: IEnemyConfig = {
 }
 
 const viperDroidConfig: IEnemyConfig = {
-    health: 1,
     type: EnemyType.VIPER_DROID,
+    removeAfterDeath: true,
+    health: 1,
     rateOfFire: 0,
     damage: 0,
     meleeDamage: 1,
@@ -138,9 +144,25 @@ const viperDroidConfig: IEnemyConfig = {
             loop: false,
             volume: 1
         },
-    }
+    },
+    death: getExplosionConfig(),
 }
 
+function getExplosionConfig(): IAnimationConfig {
+    const frames = [];
+    for (let i = 0; i <= 16; i++) {
+        const element = `explosion_${i.toString().padStart(2, "0")}.png`;
+        frames.push(element);
+    }
+
+    return {
+        frames: frames,
+        loop: false,
+        position: new Point(0, -10),
+        scale: new Point(0.3, 0.3),
+        speed: 0.4,
+    };
+}
 
 export const enemyConfigs: IEnemyConfig[] = [
     atStConfig,

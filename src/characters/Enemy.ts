@@ -7,11 +7,11 @@ import { IDisposable } from "./interfaces/IDisposable";
 import { EnemyType } from "../enums/EnemyType";
 import { ISpawnRange } from "../configs/interfaces/ISpawnRange";
 import { sound } from "@pixi/sound";
-import { getRandomInt } from "../Utils";
+import { getRandomInt, getTextureArrayFromStrings, setTintToSprite } from "../Utils";
 
 export class Enemy extends Container implements IDisposable {
     private _sprite: Sprite;
-    private _deathAnimation?: AnimatedSprite;
+    private _deathAnimation: AnimatedSprite;
     private _target: Container;
     private _stage: Container;
     private _bullets: IBullet[];
@@ -25,6 +25,7 @@ export class Enemy extends Container implements IDisposable {
     private _isMoving: boolean;
     private _type: EnemyType;
     private _health: number;
+    private _damageTimeout!: NodeJS.Timeout;
 
     constructor(target: Container, stage: Container, config: IEnemyConfig) {
         super();
@@ -37,20 +38,14 @@ export class Enemy extends Container implements IDisposable {
         this._damage = config.damage;
         this._meleeDamage = config.meleeDamage;
 
-        if (config.death) {
-            const textures = [];
-            const deathAnim = config.death.animation;
-            for (const texture of deathAnim) {
-                textures.push(Texture.from(texture));
-            }
-
-            this._deathAnimation = new AnimatedSprite(textures);
-            this._deathAnimation.anchor.set(0.5);
-            this._deathAnimation.loop = false;
-            this._deathAnimation.animationSpeed = 0.2;
-            this._deathAnimation.visible = false;
-            this.addChild(this._deathAnimation);
-        }
+        const textures = getTextureArrayFromStrings(config.death.frames);
+        this._deathAnimation = new AnimatedSprite(textures);
+        this._deathAnimation.anchor.set(0.5);
+        this._deathAnimation.scale.copyFrom(config.death.scale);
+        this._deathAnimation.loop = config.death.loop;
+        this._deathAnimation.animationSpeed = config.death.speed;
+        this._deathAnimation.visible = false;
+        this.addChild(this._deathAnimation);
 
         this._config = config;
         this._bullets = [];
@@ -103,23 +98,24 @@ export class Enemy extends Container implements IDisposable {
 
     public takeDamage(damage: number): void {
         this._health -= damage;
+        this._damageTimeout = setTintToSprite(this._sprite, 0xff0000, 200);
+
         if (this._health <= 0) {
+
             const deathSound = this._config.soundConfig.deathSound;
             sound.play(deathSound.src, {
                 volume: deathSound.volume,
                 loop: deathSound.loop,
             });
-            
+
             this._isDead = true;
             this._isShooting = false;
-            if (this._deathAnimation) {
-                this._sprite.visible = false;
-                this._deathAnimation.visible = true;
-                this._deathAnimation.play();
-                this._deathAnimation.onComplete = () => setTimeout(() => this.visible = false, 800);
-            } else {
-                this.visible = false;
-            }
+            this._sprite.visible = false;
+            this._deathAnimation.visible = true;
+            this._deathAnimation.play();
+            this._deathAnimation.onComplete =
+                () => this._config.removeAfterDeath ? this.visible = false : setTimeout(() => this.visible = false, 800);
+
         }
     }
 
@@ -137,6 +133,10 @@ export class Enemy extends Container implements IDisposable {
         }
 
         Ticker.shared.remove(this.move, this);
+        if (this._damageTimeout) {
+            clearTimeout(this._damageTimeout);
+        }
+
         this.destroy({ children: true });
     }
 
