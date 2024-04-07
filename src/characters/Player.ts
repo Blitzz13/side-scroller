@@ -48,17 +48,7 @@ export class Player extends Container implements IDisposable {
         this._deathAnimation.visible = false;
         this.addChild(this._deathAnimation);
 
-        if (typeof config.moving !== "string") {
-            this._playerAnimation = new AnimatedSprite(getTextureArrayFromStrings(config.moving.frames));
-            this._playerAnimation.scale.copyFrom(config.playerScale);
-            if (this._playerAnimation instanceof AnimatedSprite) {
-                this._playerAnimation.loop = config.moving.loop;
-                this._playerAnimation.animationSpeed = config.moving.speed;
-                this._playerAnimation.play();
-            }
-        } else {
-            this._playerAnimation = Sprite.from(config.moving);
-        }
+        this._playerAnimation = Sprite.from(config.moving);
 
         this.addEvents();
         this.addChild(this._playerAnimation);

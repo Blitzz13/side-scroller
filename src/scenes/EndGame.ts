@@ -1,5 +1,5 @@
-import { Container, RoundedRectangle, Sprite } from "pixi.js";
-import { gameConfig } from "../configs/GameConfig";
+import { Container, Sprite } from "pixi.js";
+import { defaultButtonSize, gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
 import { Scene } from "../enums/Scene";
 import { Button } from "../misc/Button";
@@ -30,8 +30,8 @@ export class EndGame extends BaseScene {
         scoreContainer.x = gameConfig.width / 2 - scoreContainer.width / 2;
         scoreContainer.y = highScoreContainer.y + highScoreContainer.height + 10;
 
-        const retryButton = new Button(new RoundedRectangle(0, 0, 210, 55, 15), "Retry");
-        const mainMenuButton = new Button(new RoundedRectangle(0, 0, 210, 55, 15), "Main Menu");
+        const retryButton = new Button(defaultButtonSize, "Retry");
+        const mainMenuButton = new Button(defaultButtonSize, "Main Menu");
 
         retryButton.x = gameConfig.width / 2 - retryButton.width / 2;
         retryButton.y = scoreContainer.y + scoreContainer.height + 10;

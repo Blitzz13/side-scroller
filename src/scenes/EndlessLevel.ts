@@ -1,9 +1,8 @@
-import { Container, Point, Rectangle, Ticker } from "pixi.js";
+import { Container, Rectangle, Ticker } from "pixi.js";
 import { Player } from "../characters/Player";
 import { Enemy } from "../characters/Enemy";
 import { enemyConfigs } from "../configs/EnemyConfigs";
 import { Environment } from "../misc/Environment";
-import { gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
 import { GameEvent } from "../enums/GameEvent";
 import { Scene } from "../enums/Scene";
@@ -11,12 +10,12 @@ import { EnemyType } from "../enums/EnemyType";
 import { HUD } from "../ui/HUD";
 import { saveScore, retrieveScore, getRandomInt } from "../Utils";
 import { InGameMenu } from "../ui/InGameMenu";
-import { yWingConfig } from "../configs/PlayerConfigs";
 import { commonHudConfig } from "../configs/HUDConfigs";
 import { PickUp } from "../misc/PickUp";
 import { PickUpType } from "../enums/PickUpType";
 import { pickUps } from "../configs/PickUpConfigs";
 import { sound } from "@pixi/sound";
+import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
 
 export class EndlessLevel extends BaseScene {
     private _player: Player;
@@ -32,16 +31,16 @@ export class EndlessLevel extends BaseScene {
     private _gameContainer: Container;
     private _keyboardHandler = this.handleKeyboardEvents.bind(this);
 
-    constructor(stage: Container, scale: number) {
+    constructor(stage: Container, scale: number, shipConfig: IPlayerConfig) {
         super(stage, scale)
         this._enemies = [];
         this._pickUps = [];
         this._isPaused = false;
         this._score = new Map();
-        this._hud = new HUD(yWingConfig.icon, yWingConfig.projectile, commonHudConfig);
+        this._hud = new HUD(shipConfig.icon, shipConfig.projectile, commonHudConfig);
         this._gameContainer = new Container();
         this._inGameMenu = new InGameMenu();
-        this._player = new Player(this._gameContainer, yWingConfig);
+        this._player = new Player(this._gameContainer, shipConfig);
         this._player.on(GameEvent.PLAYER_SHOT, () => {
             this._hud.ammo = this._player.ammo;
         });

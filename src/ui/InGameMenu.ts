@@ -1,15 +1,15 @@
-import { Container, RoundedRectangle } from "pixi.js";
+import { Container } from "pixi.js";
 import { IDisposable } from "../characters/interfaces/IDisposable";
 import { Button } from "../misc/Button";
 import { GameEvent } from "../enums/GameEvent";
-import { gameConfig } from "../configs/GameConfig";
+import { defaultButtonSize, gameConfig } from "../configs/GameConfig";
 
 export class InGameMenu extends Container implements IDisposable {
 
     constructor() {
         super();
-        const resume = new Button(new RoundedRectangle(0, 0, 210, 55, 15), "Resume");
-        const quit = new Button(new RoundedRectangle(0, 0, 210, 55, 15), "Quit");
+        const resume = new Button(defaultButtonSize, "Resume");
+        const quit = new Button(defaultButtonSize, "Quit");
 
         resume.eventMode = 'static';
         quit.eventMode = 'static';

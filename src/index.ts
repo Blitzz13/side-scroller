@@ -7,6 +7,8 @@ import { EndGame } from "./scenes/EndGame";
 import { Scene } from "./enums/Scene";
 import { loadGameAssets } from "./Utils";
 import { EndlessLevel } from "./scenes/EndlessLevel";
+import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
+import { GameEvent } from "./enums/GameEvent";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
@@ -14,6 +16,8 @@ const app = new Application<HTMLCanvasElement>({
   height: gameConfig.height,
 });
 
+let showInstructions = true;
+let shipConfig: IPlayerConfig;
 let currentScale = 1;
 
 // For pixi debug utils
@@ -32,10 +36,14 @@ function changeScene(scene: Scene): void {
   currentScene?.dispose();
   switch (scene) {
     case Scene.Endless:
-      currentScene = new EndlessLevel(app.stage, currentScale);
+      showInstructions = false;
+      currentScene = new EndlessLevel(app.stage, currentScale, shipConfig);
       break;
     case Scene.MainMenu:
-      currentScene = new MainMenu(app.stage, currentScale);
+      currentScene = new MainMenu(app.stage, currentScale, showInstructions);
+      currentScene.on(GameEvent.SELECT_SHIP, (config: IPlayerConfig) => {
+        shipConfig = config;
+      });
       break;
     case Scene.EndGame:
       currentScene = new EndGame(app.stage, currentScale);
@@ -54,7 +62,7 @@ function resizeCanvas(): void {
 
   let scale = Math.min(cleintWidth / gameConfig.width, clientHeight / gameConfig.height);
   currentScale = scale;
-  
+
   const newWidth = Math.round(gameConfig.width * scale);
   const newHeight = Math.round(gameConfig.height * scale);
 
@@ -82,5 +90,5 @@ function requestFullscreen(): void {
 }
 
 resizeCanvas();
-// app.view.addEventListener('click', requestFullscreen);
+app.view.addEventListener('click', requestFullscreen);
 window.addEventListener("resize", resizeCanvas);

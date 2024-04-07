@@ -10,6 +10,8 @@ export class Button extends Container {
             color: 0x919191
         })
 
+        this.interactive = true;
+
         button.drawRoundedRect(0, 0, size.width, size.height, size.radius);
 
         const buttonText = new BitmapText(text, {
