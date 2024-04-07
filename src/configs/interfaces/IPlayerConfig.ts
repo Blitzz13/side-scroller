@@ -7,7 +7,7 @@ export interface IPlayerConfig {
     timeBetweenShots: number;
     health: number;
     startingProjectilesNumber: number;
-    moving: string | IAnimationConfig;
+    moving: string;
     icon: string;
     movementSpeed: number;
     canShoot: boolean;

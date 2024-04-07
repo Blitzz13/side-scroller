@@ -1,4 +1,4 @@
-import { AssetsManifest, BitmapFont } from "pixi.js";
+import { AssetsManifest, BitmapFont, RoundedRectangle } from "pixi.js";
 
 export const gameConfig = {
   width: 1280,
@@ -138,3 +138,5 @@ export const manifest: AssetsManifest = {
       },
     ],
   };
+
+  export const defaultButtonSize = new RoundedRectangle(0, 0, 210, 55, 15);

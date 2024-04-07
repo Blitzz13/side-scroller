@@ -81,3 +81,8 @@ function getExplosionConfig(): IAnimationConfig {
         speed: 0.4,
     };
 }
+
+export const allConfigs: IPlayerConfig[] = [
+    xWingConfig,
+    yWingConfig
+]

@@ -1,4 +1,4 @@
-import { ILineStyleOptions, Point, Rectangle, RoundedRectangle } from "pixi.js";
+import { ILineStyleOptions, Point, Rectangle } from "pixi.js";
 
 export interface IScoreBoardConfig {
     fontName: string;
