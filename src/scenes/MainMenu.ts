@@ -10,7 +10,7 @@ import { allConfigs } from "../configs/PlayerConfigs";
 
 export class MainMenu extends BaseScene {
     private _playButton: Button;
-    private _instructions: Instructions;
+    private _instructions?: Instructions;
     private _currentVisibleShipIndex: number;
     constructor(stage: Container, scale: number, showInstructions: boolean) {
         super(stage, scale)
@@ -67,7 +67,7 @@ export class MainMenu extends BaseScene {
 
     public dispose(): void {
         sound.stopAll();
-        this._instructions.dispose();
+        this._instructions?.dispose();
         this.destroy({ children: true });
     }
 }
