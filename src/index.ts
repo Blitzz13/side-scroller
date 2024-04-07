@@ -79,16 +79,5 @@ function resizeCanvas(): void {
   app.view.style.top = `${offsetY}px`;
 }
 
-function requestFullscreen(): void {
-  if (document.fullscreenEnabled) {
-    app.view.requestFullscreen().catch((error) => {
-      console.error('Failed to enter fullscreen:', error);
-    });
-  } else {
-    console.error('Fullscreen is not supported.');
-  }
-}
-
 resizeCanvas();
-app.view.addEventListener('click', requestFullscreen);
 window.addEventListener("resize", resizeCanvas);

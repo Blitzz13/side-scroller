@@ -12,7 +12,7 @@ export class Instructions extends Container implements IDisposable {
         titleText.position.copyFrom(instructionsConfig.titleConfig.position);
 
         const content = new BitmapText(
-            "The player is controlled with WASD or the ARROW keys and drops bombs with SPACEBAR",
+            "The game can be paused by pressing ESC. The player is controlled with WASD or the ARROW keys and drops bombs with SPACEBAR.",
             instructionsConfig.contentTextConfig.textConfig
         );
         content.anchor.copyFrom(instructionsConfig.contentTextConfig.anchor);
