@@ -11,6 +11,8 @@ export function registerFonts(): void {
     fontSize: 32,
     lineHeight: 33,
     fill: 0xffffff,
+  },{
+    chars: BitmapFont.ASCII,
   });
 }
 
