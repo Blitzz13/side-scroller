@@ -9,6 +9,8 @@ import { loadGameAssets } from "./Utils";
 import { EndlessLevel } from "./scenes/EndlessLevel";
 import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
+import { OnFootTestLevel } from "./scenes/OnFootTestLevel";
+import { MapEditor } from "./scenes/MapMaker";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
@@ -29,7 +31,7 @@ window.onload = async (): Promise<void> => {
   document.body.appendChild(app.view);
   resizeCanvas();
   app.stage.interactive = true;
-  changeScene(Scene.MainMenu);
+  changeScene(Scene.MapEditor);
 };
 
 function changeScene(scene: Scene): void {
@@ -44,6 +46,12 @@ function changeScene(scene: Scene): void {
       currentScene.on(GameEvent.SELECT_SHIP, (config: IPlayerConfig) => {
         shipConfig = config;
       });
+      break;
+    case Scene.OnFootTestLevel:
+      currentScene = new OnFootTestLevel(app.stage, currentScale);
+      break;
+    case Scene.MapEditor:
+      currentScene = new MapEditor(app.stage, currentScale);
       break;
     case Scene.EndGame:
       currentScene = new EndGame(app.stage, currentScale);

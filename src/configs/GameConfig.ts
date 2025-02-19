@@ -81,7 +81,15 @@ export const manifest: AssetsManifest = {
           {
             name: "menu_background",
             src: "./assets/menu_background.png",
-          }
+          },
+          {
+            name: "corridor_corner",
+            src: "./assets/corridor_corner.png",
+          },
+          {
+            name: "corridor_down",
+            src: "./assets/corridor_down.png",
+          },
         ],
       },
       {
