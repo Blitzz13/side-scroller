@@ -213,7 +213,7 @@ export class MapEditor extends BaseScene {
                 sprite.y = closest.y - closest.height; // snaps right above the asset
             }
             if (Math.abs(sprite.y - closest.y - closest.height) < SNAP_THRESHOLD) {
-                sprite.y = closest.y + closest.height; // snaps right above the asset
+                sprite.y = closest.y + closest.height; // snaps right bellow the asset
             }
             console.log("Snapped to closest asset.");
         }
