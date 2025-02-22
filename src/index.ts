@@ -10,7 +10,7 @@ import { EndlessLevel } from "./scenes/EndlessLevel";
 import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
 import { OnFootTestLevel } from "./scenes/OnFootTestLevel";
-import { MapEditor } from "./scenes/MapMaker";
+import { MapMaker } from "./scenes/MapMaker";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
@@ -51,7 +51,7 @@ function changeScene(scene: Scene): void {
       currentScene = new OnFootTestLevel(app.stage, currentScale);
       break;
     case Scene.MapEditor:
-      currentScene = new MapEditor(app.stage, currentScale);
+      currentScene = new MapMaker(app.stage, currentScale);
       break;
     case Scene.EndGame:
       currentScene = new EndGame(app.stage, currentScale);

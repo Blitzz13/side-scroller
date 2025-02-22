@@ -3,33 +3,48 @@ import { BaseScene } from "./BaseScene";
 import { manifest } from "../configs/GameConfig";
 import { Sidebar } from "../misc/MapMaker/Sidebar";
 import { MapMakerEvent } from "../enums/MapMakerEvent";
+import { KeyboardControls } from "../misc/MapMaker/KeyboardControls";
 
-export class MapEditor extends BaseScene {
-    private assets: string[] = [];
-    private selectedAssetToPlace: Sprite | null = null;
-    private selectedMapAsset: Sprite | null = null;
-    private mapContainer: Container;
-    private uiContainer: Container;
-    private sidebar!: Sidebar;
-    private isDragging: boolean = false;
-    private dragOffset = { x: 0, y: 0 };
-    private SCROLL_SPEED = 20;
+export class MapMaker extends BaseScene {
+    private _assets: string[] = [];
+    private _selectedAssetToPlace: Sprite | null = null;
+    private _selectedMapAsset: Sprite | null = null;
+    private _mapContainer: Container;
+    private _uiContainer: Container;
+    private _keyboradControls: KeyboardControls;
+    private _sidebar!: Sidebar;
+    private _isDragging: boolean = false;
+    private _dragOffset = { x: 0, y: 0 };
 
     constructor(stage: Container, scale: number) {
         super(stage, scale);
 
-        this.mapContainer = new Container();
-        this.mapContainer.name = "MapContainer";
-        this.mapContainer.hitArea = new Rectangle(0, 0, 2000, 2000);
-        this.uiContainer = new Container();
-        this.stage.addChild(this.mapContainer);
-        this.stage.addChild(this.uiContainer);
+        this._mapContainer = new Container();
+        this._mapContainer.name = "MapContainer";
+        this._mapContainer.hitArea = new Rectangle(0, 0, 2000, 2000);
+        this._uiContainer = new Container();
+        this._keyboradControls = new KeyboardControls(this);
+        this.stage.addChild(this._mapContainer);
+        this.stage.addChild(this._uiContainer);
 
         this.loadAssets();
         this.setupInteraction();
+    }
 
-        // Listen for keypress events (for deletion)
-        window.addEventListener("keydown", (e) => this.attachControls(e));
+    public get currStage(): Container {
+        return this.stage;
+    }
+    
+    public get mapContainer(): Container {
+        return this._mapContainer;
+    }
+
+    public get selectedMapAsset(): Sprite | null {
+        return this._selectedMapAsset;
+    }
+
+    public set selectedMapAsset(value: Sprite | null) {
+        this._selectedMapAsset = value;
     }
 
     private loadAssets() {
@@ -38,7 +53,7 @@ export class MapEditor extends BaseScene {
         );
 
         if (envAssets && Array.isArray(envAssets.assets)) {
-            this.assets = envAssets.assets
+            this._assets = envAssets.assets
                 .map((asset) =>
                     typeof asset === "object" && "name" in asset
                         ? asset.name
@@ -46,31 +61,31 @@ export class MapEditor extends BaseScene {
                 )
                 .filter((name) => name !== null) as string[];
 
-            this.sidebar = new Sidebar(this.assets);
-            this.sidebar.on(
+            this._sidebar = new Sidebar(this._assets);
+            this._sidebar.on(
                 MapMakerEvent.SELECTED_SPRITE,
                 (selectedAsset: Sprite) => {
-                    this.selectedAssetToPlace = selectedAsset;
+                    this._selectedAssetToPlace = selectedAsset;
                 },
             );
 
-            this.sidebar.on(
+            this._sidebar.on(
                 MapMakerEvent.EXPORT_BUTTON_CLICKED,
                 (selectedAsset: Sprite) => {
                     this.exportMap();
                 },
             );
 
-            this.stage.addChild(this.sidebar);
+            this.stage.addChild(this._sidebar);
         } else {
             console.warn("No environment assets found in manifest.");
         }
     }
 
     private setupInteraction() {
-        this.mapContainer.interactive = true;
-        this.mapContainer.on("pointerdown", (event: FederatedPointerEvent) => {
-            if (!this.isDragging) {
+        this._mapContainer.interactive = true;
+        this._mapContainer.on("pointerdown", (event: FederatedPointerEvent) => {
+            if (!this._isDragging) {
                 // Prevent placing assets while dragging
                 this.onMapClick(event);
             }
@@ -78,10 +93,10 @@ export class MapEditor extends BaseScene {
     }
 
     private onMapClick(event: FederatedPointerEvent) {
-        const position = event.data.getLocalPosition(this.mapContainer);
+        const position = event.data.getLocalPosition(this._mapContainer);
 
         // If an asset is selected, place it on the map
-        if (this.selectedAssetToPlace) {
+        if (this._selectedAssetToPlace) {
             this.addAssetToMap(position.x, position.y);
         } else {
             // Select existing sprite if clicked
@@ -90,11 +105,11 @@ export class MapEditor extends BaseScene {
     }
 
     private addAssetToMap(x: number, y: number) {
-        if (!this.selectedAssetToPlace) {
+        if (!this._selectedAssetToPlace) {
             return;
         }
 
-        const sprite = Sprite.from(this.selectedAssetToPlace.texture);
+        const sprite = Sprite.from(this._selectedAssetToPlace.texture);
         sprite.scale.set(0.2);
         sprite.x = x;
         sprite.y = y;
@@ -111,11 +126,11 @@ export class MapEditor extends BaseScene {
         sprite.on("pointerupoutside", () => this.stopDragging());
         sprite.on("pointermove", (event) => this.onDrag(event));
 
-        this.mapContainer.addChild(sprite);
+        this._mapContainer.addChild(sprite);
     }
 
     private selectExistingAsset(x: number, y: number) {
-        const clickedSprite = this.mapContainer.children.find((child) => {
+        const clickedSprite = this._mapContainer.children.find((child) => {
             if (child instanceof Sprite) {
                 const bounds = child.getBounds();
                 return (
@@ -129,59 +144,59 @@ export class MapEditor extends BaseScene {
         }) as Sprite | undefined;
 
         if (clickedSprite) {
-            if (this.selectedMapAsset !== null) {
-                this.selectedMapAsset.tint = 0xffffff; // Reset previous selection tint
+            if (this._selectedMapAsset !== null) {
+                this._selectedMapAsset.tint = 0xffffff; // Reset previous selection tint
             }
 
-            this.selectedMapAsset = clickedSprite;
-            this.selectedMapAsset.tint = 0xff0000; // Tint the new selection
-            this.sidebar.updateInspector(this.selectedMapAsset);
+            this._selectedMapAsset = clickedSprite;
+            this._selectedMapAsset.tint = 0xff0000; // Tint the new selection
+            this._sidebar.updateInspector(this._selectedMapAsset);
             console.log("Selected existing asset.");
         }
     }
 
     private startDragging(event: FederatedPointerEvent, sprite: Sprite) {
-        this.isDragging = true;
-        if (this.selectedMapAsset !== null) {
-            this.selectedMapAsset.tint = 0xffffff; // Reset previous selection tint
+        this._isDragging = true;
+        if (this._selectedMapAsset !== null) {
+            this._selectedMapAsset.tint = 0xffffff; // Reset previous selection tint
         }
 
-        this.selectedMapAsset = sprite;
-        this.selectedMapAsset.tint = 0xff0000; // Tint the new selection
+        this._selectedMapAsset = sprite;
+        this._selectedMapAsset.tint = 0xff0000; // Tint the new selection
         sprite.alpha = 0.7; // Visual cue for dragging
-        this.sidebar.updateInspector(this.selectedMapAsset);
+        this._sidebar.updateInspector(this._selectedMapAsset);
         // Calculate the offset between the mouse and the sprite's position
-        const position = event.data.getLocalPosition(this.mapContainer);
-        this.dragOffset.x = sprite.x - position.x;
-        this.dragOffset.y = sprite.y - position.y;
+        const position = event.data.getLocalPosition(this._mapContainer);
+        this._dragOffset.x = sprite.x - position.x;
+        this._dragOffset.y = sprite.y - position.y;
 
         // Start listening for movement on the mapContainer
-        this.mapContainer.on("pointermove", this.onDrag, this);
+        this._mapContainer.on("pointermove", this.onDrag, this);
     }
 
     private stopDragging() {
-        if (!this.selectedMapAsset) {
+        if (!this._selectedMapAsset) {
             return;
         }
 
-        this.isDragging = false;
-        this.selectedMapAsset.alpha = 1;
+        this._isDragging = false;
+        this._selectedMapAsset.alpha = 1;
 
         // Stop listening for movement
-        this.mapContainer.off("pointermove", this.onDrag, this);
+        this._mapContainer.off("pointermove", this.onDrag, this);
 
         // Snap to nearby assets
-        this.snapToClosest(this.selectedMapAsset);
+        this.snapToClosest(this._selectedMapAsset);
     }
 
     private onDrag(event: FederatedPointerEvent) {
-        if (!this.isDragging || !this.selectedMapAsset) return;
+        if (!this._isDragging || !this._selectedMapAsset) return;
 
-        const newPosition = event.data.getLocalPosition(this.mapContainer);
+        const newPosition = event.data.getLocalPosition(this._mapContainer);
 
         // Apply the offset so the sprite stays in place
-        this.selectedMapAsset.x = newPosition.x + this.dragOffset.x;
-        this.selectedMapAsset.y = newPosition.y + this.dragOffset.y;
+        this._selectedMapAsset.x = newPosition.x + this._dragOffset.x;
+        this._selectedMapAsset.y = newPosition.y + this._dragOffset.y;
     }
 
     private snapToClosest(sprite: Sprite) {
@@ -189,7 +204,7 @@ export class MapEditor extends BaseScene {
         let closest: Sprite | null = null;
         let minDistance = SNAP_THRESHOLD;
 
-        for (const child of this.mapContainer.children) {
+        for (const child of this._mapContainer.children) {
             if (child === sprite || !(child instanceof Sprite)) {
                 continue;
             }
@@ -209,80 +224,22 @@ export class MapEditor extends BaseScene {
             if (Math.abs(sprite.x - closest.x) < SNAP_THRESHOLD) {
                 sprite.x = closest.x; // snaps to the left of the asset
             }
-            if (Math.abs(sprite.y - closest.y + closest.height) < SNAP_THRESHOLD) {
+            if (
+                Math.abs(sprite.y - closest.y + closest.height) < SNAP_THRESHOLD
+            ) {
                 sprite.y = closest.y - closest.height; // snaps right above the asset
             }
-            if (Math.abs(sprite.y - closest.y - closest.height) < SNAP_THRESHOLD) {
+            if (
+                Math.abs(sprite.y - closest.y - closest.height) < SNAP_THRESHOLD
+            ) {
                 sprite.y = closest.y + closest.height; // snaps right bellow the asset
             }
             console.log("Snapped to closest asset.");
         }
     }
 
-    private attachControls(event: KeyboardEvent) {
-        if (event.key === "Delete" && this.selectedMapAsset) {
-            this.mapContainer.removeChild(this.selectedMapAsset);
-            console.log("Deleted selected asset.");
-            this.selectedMapAsset = null;
-        }
-
-        if (event.key === "Escape" && this.selectedMapAsset) {
-            this.selectedMapAsset.tint = 0xffffff;
-            this.selectedMapAsset = null;
-        }
-
-        if (this.selectedMapAsset) {
-            // Move the selected asset instead of the map
-            if (event.key === "ArrowUp") {
-                this.selectedMapAsset.y -= this.SCROLL_SPEED;
-            }
-
-            if (event.key === "ArrowDown") {
-                this.selectedMapAsset.y += this.SCROLL_SPEED;
-            }
-
-            if (event.key === "ArrowLeft") {
-                this.selectedMapAsset.x -= this.SCROLL_SPEED;
-            }
-
-            if (event.key === "ArrowRight") {
-                this.selectedMapAsset.x += this.SCROLL_SPEED;
-            }
-        } else {
-            // Move the mapContainer when nothing is selected
-            let newX = this.mapContainer.x;
-            let newY = this.mapContainer.y;
-
-            if (event.key === "ArrowUp") {
-                newY += this.SCROLL_SPEED;
-            }
-
-            if (event.key === "ArrowDown") {
-                newY -= this.SCROLL_SPEED;
-            }
-
-            if (event.key === "ArrowLeft") {
-                newX += this.SCROLL_SPEED;
-            }
-
-            if (event.key === "ArrowRight") {
-                newX -= this.SCROLL_SPEED;
-            }
-
-            // Constrain scrolling within the hitArea
-            const hitArea = this.mapContainer.hitArea as Rectangle;
-            const maxX = 0;
-            const maxY = 0;
-            const minX = -hitArea.width + this.stage.width;
-            const minY = -hitArea.height + this.stage.height;
-
-            this.mapContainer.x = Math.min(maxX, Math.max(minX, newX));
-            this.mapContainer.y = Math.min(maxY, Math.max(minY, newY));
-        }
-    }
-
     private exportMap() {
-        const exportData = this.mapContainer.children.map((child) => ({
+        const exportData = this._mapContainer.children.map((child) => ({
             name: (child as Sprite).texture.textureCacheIds[0],
             x: child.x,
             y: child.y,
@@ -300,8 +257,8 @@ export class MapEditor extends BaseScene {
     }
 
     public dispose(): void {
-        this.mapContainer.removeChildren();
-        this.uiContainer.removeChildren();
-        window.removeEventListener("keydown", (e) => this.attachControls(e));
+        this._mapContainer.removeChildren();
+        this._uiContainer.removeChildren();
+        this._keyboradControls.dispose();
     }
 }
