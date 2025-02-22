@@ -9,6 +9,7 @@ import { loadGameAssets } from "./Utils";
 import { EndlessLevel } from "./scenes/EndlessLevel";
 import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
+import { RaycastScene } from "./scenes/RaycastScene";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
@@ -29,7 +30,7 @@ window.onload = async (): Promise<void> => {
   document.body.appendChild(app.view);
   resizeCanvas();
   app.stage.interactive = true;
-  changeScene(Scene.MainMenu);
+  changeScene(Scene.Raycast);
 };
 
 function changeScene(scene: Scene): void {
@@ -48,6 +49,9 @@ function changeScene(scene: Scene): void {
     case Scene.EndGame:
       currentScene = new EndGame(app.stage, currentScale);
       break;
+    case Scene.Raycast:
+      currentScene = new RaycastScene(app.stage, currentScale);
+      break;
     default:
       break;
   }
@@ -60,7 +64,10 @@ function resizeCanvas(): void {
   const cleintWidth = document.documentElement.clientWidth;
   const clientHeight = document.documentElement.clientHeight;
 
-  let scale = Math.min(cleintWidth / gameConfig.width, clientHeight / gameConfig.height);
+  let scale = Math.min(
+    cleintWidth / gameConfig.width,
+    clientHeight / gameConfig.height
+  );
   currentScale = scale;
 
   const newWidth = Math.round(gameConfig.width * scale);
