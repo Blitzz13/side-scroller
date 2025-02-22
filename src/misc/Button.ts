@@ -1,7 +1,7 @@
 import { BitmapText, Container, Graphics, RoundedRectangle } from "pixi.js";
 
 export class Button extends Container {
-    constructor(size: RoundedRectangle, text: string) {
+    constructor(size: RoundedRectangle, text: string, textSize?: number) {
         super();
         const button = new Graphics();
         button.beginFill(0x000000);
@@ -16,6 +16,7 @@ export class Button extends Container {
 
         const buttonText = new BitmapText(text, {
             fontName: "arial32",
+            fontSize: textSize
         });
 
         buttonText.anchor.set(0.5);
