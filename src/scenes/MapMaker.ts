@@ -8,13 +8,13 @@ import { KeyboardControls } from "../misc/MapMaker/KeyboardControls";
 export class MapMaker extends BaseScene {
     private _assets: string[] = [];
     private _selectedAssetToPlace: Sprite | null = null;
-    private _selectedMapAsset: Sprite | null = null;
+    private _selectedMapAssets: Set<Sprite> = new Set();
     private _mapContainer: Container;
     private _uiContainer: Container;
     private _keyboradControls: KeyboardControls;
     private _sidebar!: Sidebar;
     private _isDragging: boolean = false;
-    private _dragOffset = { x: 0, y: 0 };
+    private _dragOffsets: Map<Sprite, { x: number; y: number }> = new Map();
 
     constructor(stage: Container, scale: number) {
         super(stage, scale);
@@ -34,17 +34,17 @@ export class MapMaker extends BaseScene {
     public get currStage(): Container {
         return this.stage;
     }
-    
+
     public get mapContainer(): Container {
         return this._mapContainer;
     }
 
-    public get selectedMapAsset(): Sprite | null {
-        return this._selectedMapAsset;
+    public get selectedMapAssets(): Set<Sprite> {
+        return this._selectedMapAssets;
     }
 
-    public set selectedMapAsset(value: Sprite | null) {
-        this._selectedMapAsset = value;
+    public set selectedMapAssets(value: Set<Sprite>) {
+        this._selectedMapAssets = value;
     }
 
     private loadAssets() {
@@ -98,9 +98,6 @@ export class MapMaker extends BaseScene {
         // If an asset is selected, place it on the map
         if (this._selectedAssetToPlace) {
             this.addAssetToMap(position.x, position.y);
-        } else {
-            // Select existing sprite if clicked
-            this.selectExistingAsset(position.x, position.y);
         }
     }
 
@@ -119,7 +116,8 @@ export class MapMaker extends BaseScene {
         // Stop propagation to prevent map click from triggering
         sprite.on("pointerdown", (event) => {
             event.stopPropagation(); // Prevent the map from handling this click
-            this.startDragging(event, sprite);
+            this.onExistingAssetDown(sprite);
+            this.startDragging(event);
         });
 
         sprite.on("pointerup", () => this.stopDragging());
@@ -129,75 +127,98 @@ export class MapMaker extends BaseScene {
         this._mapContainer.addChild(sprite);
     }
 
-    private selectExistingAsset(x: number, y: number) {
-        const clickedSprite = this._mapContainer.children.find((child) => {
-            if (child instanceof Sprite) {
-                const bounds = child.getBounds();
-                return (
-                    x >= bounds.x &&
-                    x <= bounds.x + bounds.width &&
-                    y >= bounds.y &&
-                    y <= bounds.y + bounds.height
-                );
-            }
-            return false;
-        }) as Sprite | undefined;
-
-        if (clickedSprite) {
-            if (this._selectedMapAsset !== null) {
-                this._selectedMapAsset.tint = 0xffffff; // Reset previous selection tint
-            }
-
-            this._selectedMapAsset = clickedSprite;
-            this._selectedMapAsset.tint = 0xff0000; // Tint the new selection
-            this._sidebar.updateInspector(this._selectedMapAsset);
-            console.log("Selected existing asset.");
-        }
-    }
-
-    private startDragging(event: FederatedPointerEvent, sprite: Sprite) {
+    private startDragging(event: FederatedPointerEvent) {
         this._isDragging = true;
-        if (this._selectedMapAsset !== null) {
-            this._selectedMapAsset.tint = 0xffffff; // Reset previous selection tint
-        }
 
-        this._selectedMapAsset = sprite;
-        this._selectedMapAsset.tint = 0xff0000; // Tint the new selection
-        sprite.alpha = 0.7; // Visual cue for dragging
-        this._sidebar.updateInspector(this._selectedMapAsset);
-        // Calculate the offset between the mouse and the sprite's position
         const position = event.data.getLocalPosition(this._mapContainer);
-        this._dragOffset.x = sprite.x - position.x;
-        this._dragOffset.y = sprite.y - position.y;
 
-        // Start listening for movement on the mapContainer
+        // Store offsets for all selected assets
+        this._dragOffsets.clear();
+        this._selectedMapAssets.forEach((asset) => {
+            this._dragOffsets.set(asset, {
+                x: asset.x - position.x,
+                y: asset.y - position.y,
+            });
+            asset.tint = 0xff0000; // Highlight selection
+            asset.alpha = 0.7; // Visual cue for dragging
+        });
+
         this._mapContainer.on("pointermove", this.onDrag, this);
     }
 
     private stopDragging() {
-        if (!this._selectedMapAsset) {
+        if (!this._isDragging) {
             return;
         }
 
         this._isDragging = false;
-        this._selectedMapAsset.alpha = 1;
 
-        // Stop listening for movement
+        if (this._selectedMapAssets.size === 1) {
+            const asset = this._selectedMapAssets.values().next().value;
+            if (asset) {
+                this.snapToClosest(asset);
+            }
+        }
+
+        this._selectedMapAssets.forEach((asset) => {
+            asset.alpha = 1;
+        });
+
         this._mapContainer.off("pointermove", this.onDrag, this);
-
-        // Snap to nearby assets
-        this.snapToClosest(this._selectedMapAsset);
+        this._dragOffsets.clear();
     }
 
     private onDrag(event: FederatedPointerEvent) {
-        if (!this._isDragging || !this._selectedMapAsset) return;
+        if (!this._isDragging) {
+            return;
+        }
 
         const newPosition = event.data.getLocalPosition(this._mapContainer);
 
-        // Apply the offset so the sprite stays in place
-        this._selectedMapAsset.x = newPosition.x + this._dragOffset.x;
-        this._selectedMapAsset.y = newPosition.y + this._dragOffset.y;
+        this._selectedMapAssets.forEach((asset) => {
+            const offset = this._dragOffsets.get(asset);
+            if (offset) {
+                asset.x = newPosition.x + offset.x;
+                asset.y = newPosition.y + offset.y;
+            }
+        });
     }
+
+    private onExistingAssetDown(sprite: Sprite): void {
+        if (this._keyboradControls.ctrlDown) {
+            // Toggle selection: deselect if selected, otherwise add
+            if (this._selectedMapAssets.has(sprite)) {
+                sprite.tint = 0xffffff; // Reset tint
+                this._selectedMapAssets.delete(sprite);
+            } else {
+                this._selectedMapAssets.add(sprite);
+                sprite.tint = 0xff0000; // Highlight selection
+            }
+
+            return;
+        } else if (!this._selectedMapAssets.has(sprite)) {
+            // If Ctrl is NOT held and sprite is NOT already selected, select only this sprite
+            this._selectedMapAssets.forEach(asset => asset.tint = 0xffffff);
+            this._selectedMapAssets.clear();
+            this._selectedMapAssets.add(sprite);
+            sprite.tint = 0xff0000;
+            return;
+        }
+    
+        // if (!this._isDragging) {
+        //     sprite.once("pointerup",() => {
+        //         this._selectedMapAssets.forEach(asset => {
+        //             if (asset !== sprite) {
+        //                 asset.tint = 0xffffff; // Reset tint for others
+        //             }
+        //         });
+            
+        //         this._selectedMapAssets.clear();
+        //         this._selectedMapAssets.add(sprite);
+        //     });
+        // }
+    }
+    
 
     private snapToClosest(sprite: Sprite) {
         const SNAP_THRESHOLD = 10; // Pixels for snapping

@@ -5,15 +5,21 @@ export class KeyboardControls {
     private mapMaker: MapMaker;
     private SCROLL_SPEED = 20;
     private _shiftDown: boolean;
+    private _ctrlDown: boolean;
 
     constructor(mapEditor: MapMaker) {
         this._shiftDown = false;
+        this._ctrlDown = false;
         this.mapMaker = mapEditor;
         this.attachEventListeners();
     }
 
     public get shiftDown(): boolean {
         return this._shiftDown;
+    }
+
+    public get ctrlDown(): boolean {
+        return this._ctrlDown;
     }
 
     public dispose() {
@@ -30,38 +36,49 @@ export class KeyboardControls {
         if (event.key === "Shift") {
             this._shiftDown = false;
         }
+
+        if (event.key === "Control") {
+            this._ctrlDown = false;
+        }
     };
 
     private onKeyDown = (event: KeyboardEvent) => {
         const currStage = this.mapMaker.currStage;
-        const selectedMapAsset = this.mapMaker.selectedMapAsset;
         const mapContainer = this.mapMaker.mapContainer;
 
-        if (event.key === "Delete" && selectedMapAsset) {
-            mapContainer.removeChild(selectedMapAsset);
-            console.log("Deleted selected asset.");
-            this.mapMaker.selectedMapAsset = null;
+        if (event.key === "Delete" && this.mapMaker.selectedMapAssets.size > 0) {
+            this.mapMaker.selectedMapAssets.forEach((asset) => {
+                mapContainer.removeChild(asset);
+            });
+        
+            console.log(`Deleted ${this.mapMaker.selectedMapAssets.size} assets.`);
+            
+            // Clear selection after deleting
+            this.mapMaker.selectedMapAssets.clear();
         }
 
         if (event.key === "Shift") {
             this._shiftDown = true;
         }
 
-        if (event.key === "Escape" && selectedMapAsset) {
-            selectedMapAsset.tint = 0xffffff;
-            this.mapMaker.selectedMapAsset = null;
+        if (event.key === "Control") {
+            this._ctrlDown = true;
         }
 
-        if (selectedMapAsset) {
-            // Move the selected asset instead of the map
-            if (event.key === "ArrowUp")
-                selectedMapAsset.y -= this.SCROLL_SPEED;
-            if (event.key === "ArrowDown")
-                selectedMapAsset.y += this.SCROLL_SPEED;
-            if (event.key === "ArrowLeft")
-                selectedMapAsset.x -= this.SCROLL_SPEED;
-            if (event.key === "ArrowRight")
-                selectedMapAsset.x += this.SCROLL_SPEED;
+        if (event.key === "Escape" && this.mapMaker.selectedMapAssets.size > 0) {
+            this.mapMaker.selectedMapAssets.forEach((asset) => (asset.tint = 0xffffff));
+            this.mapMaker.selectedMapAssets.clear();
+            console.log("Deselected all assets.");
+        }
+        
+        if (this.mapMaker.selectedMapAssets.size > 0) {
+            // Move all selected assets
+            this.mapMaker.selectedMapAssets.forEach((asset) => {
+                if (event.key === "ArrowUp") asset.y -= this.SCROLL_SPEED;
+                if (event.key === "ArrowDown") asset.y += this.SCROLL_SPEED;
+                if (event.key === "ArrowLeft") asset.x -= this.SCROLL_SPEED;
+                if (event.key === "ArrowRight") asset.x += this.SCROLL_SPEED;
+            });
         } else {
             // Move the mapContainer when nothing is selected
             let newX = mapContainer.x;
