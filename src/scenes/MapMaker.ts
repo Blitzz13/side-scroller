@@ -1,9 +1,10 @@
 import { Container, Sprite, Rectangle, FederatedPointerEvent } from "pixi.js";
 import { BaseScene } from "./BaseScene";
-import { manifest } from "../configs/GameConfig";
+import { gameConfig, manifest } from "../configs/GameConfig";
 import { Sidebar } from "../misc/MapMaker/Sidebar";
 import { MapMakerEvent } from "../enums/MapMakerEvent";
 import { KeyboardControls } from "../misc/MapMaker/KeyboardControls";
+import { Hierarchy } from "../misc/MapMaker/Hierarchy";
 
 export class MapMaker extends BaseScene {
     private _assets: string[] = [];
@@ -13,6 +14,7 @@ export class MapMaker extends BaseScene {
     private _uiContainer: Container;
     private _keyboradControls: KeyboardControls;
     private _sidebar!: Sidebar;
+    private _hierarchy: Hierarchy;
     private _isDragging: boolean = false;
     private _dragOffsets: Map<Sprite, { x: number; y: number }> = new Map();
 
@@ -24,8 +26,12 @@ export class MapMaker extends BaseScene {
         this._mapContainer.hitArea = new Rectangle(0, 0, 2000, 2000);
         this._uiContainer = new Container();
         this._keyboradControls = new KeyboardControls(this);
+        this._hierarchy = new Hierarchy();
+        this._hierarchy.setTargetContainer(this._mapContainer);
+        this._hierarchy.x = gameConfig.width - 250; // Right side
         this.stage.addChild(this._mapContainer);
         this.stage.addChild(this._uiContainer);
+        this.stage.addChild(this._hierarchy);
 
         this.loadAssets();
         this.setupInteraction();
@@ -33,6 +39,10 @@ export class MapMaker extends BaseScene {
 
     public get currStage(): Container {
         return this.stage;
+    }
+
+    public get hierarchy(): Hierarchy {
+        return this._hierarchy;
     }
 
     public get mapContainer(): Container {
@@ -125,6 +135,7 @@ export class MapMaker extends BaseScene {
         sprite.on("pointermove", (event) => this.onDrag(event));
 
         this._mapContainer.addChild(sprite);
+        this._hierarchy.refresh();
     }
 
     private startDragging(event: FederatedPointerEvent) {
@@ -195,16 +206,20 @@ export class MapMaker extends BaseScene {
                 sprite.tint = 0xff0000; // Highlight selection
             }
 
+            this._sidebar.updateInspector(sprite);
+
             return;
         } else if (!this._selectedMapAssets.has(sprite)) {
             // If Ctrl is NOT held and sprite is NOT already selected, select only this sprite
-            this._selectedMapAssets.forEach(asset => asset.tint = 0xffffff);
+            this._selectedMapAssets.forEach((asset) => (asset.tint = 0xffffff));
             this._selectedMapAssets.clear();
             this._selectedMapAssets.add(sprite);
             sprite.tint = 0xff0000;
+
+            this._sidebar.updateInspector(sprite);
             return;
         }
-    
+
         // if (!this._isDragging) {
         //     sprite.once("pointerup",() => {
         //         this._selectedMapAssets.forEach(asset => {
@@ -212,13 +227,12 @@ export class MapMaker extends BaseScene {
         //                 asset.tint = 0xffffff; // Reset tint for others
         //             }
         //         });
-            
+
         //         this._selectedMapAssets.clear();
         //         this._selectedMapAssets.add(sprite);
         //     });
         // }
     }
-    
 
     private snapToClosest(sprite: Sprite) {
         const SNAP_THRESHOLD = 10; // Pixels for snapping

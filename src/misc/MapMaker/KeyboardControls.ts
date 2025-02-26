@@ -50,6 +50,8 @@ export class KeyboardControls {
             this.mapMaker.selectedMapAssets.forEach((asset) => {
                 mapContainer.removeChild(asset);
             });
+
+            this.mapMaker.hierarchy.refresh();
         
             console.log(`Deleted ${this.mapMaker.selectedMapAssets.size} assets.`);
             
