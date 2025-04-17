@@ -1,5 +1,5 @@
 // pixi-raycast.ts
-import { Container, Graphics } from 'pixi.js';
+import { BlurFilter, Container, Graphics } from 'pixi.js';
 import { BaseScene } from './BaseScene';
 import { gameConfig } from '../configs/GameConfig';
 
@@ -134,59 +134,108 @@ export class RaycastScene extends BaseScene {
     }
 
     private castRays(): void {
-        const rayStep = 0.05;
-        const wallWidth = 2;
-        const verticalSegments = 10;
-        const blurAmount = 2;
-
+        const wallWidth = this.gameConfig.width / this.rayCount; // Dynamic width
+    
         for (let ray = 0; ray < this.rayCount; ray++) {
-            const rayAngle = this.playerAngle + (ray / this.rayCount - 0.5) * Math.PI / 2;
+            // Calculate ray angle with field of view
+            const rayAngle = this.playerAngle + (ray / this.rayCount - 0.5) * Math.PI / 3;
+    
+            // DDA setup
             let rayX = this.playerX;
             let rayY = this.playerY;
-            let distance = 0;
+    
+            // Direction of the ray
+            const rayDirX = Math.cos(rayAngle);
+            const rayDirY = Math.sin(rayAngle);
+    
+            // Map position
+            let mapX = Math.floor(rayX);
+            let mapY = Math.floor(rayY);
+    
+            // Length of ray from one x or y-side to next x or y-side
+            const deltaDistX = Math.abs(1 / (rayDirX === 0 ? 1e-30 : rayDirX));
+            const deltaDistY = Math.abs(1 / (rayDirY === 0 ? 1e-30 : rayDirY));
+    
+            // Calculate step and initial sideDist
+            let stepX, stepY;
+            let sideDistX, sideDistY;
+    
+            if (rayDirX < 0) {
+                stepX = -1;
+                sideDistX = (rayX - mapX) * deltaDistX;
+            } else {
+                stepX = 1;
+                sideDistX = (mapX + 1 - rayX) * deltaDistX;
+            }
+    
+            if (rayDirY < 0) {
+                stepY = -1;
+                sideDistY = (rayY - mapY) * deltaDistY;
+            } else {
+                stepY = 1;
+                sideDistY = (mapY + 1 - rayY) * deltaDistY;
+            }
+    
+            // Perform DDA
             let hitWall = false;
-
-            while (!hitWall && distance < 20) {
-                rayX += Math.cos(rayAngle) * rayStep;
-                rayY += Math.sin(rayAngle) * rayStep;
-                distance += rayStep;
-
-                const mapX = Math.floor(rayX);
-                const mapY = Math.floor(rayY);
-
+            let side; // Was a NS or a EW wall hit?
+            let distance;
+    
+            while (!hitWall) {
+                // Jump to next map square, either in x-direction or y-direction
+                if (sideDistX < sideDistY) {
+                    sideDistX += deltaDistX;
+                    mapX += stepX;
+                    side = 0; // Hit vertical wall
+                } else {
+                    sideDistY += deltaDistY;
+                    mapY += stepY;
+                    side = 1; // Hit horizontal wall
+                }
+    
+                // Check if ray has hit a wall
                 if (mapX >= 0 && mapX < this.map[0].length && mapY >= 0 && mapY < this.map.length) {
                     if (this.map[mapY][mapX] === 1) {
                         hitWall = true;
                     }
                 } else {
-                    hitWall = true;
+                    break; // Ray out of bounds
                 }
             }
-
+    
             if (hitWall) {
-                const correctedDistance = distance * Math.cos(rayAngle - this.playerAngle);
+                // Calculate distance to the wall
+                if (side === 0) {
+                    distance = (mapX - rayX + (1 - stepX) / 2) / rayDirX;
+                } else {
+                    distance = (mapY - rayY + (1 - stepY) / 2) / rayDirY;
+                }
+    
+                // Apply fisheye correction
+                const correctedDistance = Math.abs(distance * Math.cos(rayAngle - this.playerAngle));
+                
+                // Calculate wall height and position
                 const wallHeight = Math.min(this.wallHeight / (correctedDistance + 0.001), this.gameConfig.height);
                 const wallTop = this.gameConfig.height / 2 - wallHeight / 2;
-
-                const segmentHeight = wallHeight / verticalSegments;
-                for (let i = 0; i < verticalSegments; i++) {
-                    const segmentTop = wallTop + i * segmentHeight;
-                    const alpha = 0.8 - (i / verticalSegments) * 0.4;
-
-                    this.walls.beginFill(0x999999, alpha);
-                    this.walls.drawRect(ray * wallWidth - 1, segmentTop, wallWidth + 2, segmentHeight);
-                    this.walls.endFill();
-                }
-
-                // this.walls.filters = [new PIXIfilters.BlurFilter(blurAmount)];
-
+    
+                // Adjust shading based on side (optional, for visual distinction)
+                const alpha = side === 0 ? Math.max(0.4, 0.8 - correctedDistance / 20) : Math.max(0.3, 0.6 - correctedDistance / 20);
+    
+                // Draw the wall
+                this.walls.beginFill(0x999999, alpha);
+                this.walls.drawRect(Math.floor(ray * wallWidth), wallTop, Math.ceil(wallWidth), wallHeight);
+                this.walls.endFill();
+    
+                // Draw the ray on the minimap
+                const endX = this.playerX + rayDirX * distance;
+                const endY = this.playerY + rayDirY * distance;
                 this.rays.lineStyle(1, 0xFFFF00);
                 this.rays.moveTo(this.playerX * 16, this.playerY * 16);
-                this.rays.lineTo(rayX * 16, rayY * 16);
+                this.rays.lineTo(endX * 16, endY * 16);
             }
         }
     }
-
+    
     public dispose(): void {
         window.removeEventListener("keydown", () => {});
     }
