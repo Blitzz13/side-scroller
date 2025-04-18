@@ -81,7 +81,15 @@ export const manifest: AssetsManifest = {
           {
             name: "menu_background",
             src: "./assets/menu_background.png",
-          }
+          },
+          {
+            name: "dark_gray_wall",
+            src: "./assets/dark_gray_wall.jpg",
+          },
+          {
+            name: "gray_brick_wall",
+            src: "./assets/gray_brick_wall.jpg",
+          },
         ],
       },
       {
