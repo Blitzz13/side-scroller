@@ -83,12 +83,12 @@ export const manifest: AssetsManifest = {
             src: "./assets/menu_background.png",
           },
           {
-            name: "dark_gray_wall",
-            src: "./assets/dark_gray_wall.jpg",
+            name: "imperial_grilled_wall",
+            src: "./assets/imperial_grilled_wall.jpg",
           },
           {
-            name: "gray_brick_wall",
-            src: "./assets/gray_brick_wall.jpg",
+            name: "basic_imperial_wall",
+            src: "./assets/basic_imperial_wall.jpg",
           },
         ],
       },
