@@ -90,6 +90,14 @@ export const manifest: AssetsManifest = {
             name: "basic_imperial_wall",
             src: "./assets/basic_imperial_wall.jpg",
           },
+          {
+            name: "inside_floor",
+            src: "./assets/inside_floor.jpg",
+          },
+          {
+            name: "metal_door",
+            src: "./assets/metal_door.jpg",
+          },
         ],
       },
       {

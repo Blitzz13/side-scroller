@@ -6,12 +6,20 @@ import {
   Texture,
   Ticker,
   Assets,
+  TilingSprite,
 } from "pixi.js";
 import { BaseScene } from "./BaseScene";
 import { gameConfig } from "../configs/GameConfig";
 
 export class RaycastScene extends BaseScene {
-  private player: any;
+  private player: {
+    x: number;
+    y: number;
+    dirX: number;
+    dirY: number;
+    planeX: number;
+    planeY: number;
+  };
   private keys: Record<string, boolean> = {
     w: false,
     a: false,
@@ -27,6 +35,8 @@ export class RaycastScene extends BaseScene {
   private mapWidth: number;
   private mapHeight: number;
 
+  private doorStates: Record<string, number> = {};
+
   constructor(stage: Container, scale: number) {
     super(stage, scale);
 
@@ -35,7 +45,7 @@ export class RaycastScene extends BaseScene {
       [2, 0, 0, 0, 2, 0, 0, 0, 2],
       [2, 0, 0, 0, 2, 2, 0, 2, 2],
       [2, 0, 0, 0, 2, 0, 0, 0, 2],
-      [2, 0, 0, 0, 0, 0, 0, 0, 1],
+      [2, 0, 0, 0, 3, 0, 0, 0, 1],
       [2, 0, 0, 0, 2, 0, 0, 0, 2],
       [2, 0, 0, 0, 2, 2, 2, 0, 1],
       [2, 0, 0, 0, 2, 0, 0, 0, 1],
@@ -48,8 +58,8 @@ export class RaycastScene extends BaseScene {
 
     this.player = {
       x: 2,
-      y: 2,
-      dirX: -2,
+      y: 4.5,
+      dirX: -1,
       dirY: 0,
       planeX: 0,
       planeY: 0.8,
@@ -87,6 +97,7 @@ export class RaycastScene extends BaseScene {
 
   private keyDownHandler = (e: KeyboardEvent) => {
     if (e.key in this.keys) this.keys[e.key] = true;
+    if (e.key === "e") this.tryOpenDoor();
   };
 
   private keyUpHandler = (e: KeyboardEvent) => {
@@ -96,10 +107,12 @@ export class RaycastScene extends BaseScene {
   private async loadTextures() {
     this.textures[1] = Texture.from("imperial_grilled_wall");
     this.textures[2] = Texture.from("basic_imperial_wall");
+    this.textures[3] = Texture.from("metal_door");
   }
 
   private tick(delta: number) {
     this.updatePlayer(delta);
+    this.updateDoors(delta);
     this.renderScene();
   }
 
@@ -107,10 +120,20 @@ export class RaycastScene extends BaseScene {
     const moveSpeed = this.moveSpeed * delta;
     const rotSpeed = this.rotSpeed * delta;
 
+    const tryMove = (newX: number, newY: number) => {
+      const targetX = Math.floor(newX);
+      const targetY = Math.floor(newY);
+      const tile = this.map[targetY]?.[targetX];
+      const doorKey = `${targetX},${targetY}`;
+      const isDoorOpen = tile === 3 && (this.doorStates[doorKey] ?? 0) >= 1;
+
+      return tile === 0 || isDoorOpen;
+    };
+
     if (this.keys.w) {
       const newX = this.player.x + this.player.dirX * moveSpeed;
       const newY = this.player.y + this.player.dirY * moveSpeed;
-      if (this.map[Math.floor(newY)][Math.floor(newX)] === 0) {
+      if (tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
       }
@@ -119,7 +142,7 @@ export class RaycastScene extends BaseScene {
     if (this.keys.s) {
       const newX = this.player.x - this.player.dirX * moveSpeed;
       const newY = this.player.y - this.player.dirY * moveSpeed;
-      if (this.map[Math.floor(newY)][Math.floor(newX)] === 0) {
+      if (tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
       }
@@ -138,6 +161,36 @@ export class RaycastScene extends BaseScene {
       const oldPlaneX = this.player.planeX;
       this.player.planeX = this.player.planeX * cos - this.player.planeY * sin;
       this.player.planeY = oldPlaneX * sin + this.player.planeY * cos;
+    }
+  }
+
+  private updateDoors(delta: number) {
+    for (const key in this.doorStates) {
+      if (this.doorStates[key] < 1) {
+        this.doorStates[key] += 0.01 * delta;
+        if (this.doorStates[key] > 1) this.doorStates[key] = 1;
+      }
+    }
+  }
+
+  private tryOpenDoor() {
+    const px = Math.floor(this.player.x);
+    const py = Math.floor(this.player.y);
+
+    const nearbyOffsets = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+
+    for (const [dx, dy] of nearbyOffsets) {
+      const x = px + dx;
+      const y = py + dy;
+      if (this.map[y]?.[x] === 3) {
+        const key = `${x},${y}`;
+        this.doorStates[key] = this.doorStates[key] || 0.01;
+      }
     }
   }
 
@@ -192,7 +245,28 @@ export class RaycastScene extends BaseScene {
         mapY >= this.mapHeight
       )
         break;
-      if (this.map[mapY][mapX] > 0) hit = 1;
+
+      const tile = this.map[mapY][mapX];
+      const key = `${mapX},${mapY}`;
+
+      if (tile === 3) {
+        const open = this.doorStates[key] ?? 0;
+        if (open < 1) {
+          const offset = 1 - open;
+          const dist =
+            side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+          const hitPos =
+            side === 0
+              ? this.player.x + dist * rayDirX
+              : this.player.y + dist * rayDirY;
+
+          const wallEdge = side === 0 ? mapX + offset : mapY + offset;
+
+          if (hitPos < wallEdge) hit = 1;
+        }
+      } else if (tile > 0) {
+        hit = 1;
+      }
     }
 
     const perpWallDist =
@@ -204,11 +278,21 @@ export class RaycastScene extends BaseScene {
         : this.player.x + perpWallDist * rayDirX;
     wallX -= Math.floor(wallX);
 
+    // 🔧 Shift door texture to simulate sliding open
+    if (this.map[mapY][mapX] === 3) {
+      const open = this.doorStates[`${mapX},${mapY}`] ?? 0;
+      wallX = Math.min(1, wallX + open);
+    }
+
     return {
       wallType: this.map[mapY][mapX],
       distance: perpWallDist,
       hitX: wallX,
       side,
+      mapX,
+      mapY,
+      rayDirX,
+      rayDirY,
     };
   }
 
@@ -224,42 +308,70 @@ export class RaycastScene extends BaseScene {
       const drawStart = -lineHeight / 2 + screenH / 2;
       const drawEnd = lineHeight / 2 + screenH / 2;
 
-      // Ceiling
       if (drawStart > 0) {
         this.graphics.beginFill(0x87ceeb);
-        this.graphics.drawRect(i, 0, 2, drawStart);
+        this.graphics.drawRect(i, 0, 1, drawStart);
         this.graphics.endFill();
       }
 
-      // Wall
       const sprite = this.wallSprites[i];
       const texture = this.textures[ray.wallType];
 
-      if (texture) {
+      if (ray.wallType === 3) {
+        // Handle doors specifically
+        const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
+        const doorWidth = texture?.width ?? 64; // Assuming a default width
+
+        if (texture && open < 1) {
+          const texX = Math.floor(ray.hitX * doorWidth);
+          const clampedTexX = Math.min(texX, doorWidth - 1);
+
+          const cropped = new Texture(
+            texture.baseTexture,
+            new Rectangle(clampedTexX, 0, 1, texture.height)
+          );
+          sprite.texture = cropped;
+          sprite.y = drawStart;
+          sprite.height = drawEnd - drawStart;
+          sprite.width = 1;
+          sprite.visible = true;
+          sprite.tint = ray.side === 1 ? 0xaaaaaa : 0xffffff;
+        } else {
+          sprite.visible = false;
+        }
+
+        // For the space where the door is opening, render the background
+        if (open > 0 && drawStart < drawEnd) {
+          this.graphics.beginFill(0x000000); // Adjust background color if needed
+          this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
+          this.graphics.endFill();
+        }
+      } else if (texture) {
+        // Handle regular walls
         const texWidth = texture.width;
         const texX = Math.floor(ray.hitX * texWidth);
-        const clampedTexX = Math.min(texX, texWidth - 2);
+        const clampedTexX = Math.min(texX, texWidth - 1);
 
         const cropped = new Texture(
           texture.baseTexture,
-          new Rectangle(clampedTexX, 0, 0.05, texture.height)
+          new Rectangle(clampedTexX, 0, 1, texture.height)
         );
         sprite.texture = cropped;
         sprite.y = drawStart;
         sprite.height = drawEnd - drawStart;
+        sprite.width = 1;
         sprite.visible = true;
         sprite.tint = ray.side === 1 ? 0xaaaaaa : 0xffffff;
       } else {
         sprite.visible = false;
         this.graphics.beginFill(ray.side === 1 ? 0x666666 : 0x999999);
-        this.graphics.drawRect(i, drawStart, 2, drawEnd - drawStart);
+        this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
         this.graphics.endFill();
       }
 
-      // Floor
       if (drawEnd < screenH) {
         this.graphics.beginFill(0x333333);
-        this.graphics.drawRect(i, drawEnd, 2, screenH - drawEnd);
+        this.graphics.drawRect(i, drawEnd, 1, screenH - drawEnd);
         this.graphics.endFill();
       }
     }
