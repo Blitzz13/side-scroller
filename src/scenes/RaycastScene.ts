@@ -1,242 +1,267 @@
-// pixi-raycast.ts
-import { BlurFilter, Container, Graphics } from 'pixi.js';
-import { BaseScene } from './BaseScene';
-import { gameConfig } from '../configs/GameConfig';
+import {
+  Container,
+  Graphics,
+  Rectangle,
+  Sprite,
+  Texture,
+  Ticker,
+  Assets,
+} from "pixi.js";
+import { BaseScene } from "./BaseScene";
+import { gameConfig } from "../configs/GameConfig";
 
 export class RaycastScene extends BaseScene {
-    private playerX: number;
-    private playerY: number;
-    private playerAngle: number;
-    private map: number[][];
-    private rayCount: number;
-    private rayStep: number;
-    private wallHeight: number;
-    private moveSpeed: number;
-    private turnSpeed: number;
-    private rays: Graphics;
-    private walls: Graphics;
-    private mapDisplay: Graphics;
-    private gameConfig: { width: number, height: number };
+  private player: any;
+  private keys: Record<string, boolean> = {
+    w: false,
+    a: false,
+    s: false,
+    d: false,
+  };
+  private graphics: Graphics;
+  private wallSprites: Sprite[] = [];
+  private textures: Record<number, Texture> = {};
+  private moveSpeed: number = 0.02;
+  private rotSpeed: number = 0.05;
+  private map: number[][];
+  private mapWidth: number;
+  private mapHeight: number;
 
-    constructor(stage: Container, scale: number) {
-        super(stage, scale);
+  constructor(stage: Container, scale: number) {
+    super(stage, scale);
 
-        this.gameConfig = {
-            width: gameConfig.width,
-            height: gameConfig.height,
-        };
-        this.playerX = 3;
-        this.playerY = 3;
-        this.playerAngle = 0;
-        this.map = [
-            [1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 0, 1, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1],
-        ];
-        this.rayCount = this.gameConfig.width * 2;
-        this.rayStep = 0.5;
-        this.wallHeight = 64;
-        this.moveSpeed = 0.1;
-        this.turnSpeed = 0.05;
+    this.map = [
+      [2, 2, 2, 2, 2, 2, 2, 1, 2],
+      [2, 0, 0, 0, 2, 0, 0, 0, 2],
+      [2, 0, 0, 0, 2, 2, 0, 2, 2],
+      [2, 0, 0, 0, 2, 0, 0, 0, 2],
+      [2, 0, 0, 0, 0, 0, 0, 0, 1],
+      [2, 0, 0, 0, 2, 0, 0, 0, 2],
+      [2, 0, 0, 0, 2, 2, 2, 0, 1],
+      [2, 0, 0, 0, 2, 0, 0, 0, 1],
+      [2, 0, 0, 0, 2, 0, 0, 0, 1],
+      [2, 0, 0, 0, 2, 0, 0, 0, 1],
+      [2, 2, 2, 2, 2, 2, 2, 2, 2],
+    ];
+    this.mapWidth = this.map[0].length;
+    this.mapHeight = this.map.length;
 
-        this.rays = new Graphics();
-        this.walls = new Graphics();
-        this.mapDisplay = new Graphics();
+    this.player = {
+      x: 2,
+      y: 2,
+      dirX: -2,
+      dirY: 0,
+      planeX: 0,
+      planeY: 0.8,
+    };
 
-        this.addChild(this.rays);
-        this.addChild(this.walls);
-        this.addChild(this.mapDisplay);
+    this.graphics = new Graphics();
+    this.addChild(this.graphics);
 
-        this.setupInput();
-        this.update();
+    for (let i = 0; i < gameConfig.width; i++) {
+      const sprite = new Sprite();
+      sprite.width = 1;
+      sprite.x = i;
+      sprite.visible = false;
+      this.addChild(sprite);
+      this.wallSprites.push(sprite);
     }
 
-    private setupInput(): void {
-        window.addEventListener("keydown", (e) => {
-            switch (e.key) {
-                case "ArrowUp":
-                    this.moveForward();
-                    break;
-                case "ArrowDown":
-                    this.moveBackward();
-                    break;
-                case "ArrowLeft":
-                    this.turnLeft();
-                    break;
-                case "ArrowRight":
-                    this.turnRight();
-                    break;
-            }
-        });
+    this.setupControls();
+    this.loadTextures().then(() => {
+      Ticker.shared.add(this.tick, this);
+    });
+  }
+
+  public dispose(): void {
+    Ticker.shared.remove(this.tick, this);
+    this.removeChildren();
+    window.removeEventListener("keydown", this.keyDownHandler);
+    window.removeEventListener("keyup", this.keyUpHandler);
+  }
+
+  private setupControls() {
+    window.addEventListener("keydown", this.keyDownHandler);
+    window.addEventListener("keyup", this.keyUpHandler);
+  }
+
+  private keyDownHandler = (e: KeyboardEvent) => {
+    if (e.key in this.keys) this.keys[e.key] = true;
+  };
+
+  private keyUpHandler = (e: KeyboardEvent) => {
+    if (e.key in this.keys) this.keys[e.key] = false;
+  };
+
+  private async loadTextures() {
+    this.textures[1] = Texture.from("imperial_grilled_wall");
+    this.textures[2] = Texture.from("basic_imperial_wall");
+  }
+
+  private tick(delta: number) {
+    this.updatePlayer(delta);
+    this.renderScene();
+  }
+
+  private updatePlayer(delta: number) {
+    const moveSpeed = this.moveSpeed * delta;
+    const rotSpeed = this.rotSpeed * delta;
+
+    if (this.keys.w) {
+      const newX = this.player.x + this.player.dirX * moveSpeed;
+      const newY = this.player.y + this.player.dirY * moveSpeed;
+      if (this.map[Math.floor(newY)][Math.floor(newX)] === 0) {
+        this.player.x = newX;
+        this.player.y = newY;
+      }
     }
 
-    private moveForward(): void {
-        this.playerX += Math.cos(this.playerAngle) * this.moveSpeed;
-        this.playerY += Math.sin(this.playerAngle) * this.moveSpeed;
-        this.checkWallCollision();
-        this.update();
+    if (this.keys.s) {
+      const newX = this.player.x - this.player.dirX * moveSpeed;
+      const newY = this.player.y - this.player.dirY * moveSpeed;
+      if (this.map[Math.floor(newY)][Math.floor(newX)] === 0) {
+        this.player.x = newX;
+        this.player.y = newY;
+      }
     }
 
-    private moveBackward(): void {
-        this.playerX -= Math.cos(this.playerAngle) * this.moveSpeed;
-        this.playerY -= Math.sin(this.playerAngle) * this.moveSpeed;
-        this.checkWallCollision();
-        this.update();
+    if (this.keys.a || this.keys.d) {
+      const sign = this.keys.a ? 1 : -1;
+      const angle = rotSpeed * sign;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+
+      const oldDirX = this.player.dirX;
+      this.player.dirX = this.player.dirX * cos - this.player.dirY * sin;
+      this.player.dirY = oldDirX * sin + this.player.dirY * cos;
+
+      const oldPlaneX = this.player.planeX;
+      this.player.planeX = this.player.planeX * cos - this.player.planeY * sin;
+      this.player.planeY = oldPlaneX * sin + this.player.planeY * cos;
+    }
+  }
+
+  private castRay(column: number) {
+    const screenW = gameConfig.width;
+    const cameraX = (2 * column) / screenW - 1;
+    const rayDirX = this.player.dirX + this.player.planeX * cameraX;
+    const rayDirY = this.player.dirY + this.player.planeY * cameraX;
+
+    let mapX = Math.floor(this.player.x);
+    let mapY = Math.floor(this.player.y);
+
+    const deltaDistX = rayDirX === 0 ? 1e30 : Math.abs(1 / rayDirX);
+    const deltaDistY = rayDirY === 0 ? 1e30 : Math.abs(1 / rayDirY);
+
+    let stepX, stepY, sideDistX, sideDistY;
+
+    if (rayDirX < 0) {
+      stepX = -1;
+      sideDistX = (this.player.x - mapX) * deltaDistX;
+    } else {
+      stepX = 1;
+      sideDistX = (mapX + 1 - this.player.x) * deltaDistX;
     }
 
-    private turnLeft(): void {
-        this.playerAngle -= this.turnSpeed;
-        this.update();
+    if (rayDirY < 0) {
+      stepY = -1;
+      sideDistY = (this.player.y - mapY) * deltaDistY;
+    } else {
+      stepY = 1;
+      sideDistY = (mapY + 1 - this.player.y) * deltaDistY;
     }
 
-    private turnRight(): void {
-        this.playerAngle += this.turnSpeed;
-        this.update();
+    let hit = 0;
+    let side = 0;
+
+    while (hit === 0) {
+      if (sideDistX < sideDistY) {
+        sideDistX += deltaDistX;
+        mapX += stepX;
+        side = 0;
+      } else {
+        sideDistY += deltaDistY;
+        mapY += stepY;
+        side = 1;
+      }
+
+      if (
+        mapX < 0 ||
+        mapX >= this.mapWidth ||
+        mapY < 0 ||
+        mapY >= this.mapHeight
+      )
+        break;
+      if (this.map[mapY][mapX] > 0) hit = 1;
     }
 
-    private checkWallCollision(): void {
-        const mapX = Math.floor(this.playerX);
-        const mapY = Math.floor(this.playerY);
-        if (this.map[mapY][mapX] === 1) {
-            this.playerX -= Math.cos(this.playerAngle) * this.moveSpeed * 2;
-            this.playerY -= Math.sin(this.playerAngle) * this.moveSpeed * 2;
-        }
-    }
+    const perpWallDist =
+      side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
 
-    private update(): void {
-        this.rays.clear();
-        this.walls.clear();
-        this.mapDisplay.clear();
+    let wallX =
+      side === 0
+        ? this.player.y + perpWallDist * rayDirY
+        : this.player.x + perpWallDist * rayDirX;
+    wallX -= Math.floor(wallX);
 
-        this.drawMap();
-        this.castRays();
-    }
+    return {
+      wallType: this.map[mapY][mapX],
+      distance: perpWallDist,
+      hitX: wallX,
+      side,
+    };
+  }
 
-    private drawMap(): void {
-        const cellSize = 16;
-        for (let y = 0; y < this.map.length; y++) {
-            for (let x = 0; x < this.map[y].length; x++) {
-                if (this.map[y][x] === 1) {
-                    this.mapDisplay.beginFill(0x888888);
-                    this.mapDisplay.drawRect(x * cellSize, y * cellSize, cellSize, cellSize);
-                    this.mapDisplay.endFill();
-                }
-            }
-        }
-        this.mapDisplay.beginFill(0xFF0000);
-        this.mapDisplay.drawCircle(this.playerX * cellSize, this.playerY * cellSize, 4);
-        this.mapDisplay.endFill();
-    }
+  private renderScene() {
+    const screenW = gameConfig.width;
+    const screenH = gameConfig.height;
 
-    private castRays(): void {
-        const wallWidth = this.gameConfig.width / this.rayCount; // Dynamic width
-    
-        for (let ray = 0; ray < this.rayCount; ray++) {
-            // Calculate ray angle with field of view
-            const rayAngle = this.playerAngle + (ray / this.rayCount - 0.5) * Math.PI / 3;
-    
-            // DDA setup
-            let rayX = this.playerX;
-            let rayY = this.playerY;
-    
-            // Direction of the ray
-            const rayDirX = Math.cos(rayAngle);
-            const rayDirY = Math.sin(rayAngle);
-    
-            // Map position
-            let mapX = Math.floor(rayX);
-            let mapY = Math.floor(rayY);
-    
-            // Length of ray from one x or y-side to next x or y-side
-            const deltaDistX = Math.abs(1 / (rayDirX === 0 ? 1e-30 : rayDirX));
-            const deltaDistY = Math.abs(1 / (rayDirY === 0 ? 1e-30 : rayDirY));
-    
-            // Calculate step and initial sideDist
-            let stepX, stepY;
-            let sideDistX, sideDistY;
-    
-            if (rayDirX < 0) {
-                stepX = -1;
-                sideDistX = (rayX - mapX) * deltaDistX;
-            } else {
-                stepX = 1;
-                sideDistX = (mapX + 1 - rayX) * deltaDistX;
-            }
-    
-            if (rayDirY < 0) {
-                stepY = -1;
-                sideDistY = (rayY - mapY) * deltaDistY;
-            } else {
-                stepY = 1;
-                sideDistY = (mapY + 1 - rayY) * deltaDistY;
-            }
-    
-            // Perform DDA
-            let hitWall = false;
-            let side; // Was a NS or a EW wall hit?
-            let distance;
-    
-            while (!hitWall) {
-                // Jump to next map square, either in x-direction or y-direction
-                if (sideDistX < sideDistY) {
-                    sideDistX += deltaDistX;
-                    mapX += stepX;
-                    side = 0; // Hit vertical wall
-                } else {
-                    sideDistY += deltaDistY;
-                    mapY += stepY;
-                    side = 1; // Hit horizontal wall
-                }
-    
-                // Check if ray has hit a wall
-                if (mapX >= 0 && mapX < this.map[0].length && mapY >= 0 && mapY < this.map.length) {
-                    if (this.map[mapY][mapX] === 1) {
-                        hitWall = true;
-                    }
-                } else {
-                    break; // Ray out of bounds
-                }
-            }
-    
-            if (hitWall) {
-                // Calculate distance to the wall
-                if (side === 0) {
-                    distance = (mapX - rayX + (1 - stepX) / 2) / rayDirX;
-                } else {
-                    distance = (mapY - rayY + (1 - stepY) / 2) / rayDirY;
-                }
-    
-                // Apply fisheye correction
-                const correctedDistance = Math.abs(distance * Math.cos(rayAngle - this.playerAngle));
-                
-                // Calculate wall height and position
-                const wallHeight = Math.min(this.wallHeight / (correctedDistance + 0.001), this.gameConfig.height);
-                const wallTop = this.gameConfig.height / 2 - wallHeight / 2;
-    
-                // Adjust shading based on side (optional, for visual distinction)
-                const alpha = side === 0 ? Math.max(0.4, 0.8 - correctedDistance / 20) : Math.max(0.3, 0.6 - correctedDistance / 20);
-    
-                // Draw the wall
-                this.walls.beginFill(0x999999, alpha);
-                this.walls.drawRect(Math.floor(ray * wallWidth), wallTop, Math.ceil(wallWidth), wallHeight);
-                this.walls.endFill();
-    
-                // Draw the ray on the minimap
-                const endX = this.playerX + rayDirX * distance;
-                const endY = this.playerY + rayDirY * distance;
-                this.rays.lineStyle(1, 0xFFFF00);
-                this.rays.moveTo(this.playerX * 16, this.playerY * 16);
-                this.rays.lineTo(endX * 16, endY * 16);
-            }
-        }
+    this.graphics.clear();
+
+    for (let i = 0; i < screenW; i++) {
+      const ray = this.castRay(i);
+      const lineHeight = screenH / ray.distance;
+      const drawStart = -lineHeight / 2 + screenH / 2;
+      const drawEnd = lineHeight / 2 + screenH / 2;
+
+      // Ceiling
+      if (drawStart > 0) {
+        this.graphics.beginFill(0x87ceeb);
+        this.graphics.drawRect(i, 0, 2, drawStart);
+        this.graphics.endFill();
+      }
+
+      // Wall
+      const sprite = this.wallSprites[i];
+      const texture = this.textures[ray.wallType];
+
+      if (texture) {
+        const texWidth = texture.width;
+        const texX = Math.floor(ray.hitX * texWidth);
+        const clampedTexX = Math.min(texX, texWidth - 2);
+
+        const cropped = new Texture(
+          texture.baseTexture,
+          new Rectangle(clampedTexX, 0, 0.05, texture.height)
+        );
+        sprite.texture = cropped;
+        sprite.y = drawStart;
+        sprite.height = drawEnd - drawStart;
+        sprite.visible = true;
+        sprite.tint = ray.side === 1 ? 0xaaaaaa : 0xffffff;
+      } else {
+        sprite.visible = false;
+        this.graphics.beginFill(ray.side === 1 ? 0x666666 : 0x999999);
+        this.graphics.drawRect(i, drawStart, 2, drawEnd - drawStart);
+        this.graphics.endFill();
+      }
+
+      // Floor
+      if (drawEnd < screenH) {
+        this.graphics.beginFill(0x333333);
+        this.graphics.drawRect(i, drawEnd, 2, screenH - drawEnd);
+        this.graphics.endFill();
+      }
     }
-    
-    public dispose(): void {
-        window.removeEventListener("keydown", () => {});
-    }
+  }
 }

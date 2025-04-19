@@ -9,7 +9,7 @@ import { loadGameAssets } from "./Utils";
 import { EndlessLevel } from "./scenes/EndlessLevel";
 import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
-import { RaycastScene } from "./scenes/RaycastSceneV2";
+import { RaycastScene } from "./scenes/RaycastScene";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
