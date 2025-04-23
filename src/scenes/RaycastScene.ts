@@ -34,8 +34,14 @@ export class RaycastScene extends BaseScene {
   private map: number[][];
   private mapWidth: number;
   private mapHeight: number;
-
   private doorStates: Record<string, number> = {};
+  private thinWalls: Array<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    texture: number;
+  }> = [];
 
   constructor(stage: Container, scale: number) {
     super(stage, scale);
@@ -43,10 +49,10 @@ export class RaycastScene extends BaseScene {
     this.map = [
       [2, 2, 2, 2, 2, 2, 2, 1, 2],
       [2, 0, 0, 0, 2, 0, 0, 0, 2],
-      [2, 0, 0, 0, 2, 2, 0, 2, 2],
+      [2, 0, 0, 0, 2, 2, 5, 2, 2],
       [2, 0, 0, 0, 2, 0, 0, 0, 2],
-      [2, 0, 0, 0, 3, 0, 0, 0, 1],
-      [2, 0, 0, 0, 2, 0, 0, 0, 2],
+      [2, 0, 0, 0, 4, 0, 0, 0, 1], // 4: Vertical thin wall at center
+      [2, 0, 0, 0, 0, 0, 0, 0, 2],
       [2, 0, 0, 0, 2, 2, 2, 0, 1],
       [2, 0, 0, 0, 2, 0, 0, 0, 1],
       [2, 0, 0, 0, 2, 0, 0, 0, 1],
@@ -55,6 +61,9 @@ export class RaycastScene extends BaseScene {
     ];
     this.mapWidth = this.map[0].length;
     this.mapHeight = this.map.length;
+
+    // Generate thin walls based on map
+    this.generateThinWalls();
 
     this.player = {
       x: 2,
@@ -83,6 +92,71 @@ export class RaycastScene extends BaseScene {
     });
   }
 
+  private generateThinWalls() {
+    for (let y = 0; y < this.mapHeight; y++) {
+      for (let x = 0; x < this.mapWidth; x++) {
+        const tile = this.map[y][x];
+        if (tile >= 4 && tile <= 9) { // Handle thin walls (4 to 9)
+          if (tile === 4) {
+            // Vertical thin wall at center
+            this.thinWalls.push({
+              x1: x + 0.5,
+              y1: y,
+              x2: x + 0.5,
+              y2: y + 1,
+              texture: 4,
+            });
+          } else if (tile === 5) {
+            // Horizontal thin wall at center
+            this.thinWalls.push({
+              x1: x,
+              y1: y + 0.5,
+              x2: x + 1,
+              y2: y + 0.5,
+              texture: 4,
+            });
+          } else if (tile === 6) {
+            // Vertical thin wall on the left side
+            this.thinWalls.push({
+              x1: x,
+              y1: y,
+              x2: x,
+              y2: y + 1,
+              texture: 4,
+            });
+          } else if (tile === 7) {
+            // Vertical thin wall on the right side
+            this.thinWalls.push({
+              x1: x + 1,
+              y1: y,
+              x2: x + 1,
+              y2: y + 1,
+              texture: 4,
+            });
+          } else if (tile === 8) {
+            // Horizontal thin wall on the top side
+            this.thinWalls.push({
+              x1: x,
+              y1: y,
+              x2: x + 1,
+              y2: y,
+              texture: 4,
+            });
+          } else if (tile === 9) {
+            // Horizontal thin wall on the bottom side
+            this.thinWalls.push({
+              x1: x,
+              y1: y + 1,
+              x2: x + 1,
+              y2: y + 1,
+              texture: 4,
+            });
+          }
+        }
+      }
+    }
+  }
+
   public dispose(): void {
     Ticker.shared.remove(this.tick, this);
     this.removeChildren();
@@ -108,6 +182,7 @@ export class RaycastScene extends BaseScene {
     this.textures[1] = Texture.from("imperial_grilled_wall");
     this.textures[2] = Texture.from("basic_imperial_wall");
     this.textures[3] = Texture.from("metal_door");
+    this.textures[4] = Texture.from("metal_door");
   }
 
   private tick(delta: number) {
@@ -127,7 +202,23 @@ export class RaycastScene extends BaseScene {
       const doorKey = `${targetX},${targetY}`;
       const isDoorOpen = tile === 3 && (this.doorStates[doorKey] ?? 0) >= 1;
 
-      return tile === 0 || isDoorOpen;
+      // Check collision with thin walls
+      for (const wall of this.thinWalls) {
+        const minX = Math.min(wall.x1, wall.x2);
+        const maxX = Math.max(wall.x1, wall.x2);
+        const minY = Math.min(wall.y1, wall.y2);
+        const maxY = Math.max(wall.y1, wall.y2);
+        if (
+          newX >= minX - 0.1 &&
+          newX <= maxX + 0.1 &&
+          newY >= minY - 0.1 &&
+          newY <= maxY + 0.1
+        ) {
+          return false;
+        }
+      }
+
+      return tile === 0 || isDoorOpen || (tile >= 4 && tile <= 9); // Allow movement through thin wall cells
     };
 
     if (this.keys.w) {
@@ -226,7 +317,13 @@ export class RaycastScene extends BaseScene {
 
     let hit = 0;
     let side = 0;
+    let wallType = 0;
+    let perpWallDist = Infinity;
+    let hitX = 0;
+    let mapHitX = mapX;
+    let mapHitY = mapY;
 
+    // Check for thick walls
     while (hit === 0) {
       if (sideDistX < sideDistY) {
         sideDistX += deltaDistX;
@@ -262,35 +359,84 @@ export class RaycastScene extends BaseScene {
 
           const wallEdge = side === 0 ? mapX + offset : mapY + offset;
 
-          if (hitPos < wallEdge) hit = 1;
+          if (hitPos < wallEdge) {
+            hit = 1;
+            wallType = tile;
+            perpWallDist = dist;
+            hitX =
+              side === 0
+                ? this.player.y + dist * rayDirY
+                : this.player.x + dist * rayDirX;
+            hitX -= Math.floor(hitX);
+            if (wallType === 3) {
+              hitX = Math.min(1, hitX + open);
+            }
+            mapHitX = mapX;
+            mapHitY = mapY;
+          }
         }
-      } else if (tile > 0) {
+      } else if (tile > 0 && (tile < 4 || tile > 9)) { // Skip thin walls (4-9) in grid-based raycasting
         hit = 1;
+        wallType = tile;
+        perpWallDist =
+          side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+        hitX =
+          side === 0
+            ? this.player.y + perpWallDist * rayDirY
+            : this.player.x + perpWallDist * rayDirX;
+        hitX -= Math.floor(hitX);
+        mapHitX = mapX;
+        mapHitY = mapY;
       }
     }
 
-    const perpWallDist =
-      side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+    // Check for thin walls
+    let closestThinWallDist = Infinity;
+    let thinWallHitX = 0;
+    let thinWallType = 0;
 
-    let wallX =
-      side === 0
-        ? this.player.y + perpWallDist * rayDirY
-        : this.player.x + perpWallDist * rayDirX;
-    wallX -= Math.floor(wallX);
+    for (const wall of this.thinWalls) {
+      const x1 = wall.x1;
+      const y1 = wall.y1;
+      const x2 = wall.x2;
+      const y2 = wall.y2;
 
-    // 🔧 Shift door texture to simulate sliding open
-    if (this.map[mapY][mapX] === 3) {
-      const open = this.doorStates[`${mapX},${mapY}`] ?? 0;
-      wallX = Math.min(1, wallX + open);
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+
+      const denominator = dx * rayDirY - dy * rayDirX;
+      if (Math.abs(denominator) < 0.0001) continue; // Parallel lines
+
+      const t = ((this.player.x - x1) * rayDirY - (this.player.y - y1) * rayDirX) / denominator;
+      const u = ((this.player.x - x1) * dy - (this.player.y - y1) * dx) / denominator;
+
+      if (t >= 0 && t <= 1 && u >= 0) {
+        const dist = u; // Distance along the ray
+        if (dist < closestThinWallDist) {
+          closestThinWallDist = dist;
+          const hitPosX = this.player.x + dist * rayDirX;
+          const hitPosY = this.player.y + dist * rayDirY;
+          thinWallHitX = t; // Texture coordinate along the wall
+          thinWallType = wall.texture;
+        }
+      }
+    }
+
+    // Determine which hit is closer: thick wall or thin wall
+    if (closestThinWallDist < perpWallDist) {
+      perpWallDist = closestThinWallDist;
+      hitX = thinWallHitX;
+      wallType = thinWallType;
+      side = 2; // Special side value for thin walls
     }
 
     return {
-      wallType: this.map[mapY][mapX],
+      wallType,
       distance: perpWallDist,
-      hitX: wallX,
+      hitX,
       side,
-      mapX,
-      mapY,
+      mapX: mapHitX,
+      mapY: mapHitY,
       rayDirX,
       rayDirY,
     };
@@ -318,9 +464,9 @@ export class RaycastScene extends BaseScene {
       const texture = this.textures[ray.wallType];
 
       if (ray.wallType === 3) {
-        // Handle doors specifically
+        // Handle doors
         const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
-        const doorWidth = texture?.width ?? 64; // Assuming a default width
+        const doorWidth = texture?.width ?? 64;
 
         if (texture && open < 1) {
           const texX = Math.floor(ray.hitX * doorWidth);
@@ -340,14 +486,13 @@ export class RaycastScene extends BaseScene {
           sprite.visible = false;
         }
 
-        // For the space where the door is opening, render the background
         if (open > 0 && drawStart < drawEnd) {
-          this.graphics.beginFill(0x000000); // Adjust background color if needed
+          this.graphics.beginFill(0x000000);
           this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
           this.graphics.endFill();
         }
       } else if (texture) {
-        // Handle regular walls
+        // Handle regular walls and thin walls
         const texWidth = texture.width;
         const texX = Math.floor(ray.hitX * texWidth);
         const clampedTexX = Math.min(texX, texWidth - 1);
@@ -361,7 +506,7 @@ export class RaycastScene extends BaseScene {
         sprite.height = drawEnd - drawStart;
         sprite.width = 1;
         sprite.visible = true;
-        sprite.tint = ray.side === 1 ? 0xaaaaaa : 0xffffff;
+        sprite.tint = ray.side === 1 ? 0xaaaaaa : ray.side === 2 ? 0xcccccc : 0xffffff;
       } else {
         sprite.visible = false;
         this.graphics.beginFill(ray.side === 1 ? 0x666666 : 0x999999);
