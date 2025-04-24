@@ -27,7 +27,6 @@ export class RaycastScene extends BaseScene {
     d: false,
   };
   private graphics: Graphics;
-  private wallSprites: Sprite[] = [];
   private textures: Record<number, Texture> = {};
   private moveSpeed: number = 0.02;
   private rotSpeed: number = 0.05;
@@ -42,6 +41,9 @@ export class RaycastScene extends BaseScene {
     y2: number;
     texture: number;
   }> = [];
+  private spritePool: Sprite[][] = []; // Pre-allocated sprite pool for multiple hits per column
+  private readonly MAX_HITS_PER_COLUMN: number = 3; // Limit to improve performance
+  private readonly MAX_RENDER_DISTANCE: number = 50;
 
   constructor(stage: Container, scale: number) {
     super(stage, scale);
@@ -51,7 +53,7 @@ export class RaycastScene extends BaseScene {
       [2, 0, 0, 0, 2, 0, 0, 0, 2],
       [2, 0, 0, 0, 2, 2, 5, 2, 2],
       [2, 0, 0, 0, 2, 0, 0, 0, 2],
-      [2, 0, 0, 0, 4, 0, 0, 0, 1], // 4: Vertical thin wall at center
+      [2, 0, 0, 0, 4, 0, 0, 0, 1],
       [2, 0, 0, 0, 0, 0, 0, 0, 2],
       [2, 0, 0, 0, 2, 2, 2, 0, 1],
       [2, 0, 0, 0, 2, 0, 0, 0, 1],
@@ -62,7 +64,6 @@ export class RaycastScene extends BaseScene {
     this.mapWidth = this.map[0].length;
     this.mapHeight = this.map.length;
 
-    // Generate thin walls based on map
     this.generateThinWalls();
 
     this.player = {
@@ -77,13 +78,18 @@ export class RaycastScene extends BaseScene {
     this.graphics = new Graphics();
     this.addChild(this.graphics);
 
+    // Pre-allocate sprites for each column
     for (let i = 0; i < gameConfig.width; i++) {
-      const sprite = new Sprite();
-      sprite.width = 1;
-      sprite.x = i;
-      sprite.visible = false;
-      this.addChild(sprite);
-      this.wallSprites.push(sprite);
+      const columnSprites: Sprite[] = [];
+      for (let j = 0; j < this.MAX_HITS_PER_COLUMN; j++) {
+        const sprite = new Sprite();
+        sprite.width = 1;
+        sprite.x = i;
+        sprite.visible = false;
+        this.addChild(sprite);
+        columnSprites.push(sprite);
+      }
+      this.spritePool.push(columnSprites);
     }
 
     this.setupControls();
@@ -96,9 +102,8 @@ export class RaycastScene extends BaseScene {
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
         const tile = this.map[y][x];
-        if (tile >= 4 && tile <= 9) { // Handle thin walls (4 to 9)
+        if (tile >= 4 && tile <= 9) {
           if (tile === 4) {
-            // Vertical thin wall at center
             this.thinWalls.push({
               x1: x + 0.5,
               y1: y,
@@ -107,7 +112,6 @@ export class RaycastScene extends BaseScene {
               texture: 4,
             });
           } else if (tile === 5) {
-            // Horizontal thin wall at center
             this.thinWalls.push({
               x1: x,
               y1: y + 0.5,
@@ -116,7 +120,6 @@ export class RaycastScene extends BaseScene {
               texture: 4,
             });
           } else if (tile === 6) {
-            // Vertical thin wall on the left side
             this.thinWalls.push({
               x1: x,
               y1: y,
@@ -125,7 +128,6 @@ export class RaycastScene extends BaseScene {
               texture: 4,
             });
           } else if (tile === 7) {
-            // Vertical thin wall on the right side
             this.thinWalls.push({
               x1: x + 1,
               y1: y,
@@ -134,7 +136,6 @@ export class RaycastScene extends BaseScene {
               texture: 4,
             });
           } else if (tile === 8) {
-            // Horizontal thin wall on the top side
             this.thinWalls.push({
               x1: x,
               y1: y,
@@ -143,7 +144,6 @@ export class RaycastScene extends BaseScene {
               texture: 4,
             });
           } else if (tile === 9) {
-            // Horizontal thin wall on the bottom side
             this.thinWalls.push({
               x1: x,
               y1: y + 1,
@@ -182,7 +182,7 @@ export class RaycastScene extends BaseScene {
     this.textures[1] = Texture.from("imperial_grilled_wall");
     this.textures[2] = Texture.from("basic_imperial_wall");
     this.textures[3] = Texture.from("metal_door");
-    this.textures[4] = Texture.from("metal_door");
+    this.textures[4] = Texture.from("fence");
   }
 
   private tick(delta: number) {
@@ -202,7 +202,6 @@ export class RaycastScene extends BaseScene {
       const doorKey = `${targetX},${targetY}`;
       const isDoorOpen = tile === 3 && (this.doorStates[doorKey] ?? 0) >= 1;
 
-      // Check collision with thin walls
       for (const wall of this.thinWalls) {
         const minX = Math.min(wall.x1, wall.x2);
         const maxX = Math.max(wall.x1, wall.x2);
@@ -218,7 +217,7 @@ export class RaycastScene extends BaseScene {
         }
       }
 
-      return tile === 0 || isDoorOpen || (tile >= 4 && tile <= 9); // Allow movement through thin wall cells
+      return tile === 0 || isDoorOpen || (tile >= 4 && tile <= 9);
     };
 
     if (this.keys.w) {
@@ -297,7 +296,8 @@ export class RaycastScene extends BaseScene {
     const deltaDistX = rayDirX === 0 ? 1e30 : Math.abs(1 / rayDirX);
     const deltaDistY = rayDirY === 0 ? 1e30 : Math.abs(1 / rayDirY);
 
-    let stepX, stepY, sideDistX, sideDistY;
+    let stepX: number, stepY: number, sideDistX: number, sideDistY: number;
+    let side: number = 0;
 
     if (rayDirX < 0) {
       stepX = -1;
@@ -315,16 +315,19 @@ export class RaycastScene extends BaseScene {
       sideDistY = (mapY + 1 - this.player.y) * deltaDistY;
     }
 
-    let hit = 0;
-    let side = 0;
-    let wallType = 0;
-    let perpWallDist = Infinity;
-    let hitX = 0;
-    let mapHitX = mapX;
-    let mapHitY = mapY;
+    const hits: Array<{
+      wallType: number;
+      distance: number;
+      hitX: number;
+      side: number;
+      mapX: number;
+      mapY: number;
+      rayDirX: number;
+      rayDirY: number;
+    }> = [];
 
     // Check for thick walls
-    while (hit === 0) {
+    while (true) {
       if (sideDistX < sideDistY) {
         sideDistX += deltaDistX;
         mapX += stepX;
@@ -334,6 +337,9 @@ export class RaycastScene extends BaseScene {
         mapY += stepY;
         side = 1;
       }
+
+      const dist = side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+      if (dist > this.MAX_RENDER_DISTANCE) break;
 
       if (
         mapX < 0 ||
@@ -350,8 +356,6 @@ export class RaycastScene extends BaseScene {
         const open = this.doorStates[key] ?? 0;
         if (open < 1) {
           const offset = 1 - open;
-          const dist =
-            side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
           const hitPos =
             side === 0
               ? this.player.x + dist * rayDirX
@@ -360,41 +364,48 @@ export class RaycastScene extends BaseScene {
           const wallEdge = side === 0 ? mapX + offset : mapY + offset;
 
           if (hitPos < wallEdge) {
-            hit = 1;
-            wallType = tile;
-            perpWallDist = dist;
-            hitX =
+            let hitX =
               side === 0
                 ? this.player.y + dist * rayDirY
                 : this.player.x + dist * rayDirX;
             hitX -= Math.floor(hitX);
-            if (wallType === 3) {
+            if (tile === 3) {
               hitX = Math.min(1, hitX + open);
             }
-            mapHitX = mapX;
-            mapHitY = mapY;
+            hits.push({
+              wallType: tile,
+              distance: dist,
+              hitX,
+              side,
+              mapX,
+              mapY,
+              rayDirX,
+              rayDirY,
+            });
+            break; // Doors are opaque when not fully open
           }
         }
-      } else if (tile > 0 && (tile < 4 || tile > 9)) { // Skip thin walls (4-9) in grid-based raycasting
-        hit = 1;
-        wallType = tile;
-        perpWallDist =
-          side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
-        hitX =
+      } else if (tile > 0 && (tile < 4 || tile > 9)) {
+        let hitX =
           side === 0
-            ? this.player.y + perpWallDist * rayDirY
-            : this.player.x + perpWallDist * rayDirX;
+            ? this.player.y + dist * rayDirY
+            : this.player.x + dist * rayDirX;
         hitX -= Math.floor(hitX);
-        mapHitX = mapX;
-        mapHitY = mapY;
+        hits.push({
+          wallType: tile,
+          distance: dist,
+          hitX,
+          side,
+          mapX,
+          mapY,
+          rayDirX,
+          rayDirY,
+        });
+        break; // Thick walls are opaque
       }
     }
 
     // Check for thin walls
-    let closestThinWallDist = Infinity;
-    let thinWallHitX = 0;
-    let thinWallType = 0;
-
     for (const wall of this.thinWalls) {
       const x1 = wall.x1;
       const y1 = wall.y1;
@@ -405,41 +416,45 @@ export class RaycastScene extends BaseScene {
       const dy = y2 - y1;
 
       const denominator = dx * rayDirY - dy * rayDirX;
-      if (Math.abs(denominator) < 0.0001) continue; // Parallel lines
+      if (Math.abs(denominator) < 0.0001) continue;
 
       const t = ((this.player.x - x1) * rayDirY - (this.player.y - y1) * rayDirX) / denominator;
       const u = ((this.player.x - x1) * dy - (this.player.y - y1) * dx) / denominator;
 
-      if (t >= 0 && t <= 1 && u >= 0) {
-        const dist = u; // Distance along the ray
-        if (dist < closestThinWallDist) {
-          closestThinWallDist = dist;
-          const hitPosX = this.player.x + dist * rayDirX;
-          const hitPosY = this.player.y + dist * rayDirY;
-          thinWallHitX = t; // Texture coordinate along the wall
-          thinWallType = wall.texture;
-        }
+      if (t >= 0 && t <= 1 && u >= 0 && u <= this.MAX_RENDER_DISTANCE) {
+        const dist = u;
+        const hitPosX = this.player.x + dist * rayDirX;
+        const hitPosY = this.player.y + dist * rayDirY;
+        const hitX = t;
+        hits.push({
+          wallType: wall.texture,
+          distance: dist,
+          hitX,
+          side: 2,
+          mapX: Math.floor(hitPosX),
+          mapY: Math.floor(hitPosY),
+          rayDirX,
+          rayDirY,
+        });
       }
     }
 
-    // Determine which hit is closer: thick wall or thin wall
-    if (closestThinWallDist < perpWallDist) {
-      perpWallDist = closestThinWallDist;
-      hitX = thinWallHitX;
-      wallType = thinWallType;
-      side = 2; // Special side value for thin walls
+    // Sort hits by distance (farthest to closest)
+    hits.sort((a, b) => b.distance - a.distance);
+    if (hits.length > this.MAX_HITS_PER_COLUMN) {
+      hits.length = this.MAX_HITS_PER_COLUMN;
     }
 
-    return {
-      wallType,
-      distance: perpWallDist,
-      hitX,
-      side,
-      mapX: mapHitX,
-      mapY: mapHitY,
-      rayDirX,
-      rayDirY,
-    };
+    // Avoid z-fighting
+    const minDistance = 0.05;
+    for (let i = 1; i < hits.length; i++) {
+      if (hits[i].distance + minDistance > hits[i - 1].distance) {
+        hits.splice(i, 1);
+        i--;
+      }
+    }
+
+    return hits;
   }
 
   private renderScene() {
@@ -449,28 +464,61 @@ export class RaycastScene extends BaseScene {
     this.graphics.clear();
 
     for (let i = 0; i < screenW; i++) {
-      const ray = this.castRay(i);
-      const lineHeight = screenH / ray.distance;
-      const drawStart = -lineHeight / 2 + screenH / 2;
-      const drawEnd = lineHeight / 2 + screenH / 2;
+      const hits = this.castRay(i);
 
-      if (drawStart > 0) {
-        this.graphics.beginFill(0x87ceeb);
-        this.graphics.drawRect(i, 0, 1, drawStart);
-        this.graphics.endFill();
+      // Draw sky and floor first
+      this.graphics.beginFill(0x87ceeb);
+      this.graphics.drawRect(i, 0, 1, screenH / 2);
+      this.graphics.endFill();
+      this.graphics.beginFill(0x333333);
+      this.graphics.drawRect(i, screenH / 2, 1, screenH / 2);
+      this.graphics.endFill();
+
+      // Hide all sprites in this column
+      for (const sprite of this.spritePool[i]) {
+        sprite.visible = false;
       }
 
-      const sprite = this.wallSprites[i];
-      const texture = this.textures[ray.wallType];
+      // Render each hit from back to front
+      for (let j = 0; j < hits.length; j++) {
+        const ray = hits[j];
+        const lineHeight = screenH / ray.distance;
+        const drawStart = -lineHeight / 2 + screenH / 2;
+        const drawEnd = lineHeight / 2 + screenH / 2;
 
-      if (ray.wallType === 3) {
-        // Handle doors
-        const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
-        const doorWidth = texture?.width ?? 64;
+        const sprite = this.spritePool[i][j];
+        const texture = this.textures[ray.wallType];
 
-        if (texture && open < 1) {
-          const texX = Math.floor(ray.hitX * doorWidth);
-          const clampedTexX = Math.min(texX, doorWidth - 1);
+        if (ray.wallType === 3) {
+          const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
+          const doorWidth = texture?.width ?? 64;
+
+          if (texture && open < 1) {
+            const texX = Math.floor(ray.hitX * doorWidth);
+            const clampedTexX = Math.min(texX, doorWidth - 1);
+
+            const cropped = new Texture(
+              texture.baseTexture,
+              new Rectangle(clampedTexX, 0, 1, texture.height)
+            );
+            sprite.texture = cropped;
+            sprite.y = drawStart;
+            sprite.height = drawEnd - drawStart;
+            sprite.width = 1;
+            sprite.visible = true;
+            sprite.tint = ray.side === 1 ? 0xaaaaaa : 0xffffff;
+            sprite.alpha = 1;
+          }
+
+          if (open > 0 && drawStart < drawEnd) {
+            this.graphics.beginFill(0x000000);
+            this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
+            this.graphics.endFill();
+          }
+        } else if (texture) {
+          const texWidth = texture.width;
+          const texX = Math.floor(ray.hitX * texWidth);
+          const clampedTexX = Math.min(texX, texWidth - 1);
 
           const cropped = new Texture(
             texture.baseTexture,
@@ -481,43 +529,13 @@ export class RaycastScene extends BaseScene {
           sprite.height = drawEnd - drawStart;
           sprite.width = 1;
           sprite.visible = true;
-          sprite.tint = ray.side === 1 ? 0xaaaaaa : 0xffffff;
+          sprite.tint = ray.side === 1 ? 0xaaaaaa : ray.side === 2 ? 0xcccccc : 0xffffff;
+          sprite.alpha = 1;
         } else {
-          sprite.visible = false;
-        }
-
-        if (open > 0 && drawStart < drawEnd) {
-          this.graphics.beginFill(0x000000);
+          this.graphics.beginFill(ray.side === 1 ? 0x666666 : 0x999999);
           this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
           this.graphics.endFill();
         }
-      } else if (texture) {
-        // Handle regular walls and thin walls
-        const texWidth = texture.width;
-        const texX = Math.floor(ray.hitX * texWidth);
-        const clampedTexX = Math.min(texX, texWidth - 1);
-
-        const cropped = new Texture(
-          texture.baseTexture,
-          new Rectangle(clampedTexX, 0, 1, texture.height)
-        );
-        sprite.texture = cropped;
-        sprite.y = drawStart;
-        sprite.height = drawEnd - drawStart;
-        sprite.width = 1;
-        sprite.visible = true;
-        sprite.tint = ray.side === 1 ? 0xaaaaaa : ray.side === 2 ? 0xcccccc : 0xffffff;
-      } else {
-        sprite.visible = false;
-        this.graphics.beginFill(ray.side === 1 ? 0x666666 : 0x999999);
-        this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
-        this.graphics.endFill();
-      }
-
-      if (drawEnd < screenH) {
-        this.graphics.beginFill(0x333333);
-        this.graphics.drawRect(i, drawEnd, 1, screenH - drawEnd);
-        this.graphics.endFill();
       }
     }
   }

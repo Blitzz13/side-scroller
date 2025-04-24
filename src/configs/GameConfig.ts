@@ -98,6 +98,10 @@ export const manifest: AssetsManifest = {
             name: "metal_door",
             src: "./assets/metal_door.jpg",
           },
+          {
+            name: "fence",
+            src: "./assets/fence.webp",
+          },
         ],
       },
       {
