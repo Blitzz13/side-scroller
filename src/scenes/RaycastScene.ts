@@ -30,6 +30,7 @@ export class RaycastScene extends BaseScene {
   private textures: Record<number, Texture> = {};
   private moveSpeed: number = 0.02;
   private rotSpeed: number = 0.05;
+  private mouseSensitivity: number = 0.002; // Added for mouse look
   private map: number[][];
   private mapWidth: number;
   private mapHeight: number;
@@ -41,8 +42,8 @@ export class RaycastScene extends BaseScene {
     y2: number;
     texture: number;
   }> = [];
-  private spritePool: Sprite[][] = []; // Pre-allocated sprite pool for multiple hits per column
-  private readonly MAX_HITS_PER_COLUMN: number = 3; // Limit to improve performance
+  private spritePool: Sprite[][] = [];
+  private readonly MAX_HITS_PER_COLUMN: number = 3;
   private readonly MAX_RENDER_DISTANCE: number = 50;
 
   constructor(stage: Container, scale: number) {
@@ -78,7 +79,6 @@ export class RaycastScene extends BaseScene {
     this.graphics = new Graphics();
     this.addChild(this.graphics);
 
-    // Pre-allocate sprites for each column
     for (let i = 0; i < gameConfig.width; i++) {
       const columnSprites: Sprite[] = [];
       for (let j = 0; j < this.MAX_HITS_PER_COLUMN; j++) {
@@ -162,12 +162,40 @@ export class RaycastScene extends BaseScene {
     this.removeChildren();
     window.removeEventListener("keydown", this.keyDownHandler);
     window.removeEventListener("keyup", this.keyUpHandler);
+    window.removeEventListener("mousemove", this.mouseMoveHandler);
+    document.removeEventListener(
+      "pointerlockchange",
+      this.pointerLockChangeHandler
+    );
   }
 
   private setupControls() {
     window.addEventListener("keydown", this.keyDownHandler);
     window.addEventListener("keyup", this.keyUpHandler);
+    window.addEventListener("mousemove", this.mouseMoveHandler);
+
+    // Request pointer lock on click to enable mouse look
+    this.stage.interactive = true;
+    this.stage.on("mousedown", () => {
+      document.body.requestPointerLock();
+    });
+
+    // Handle pointer lock state changes
+    document.addEventListener(
+      "pointerlockchange",
+      this.pointerLockChangeHandler
+    );
   }
+
+  private pointerLockChangeHandler = () => {
+    if (document.pointerLockElement === document.body) {
+      // Pointer is locked, enable mouse movement
+      this.stage.interactive = true;
+    } else {
+      // Pointer is unlocked, disable mouse movement
+      this.stage.interactive = false;
+    }
+  };
 
   private keyDownHandler = (e: KeyboardEvent) => {
     if (e.key in this.keys) this.keys[e.key] = true;
@@ -176,6 +204,26 @@ export class RaycastScene extends BaseScene {
 
   private keyUpHandler = (e: KeyboardEvent) => {
     if (e.key in this.keys) this.keys[e.key] = false;
+  };
+
+  private mouseMoveHandler = (e: MouseEvent) => {
+    if (document.pointerLockElement !== document.body) {
+      return;
+    }
+
+    const angle = e.movementX * this.mouseSensitivity; // movementX is delta in mouse position
+    const cos = Math.cos(-angle); // Negative to match FPS convention (left = turn left)
+    const sin = Math.sin(-angle);
+
+    // Rotate player direction
+    const oldDirX = this.player.dirX;
+    this.player.dirX = this.player.dirX * cos - this.player.dirY * sin;
+    this.player.dirY = oldDirX * sin + this.player.dirY * cos;
+
+    // Rotate camera plane
+    const oldPlaneX = this.player.planeX;
+    this.player.planeX = this.player.planeX * cos - this.player.planeY * sin;
+    this.player.planeY = oldPlaneX * sin + this.player.planeY * cos;
   };
 
   private async loadTextures() {
@@ -193,7 +241,6 @@ export class RaycastScene extends BaseScene {
 
   private updatePlayer(delta: number) {
     const moveSpeed = this.moveSpeed * delta;
-    const rotSpeed = this.rotSpeed * delta;
 
     const tryMove = (newX: number, newY: number) => {
       const targetX = Math.floor(newX);
@@ -239,18 +286,15 @@ export class RaycastScene extends BaseScene {
     }
 
     if (this.keys.a || this.keys.d) {
-      const sign = this.keys.a ? 1 : -1;
-      const angle = rotSpeed * sign;
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-
-      const oldDirX = this.player.dirX;
-      this.player.dirX = this.player.dirX * cos - this.player.dirY * sin;
-      this.player.dirY = oldDirX * sin + this.player.dirY * cos;
-
-      const oldPlaneX = this.player.planeX;
-      this.player.planeX = this.player.planeX * cos - this.player.planeY * sin;
-      this.player.planeY = oldPlaneX * sin + this.player.planeY * cos;
+      const strafeDirX = this.player.dirY; // Perpendicular to direction (rotate 90 degrees)
+      const strafeDirY = -this.player.dirX;
+      const sign = this.keys.a ? -1 : 1; // A = left, D = right
+      const newX = this.player.x + strafeDirX * moveSpeed * sign;
+      const newY = this.player.y + strafeDirY * moveSpeed * sign;
+      if (tryMove(newX, newY)) {
+        this.player.x = newX;
+        this.player.y = newY;
+      }
     }
   }
 
@@ -326,7 +370,6 @@ export class RaycastScene extends BaseScene {
       rayDirY: number;
     }> = [];
 
-    // Check for thick walls
     while (true) {
       if (sideDistX < sideDistY) {
         sideDistX += deltaDistX;
@@ -382,7 +425,7 @@ export class RaycastScene extends BaseScene {
               rayDirX,
               rayDirY,
             });
-            break; // Doors are opaque when not fully open
+            break;
           }
         }
       } else if (tile > 0 && (tile < 4 || tile > 9)) {
@@ -401,11 +444,10 @@ export class RaycastScene extends BaseScene {
           rayDirX,
           rayDirY,
         });
-        break; // Thick walls are opaque
+        break;
       }
     }
 
-    // Check for thin walls
     for (const wall of this.thinWalls) {
       const x1 = wall.x1;
       const y1 = wall.y1;
@@ -418,8 +460,11 @@ export class RaycastScene extends BaseScene {
       const denominator = dx * rayDirY - dy * rayDirX;
       if (Math.abs(denominator) < 0.0001) continue;
 
-      const t = ((this.player.x - x1) * rayDirY - (this.player.y - y1) * rayDirX) / denominator;
-      const u = ((this.player.x - x1) * dy - (this.player.y - y1) * dx) / denominator;
+      const t =
+        ((this.player.x - x1) * rayDirY - (this.player.y - y1) * rayDirX) /
+        denominator;
+      const u =
+        ((this.player.x - x1) * dy - (this.player.y - y1) * dx) / denominator;
 
       if (t >= 0 && t <= 1 && u >= 0 && u <= this.MAX_RENDER_DISTANCE) {
         const dist = u;
@@ -439,13 +484,11 @@ export class RaycastScene extends BaseScene {
       }
     }
 
-    // Sort hits by distance (farthest to closest)
     hits.sort((a, b) => b.distance - a.distance);
     if (hits.length > this.MAX_HITS_PER_COLUMN) {
       hits.length = this.MAX_HITS_PER_COLUMN;
     }
 
-    // Avoid z-fighting
     const minDistance = 0.05;
     for (let i = 1; i < hits.length; i++) {
       if (hits[i].distance + minDistance > hits[i - 1].distance) {
@@ -466,7 +509,6 @@ export class RaycastScene extends BaseScene {
     for (let i = 0; i < screenW; i++) {
       const hits = this.castRay(i);
 
-      // Draw sky and floor first
       this.graphics.beginFill(0x87ceeb);
       this.graphics.drawRect(i, 0, 1, screenH / 2);
       this.graphics.endFill();
@@ -474,12 +516,10 @@ export class RaycastScene extends BaseScene {
       this.graphics.drawRect(i, screenH / 2, 1, screenH / 2);
       this.graphics.endFill();
 
-      // Hide all sprites in this column
       for (const sprite of this.spritePool[i]) {
         sprite.visible = false;
       }
 
-      // Render each hit from back to front
       for (let j = 0; j < hits.length; j++) {
         const ray = hits[j];
         const lineHeight = screenH / ray.distance;
