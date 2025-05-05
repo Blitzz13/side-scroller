@@ -52,7 +52,7 @@ export class RaycastScene extends BaseScene {
       [2, 2, 2, 2, 2, 2, 2, 1, 2],
       [2, 0, 0, 0, 2, 0, 0, 0, 2],
       [2, 0, 0, 0, 2, 2, 5, 2, 2],
-      [2, 0, 0, 0, 2, 0, 0, 0, 2],
+      [4, 0, 0, 0, 2, 0, 0, 0, 2],
       [2, 0, 0, 0, 4, 0, 0, 0, 1],
       [2, 0, 0, 0, 0, 0, 0, 0, 2],
       [2, 0, 0, 0, 2, 2, 2, 0, 1],
@@ -506,7 +506,7 @@ export class RaycastScene extends BaseScene {
             sprite.height = drawEnd - drawStart;
             sprite.width = 1;
             sprite.visible = true;
-            sprite.tint = ray.side === 1 ? 0xaaaaaa : 0xffffff;
+            sprite.tint = ray.side === 0 ? 0xaaaaaa : 0xffffff;
             sprite.alpha = 1;
           }
 
@@ -529,10 +529,10 @@ export class RaycastScene extends BaseScene {
           sprite.height = drawEnd - drawStart;
           sprite.width = 1;
           sprite.visible = true;
-          sprite.tint = ray.side === 1 ? 0xaaaaaa : ray.side === 2 ? 0xcccccc : 0xffffff;
+          sprite.tint = ray.side === 0 ? 0xaaaaaa : 0xcccccc;
           sprite.alpha = 1;
         } else {
-          this.graphics.beginFill(ray.side === 1 ? 0x666666 : 0x999999);
+          this.graphics.beginFill(ray.side === 0 ? 0x666666 : 0x999999);
           this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
           this.graphics.endFill();
         }
