@@ -572,29 +572,69 @@ export class RaycastScene extends BaseScene {
       const x2 = wall.x2;
       const y2 = wall.y2;
 
+      // --- OPTIMIZATION: Simple Proximity/Direction Check ---
+      // Calculate the center of the thin wall segment
+      const wallCenterX = (x1 + x2) / 2;
+      const wallCenterY = (y1 + y2) / 2;
+
+      // Vector from player to wall center
+      const toWallX = wallCenterX - this.player.x;
+      const toWallY = wallCenterY - this.player.y;
+
+      const distToWallCenterSq = toWallX * toWallX + toWallY * toWallY;
+
+      // If wall center is too far, skip (use squared distance to avoid sqrt)
+      if (
+        distToWallCenterSq >
+        this.MAX_RENDER_DISTANCE * this.MAX_RENDER_DISTANCE
+      ) {
+        continue;
+      }
+
+      // Check if wall is roughly in front of the player (dot product)
+      // This helps cull walls clearly behind the player
+      const dotProduct = rayDirX * toWallX + rayDirY * toWallY;
+      if (dotProduct < 0 && distToWallCenterSq > 4) {
+        // If behind and not extremely close
+        continue;
+      }
+      // --- END OPTIMIZATION ---
+
       const dx = x2 - x1;
       const dy = y2 - y1;
 
       const denominator = dx * rayDirY - dy * rayDirX;
-      if (Math.abs(denominator) < 0.0001) continue;
+      if (Math.abs(denominator) < 0.0001) continue; // Parallel lines or ray collinear with segment
 
-      const t =
-        ((this.player.x - x1) * rayDirY - (this.player.y - y1) * rayDirX) /
-        denominator;
-      const u =
-        ((this.player.x - x1) * dy - (this.player.y - y1) * dx) / denominator;
+      // Parameter for ray: P = PlayerPos + u * RayDir
+      const u_numerator = (this.player.x - x1) * dy - (this.player.y - y1) * dx;
+      const u = u_numerator / denominator;
+
+      // Parameter for wall segment: P = WallP1 + t * (WallP2 - WallP1)
+      const t_numerator =
+        (this.player.x - x1) * rayDirY - (this.player.y - y1) * rayDirX;
+      const t = t_numerator / denominator;
 
       if (t >= 0 && t <= 1 && u >= 0 && u <= this.MAX_RENDER_DISTANCE) {
-        const dist = u;
+        const dist = u; // 'u' is the distance along the ray to the intersection point
+        // Check if this thin wall hit is closer than an existing grid wall hit (if any)
+        // Or if it should be added for transparency. The current logic sorts all hits.
+        // Ensure distance is positive.
+        if (dist < 0.01) continue; // Avoid hits too close or behind due to precision
+
         const hitPosX = this.player.x + dist * rayDirX;
         const hitPosY = this.player.y + dist * rayDirY;
+
+        // 't' is the normalized position along the thin wall segment (0 to 1)
+        // This is our texture coordinate for the thin wall
         const hitX = t;
+
         hits.push({
           wallType: wall.texture,
           distance: dist,
-          hitX,
-          side: 2,
-          mapX: Math.floor(hitPosX),
+          hitX: hitX, // Use 't' as the texture coordinate for the thin wall
+          side: 2, // Special side value for thin walls
+          mapX: Math.floor(hitPosX), // Approximate map cell for sorting/door checks
           mapY: Math.floor(hitPosY),
           rayDirX,
           rayDirY,
