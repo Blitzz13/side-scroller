@@ -26,16 +26,22 @@ let currentScale = 1;
 (globalThis as any).__PIXI_APP__ = app;
 let currentScene: BaseScene;
 
-// Initialize pixi-stats
-const stats = new Stats(app.renderer);
-
 window.onload = async (): Promise<void> => {
   await loadGameAssets(manifest);
   registerFonts();
   document.body.appendChild(app.view);
+
+  // Add Pixi Stats and adjust its z-index
+  const stats = new Stats(app.renderer);
+
   resizeCanvas();
   app.stage.interactive = true;
   changeScene(Scene.Raycast);
+
+  // Update stats on each frame
+  Ticker.shared.add(() => {
+    stats.update();
+  });
 };
 
 function changeScene(scene: Scene): void {
@@ -66,11 +72,11 @@ function changeScene(scene: Scene): void {
 }
 
 function resizeCanvas(): void {
-  const cleintWidth = document.documentElement.clientWidth;
+  const clientWidth = document.documentElement.clientWidth;
   const clientHeight = document.documentElement.clientHeight;
 
   let scale = Math.min(
-    cleintWidth / gameConfig.width,
+    clientWidth / gameConfig.width,
     clientHeight / gameConfig.height
   );
   currentScale = scale;
@@ -84,7 +90,7 @@ function resizeCanvas(): void {
     currentScene.appScale = scale;
   }
 
-  const offsetX = (cleintWidth - newWidth) / 2;
+  const offsetX = (clientWidth - newWidth) / 2;
   const offsetY = (clientHeight - newHeight) / 2;
   app.view.style.position = "absolute";
   app.view.style.left = `${offsetX}px`;
