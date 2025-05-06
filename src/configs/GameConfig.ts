@@ -100,7 +100,15 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "fence",
-            src: "./assets/fence.webp",
+            src: "./assets/fence.png",
+          },
+          {
+            name: "raycast_test_map",
+            src: "./assets/raycast_test_map.json",
+          },
+          {
+            name: "level2",
+            src: "./assets/level2.json",
           },
         ],
       },

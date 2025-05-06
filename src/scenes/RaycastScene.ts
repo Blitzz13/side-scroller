@@ -30,7 +30,7 @@ export class RaycastScene extends BaseScene {
   private textures: Record<number, Texture> = {};
   private moveSpeed: number = 0.02;
   private rotSpeed: number = 0.05;
-  private mouseSensitivity: number = 0.002; // Added for mouse look
+  private mouseSensitivity: number = 0.002;
   private map: number[][];
   private mapWidth: number;
   private mapHeight: number;
@@ -41,35 +41,23 @@ export class RaycastScene extends BaseScene {
     x2: number;
     y2: number;
     texture: number;
+    orientation: "vertical" | "horizontal";
   }> = [];
   private spritePool: Sprite[][] = [];
   private readonly MAX_HITS_PER_COLUMN: number = 3;
   private readonly MAX_RENDER_DISTANCE: number = 50;
+  private tileTypes: Record<number, string> = {};
 
-  constructor(stage: Container, scale: number) {
+  constructor(stage: Container, scale: number, level: string = "level2") {
     super(stage, scale);
 
-    this.map = [
-      [2, 2, 2, 2, 2, 2, 2, 1, 2],
-      [2, 0, 0, 0, 2, 0, 0, 0, 2],
-      [2, 0, 0, 0, 2, 2, 5, 2, 2],
-      [4, 0, 0, 0, 2, 0, 0, 0, 2],
-      [2, 0, 0, 0, 4, 0, 0, 0, 1],
-      [2, 0, 0, 0, 0, 0, 0, 0, 2],
-      [2, 0, 0, 0, 2, 2, 2, 0, 1],
-      [2, 0, 0, 0, 2, 0, 0, 0, 1],
-      [2, 0, 0, 0, 2, 0, 0, 0, 1],
-      [2, 0, 0, 0, 2, 0, 0, 0, 1],
-      [2, 2, 2, 2, 2, 2, 2, 2, 2],
-    ];
-    this.mapWidth = this.map[0].length;
-    this.mapHeight = this.map.length;
-
-    this.generateThinWalls();
+    this.map = [];
+    this.mapWidth = 0;
+    this.mapHeight = 0;
 
     this.player = {
       x: 2,
-      y: 4.5,
+      y: 5,
       dirX: -1,
       dirY: 0,
       planeX: 0,
@@ -93,67 +81,189 @@ export class RaycastScene extends BaseScene {
     }
 
     this.setupControls();
-    this.loadTextures().then(() => {
+    this.loadLevel(level).then(() => {
       Ticker.shared.add(this.tick, this);
     });
   }
 
-  private generateThinWalls() {
-    for (let y = 0; y < this.mapHeight; y++) {
-      for (let x = 0; x < this.mapWidth; x++) {
-        const tile = this.map[y][x];
-        if (tile >= 4 && tile <= 9) {
-          if (tile === 4) {
+  private async loadLevel(levelName: string) {
+    const mapData = await Assets.load(`assets/${levelName}.json`);
+
+    const textureMap: Record<number, string> = {};
+    const tileset = mapData.tilesets[0];
+    if (tileset && tileset.tiles) {
+      tileset.tiles.forEach((tile: any) => {
+        const tileId = tile.id;
+        const imagePath = tile.image;
+        const fileName = imagePath.split(/[\\/]/).pop();
+        textureMap[tileId] = fileName;
+      });
+    }
+
+    const texturePromises = Object.entries(textureMap).map(
+      ([tileId, fileName]) =>
+        Assets.load(`assets/${fileName}`)
+          .then((texture) => {
+            this.textures[parseInt(tileId)] = texture;
+          })
+          .catch((err) => console.error(`Failed to load ${fileName}:`, err))
+    );
+    await Promise.all(texturePromises);
+
+    this.parseTiledMap(mapData);
+    console.log("Parsed map:", this.map);
+    console.log("Tile types:", this.tileTypes);
+    console.log("Thin walls:", this.thinWalls);
+
+    const px = Math.floor(this.player.x);
+    const py = Math.floor(this.player.y);
+    if (this.map[py]?.[px] !== 0) {
+      console.warn(
+        "Player spawned inside a wall! Finding new spawn position..."
+      );
+      for (let y = 0; y < this.mapHeight; y++) {
+        for (let x = 0; x < this.mapWidth; x++) {
+          if (this.map[y][x] === 0) {
+            this.player.x = x + 0.5;
+            this.player.y = y + 0.5;
+            console.log(`Moved player to (${this.player.x}, ${this.player.y})`);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  private parseTiledMap(mapData: any) {
+    this.map = Array(mapData.height)
+      .fill(0)
+      .map(() => Array(mapData.width).fill(0));
+    this.mapWidth = mapData.width;
+    this.mapHeight = mapData.height;
+
+    const firstgid = mapData.tilesets[0].firstgid;
+
+    const tileset = mapData.tilesets[0];
+    if (tileset && tileset.tiles) {
+      tileset.tiles.forEach((tile: any) => {
+        const gid = tile.id + firstgid;
+        const typeProp = tile.properties?.find(
+          (prop: any) => prop.name === "type"
+        );
+        if (typeProp) {
+          this.tileTypes[gid] = typeProp.value;
+        }
+      });
+    }
+
+    const wallsLayer = mapData.layers.find(
+      (layer: any) => layer.name === "Walls"
+    );
+    if (wallsLayer) {
+      wallsLayer.data.forEach((tileId: number, index: number) => {
+        const x = index % wallsLayer.width;
+        const y = Math.floor(index / wallsLayer.width);
+        if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+          if (tileId !== 0) {
+            this.map[y][x] = tileId;
+            const tileType = this.tileTypes[tileId];
+            if (tileType === "door") {
+              this.doorStates[`${x},${y}`] = 0;
+            }
+          }
+        }
+      });
+    }
+
+    const thinWallsLayer = mapData.layers.find(
+      (layer: any) => layer.name === "ThinWalls"
+    );
+    if (thinWallsLayer) {
+      const thinWallTiles: Array<{ x: number; y: number; tileId: number }> = [];
+      thinWallsLayer.data.forEach((tileId: number, index: number) => {
+        if (tileId !== 0) {
+          const x = index % thinWallsLayer.width;
+          const y = Math.floor(index / thinWallsLayer.width);
+          thinWallTiles.push({ x, y, tileId });
+        }
+      });
+
+      thinWallTiles.forEach(({ x, y, tileId }) => {
+        const tileType = this.tileTypes[tileId];
+        const adjustedTileId = tileId - firstgid;
+        if (tileType === "thinWall") {
+          const hasTop = thinWallTiles.some(
+            (t) =>
+              t.x === x &&
+              t.y === y - 1 &&
+              this.tileTypes[t.tileId] === "thinWall"
+          );
+          const hasBottom = thinWallTiles.some(
+            (t) =>
+              t.x === x &&
+              t.y === y + 1 &&
+              this.tileTypes[t.tileId] === "thinWall"
+          );
+          const hasLeft = thinWallTiles.some(
+            (t) =>
+              t.x === x - 1 &&
+              t.y === y &&
+              this.tileTypes[t.tileId] === "thinWall"
+          );
+          const hasRight = thinWallTiles.some(
+            (t) =>
+              t.x === x + 1 &&
+              t.y === y &&
+              this.tileTypes[t.tileId] === "thinWall"
+          );
+
+          let orientation: "vertical" | "horizontal" = "vertical";
+          if ((hasLeft || hasRight) && !(hasTop || hasBottom)) {
+            orientation = "horizontal";
+          } else if ((hasTop || hasBottom) && !(hasLeft || hasRight)) {
+            orientation = "vertical";
+          } else if (hasLeft || hasRight) {
+            orientation = "horizontal";
+          }
+
+          if (orientation === "vertical") {
             this.thinWalls.push({
               x1: x + 0.5,
               y1: y,
               x2: x + 0.5,
               y2: y + 1,
-              texture: 4,
+              texture: adjustedTileId,
+              orientation,
             });
-          } else if (tile === 5) {
+          } else {
             this.thinWalls.push({
               x1: x,
               y1: y + 0.5,
               x2: x + 1,
               y2: y + 0.5,
-              texture: 4,
-            });
-          } else if (tile === 6) {
-            this.thinWalls.push({
-              x1: x,
-              y1: y,
-              x2: x,
-              y2: y + 1,
-              texture: 4,
-            });
-          } else if (tile === 7) {
-            this.thinWalls.push({
-              x1: x + 1,
-              y1: y,
-              x2: x + 1,
-              y2: y + 1,
-              texture: 4,
-            });
-          } else if (tile === 8) {
-            this.thinWalls.push({
-              x1: x,
-              y1: y,
-              x2: x + 1,
-              y2: y,
-              texture: 4,
-            });
-          } else if (tile === 9) {
-            this.thinWalls.push({
-              x1: x,
-              y1: y + 1,
-              x2: x + 1,
-              y2: y + 1,
-              texture: 4,
+              texture: adjustedTileId,
+              orientation,
             });
           }
         }
-      }
+      });
+    }
+
+    const doorsLayer = mapData.layers.find(
+      (layer: any) => layer.name === "Doors"
+    );
+    if (doorsLayer) {
+      doorsLayer.data.forEach((tileId: number, index: number) => {
+        if (tileId !== 0) {
+          const x = index % doorsLayer.width;
+          const y = Math.floor(index / doorsLayer.width);
+          const tileType = this.tileTypes[tileId];
+          if (tileType === "door") {
+            this.map[y][x] = tileId;
+            this.doorStates[`${x},${y}`] = 0;
+          }
+        }
+      });
     }
   }
 
@@ -174,13 +284,13 @@ export class RaycastScene extends BaseScene {
     window.addEventListener("keyup", this.keyUpHandler);
     window.addEventListener("mousemove", this.mouseMoveHandler);
 
-    // Request pointer lock on click to enable mouse look
     this.stage.interactive = true;
-    this.stage.on("mousedown", () => {
-      document.body.requestPointerLock();
+    this.stage.on("mousedown", async () => {
+      if (!document.pointerLockElement) {
+        await document.body.requestPointerLock();
+      }
     });
 
-    // Handle pointer lock state changes
     document.addEventListener(
       "pointerlockchange",
       this.pointerLockChangeHandler
@@ -188,18 +298,21 @@ export class RaycastScene extends BaseScene {
   }
 
   private pointerLockChangeHandler = () => {
+    console.log("Pointer lock state:", document.pointerLockElement);
     if (document.pointerLockElement === document.body) {
-      // Pointer is locked, enable mouse movement
       this.stage.interactive = true;
     } else {
-      // Pointer is unlocked, disable mouse movement
-      this.stage.interactive = false;
+      this.stage.interactive = true; // Keep interactive to allow re-locking
     }
   };
 
   private keyDownHandler = (e: KeyboardEvent) => {
-    if (e.key in this.keys) this.keys[e.key] = true;
-    if (e.key === "e") this.tryOpenDoor();
+    if (e.key in this.keys) {
+      this.keys[e.key] = true;
+    }
+    if (e.key === "e") {
+      this.tryOpenDoor();
+    }
   };
 
   private keyUpHandler = (e: KeyboardEvent) => {
@@ -207,31 +320,20 @@ export class RaycastScene extends BaseScene {
   };
 
   private mouseMoveHandler = (e: MouseEvent) => {
-    if (document.pointerLockElement !== document.body) {
-      return;
-    }
+    if (document.pointerLockElement !== document.body) return;
 
-    const angle = e.movementX * this.mouseSensitivity; // movementX is delta in mouse position
-    const cos = Math.cos(-angle); // Negative to match FPS convention (left = turn left)
+    const angle = e.movementX * this.mouseSensitivity;
+    const cos = Math.cos(-angle);
     const sin = Math.sin(-angle);
 
-    // Rotate player direction
     const oldDirX = this.player.dirX;
     this.player.dirX = this.player.dirX * cos - this.player.dirY * sin;
     this.player.dirY = oldDirX * sin + this.player.dirY * cos;
 
-    // Rotate camera plane
     const oldPlaneX = this.player.planeX;
     this.player.planeX = this.player.planeX * cos - this.player.planeY * sin;
     this.player.planeY = oldPlaneX * sin + this.player.planeY * cos;
   };
-
-  private async loadTextures() {
-    this.textures[1] = Texture.from("imperial_grilled_wall");
-    this.textures[2] = Texture.from("basic_imperial_wall");
-    this.textures[3] = Texture.from("metal_door");
-    this.textures[4] = Texture.from("fence");
-  }
 
   private tick(delta: number) {
     this.updatePlayer(delta);
@@ -242,35 +344,10 @@ export class RaycastScene extends BaseScene {
   private updatePlayer(delta: number) {
     const moveSpeed = this.moveSpeed * delta;
 
-    const tryMove = (newX: number, newY: number) => {
-      const targetX = Math.floor(newX);
-      const targetY = Math.floor(newY);
-      const tile = this.map[targetY]?.[targetX];
-      const doorKey = `${targetX},${targetY}`;
-      const isDoorOpen = tile === 3 && (this.doorStates[doorKey] ?? 0) >= 1;
-
-      for (const wall of this.thinWalls) {
-        const minX = Math.min(wall.x1, wall.x2);
-        const maxX = Math.max(wall.x1, wall.x2);
-        const minY = Math.min(wall.y1, wall.y2);
-        const maxY = Math.max(wall.y1, wall.y2);
-        if (
-          newX >= minX - 0.1 &&
-          newX <= maxX + 0.1 &&
-          newY >= minY - 0.1 &&
-          newY <= maxY + 0.1
-        ) {
-          return false;
-        }
-      }
-
-      return tile === 0 || isDoorOpen || (tile >= 4 && tile <= 9);
-    };
-
     if (this.keys.w) {
       const newX = this.player.x + this.player.dirX * moveSpeed;
       const newY = this.player.y + this.player.dirY * moveSpeed;
-      if (tryMove(newX, newY)) {
+      if (this.tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
       }
@@ -279,30 +356,69 @@ export class RaycastScene extends BaseScene {
     if (this.keys.s) {
       const newX = this.player.x - this.player.dirX * moveSpeed;
       const newY = this.player.y - this.player.dirY * moveSpeed;
-      if (tryMove(newX, newY)) {
+      if (this.tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
       }
     }
 
     if (this.keys.a || this.keys.d) {
-      const strafeDirX = this.player.dirY; // Perpendicular to direction (rotate 90 degrees)
+      const strafeDirX = this.player.dirY;
       const strafeDirY = -this.player.dirX;
-      const sign = this.keys.a ? -1 : 1; // A = left, D = right
+      const sign = this.keys.a ? -1 : 1;
       const newX = this.player.x + strafeDirX * moveSpeed * sign;
       const newY = this.player.y + strafeDirY * moveSpeed * sign;
-      if (tryMove(newX, newY)) {
+      if (this.tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
       }
     }
   }
 
+  private tryMove(newX: number, newY: number): boolean {
+    const targetX = Math.floor(newX);
+    const targetY = Math.floor(newY);
+    const tile = this.map[targetY]?.[targetX];
+    const doorKey = `${targetX},${targetY}`;
+    const tileType = this.tileTypes[tile];
+    const isDoorOpen =
+      tileType === "door" && (this.doorStates[doorKey] ?? 0) > 0;
+
+    for (const wall of this.thinWalls) {
+      const minX = Math.min(wall.x1, wall.x2);
+      const maxX = Math.max(wall.x1, wall.x2);
+      const minY = Math.min(wall.y1, wall.y2);
+      const maxY = Math.max(wall.y1, wall.y2);
+      if (
+        newX >= minX - 0.1 &&
+        newX <= maxX + 0.1 &&
+        newY >= minY - 0.1 &&
+        newY <= maxY + 0.1
+      ) {
+        return false;
+      }
+    }
+
+    return tile === 0 || isDoorOpen;
+  }
+
   private updateDoors(delta: number) {
     for (const key in this.doorStates) {
-      if (this.doorStates[key] < 1) {
-        this.doorStates[key] += 0.01 * delta;
-        if (this.doorStates[key] > 1) this.doorStates[key] = 1;
+      const state = this.doorStates[key];
+      if (typeof state === "number") {
+        if (state < 0) {
+          // Closing the door
+          this.doorStates[key] = state + 0.05 * delta;
+          if (this.doorStates[key] > 0) {
+            this.doorStates[key] = 0;
+          } // Reset to closed
+        } else if (state > 0) {
+          // Opening the door
+          this.doorStates[key] = state + 0.05 * delta;
+          if (this.doorStates[key] > 1) {
+            this.doorStates[key] = 1; // Fully open
+          }
+        }
       }
     }
   }
@@ -321,9 +437,16 @@ export class RaycastScene extends BaseScene {
     for (const [dx, dy] of nearbyOffsets) {
       const x = px + dx;
       const y = py + dy;
-      if (this.map[y]?.[x] === 3) {
+      const tile = this.map[y]?.[x];
+      if (tile && this.tileTypes[tile] === "door") {
         const key = `${x},${y}`;
-        this.doorStates[key] = this.doorStates[key] || 0.01;
+        const currentState = this.doorStates[key];
+
+        if (currentState === 0) {
+          this.doorStates[key] = 0.01;
+        } else if (currentState === 1) {
+          this.doorStates[key] = -1;
+        }
       }
     }
   }
@@ -368,6 +491,7 @@ export class RaycastScene extends BaseScene {
       mapY: number;
       rayDirX: number;
       rayDirY: number;
+      orientation?: "vertical" | "horizontal";
     }> = [];
 
     while (true) {
@@ -395,56 +519,50 @@ export class RaycastScene extends BaseScene {
       const tile = this.map[mapY][mapX];
       const key = `${mapX},${mapY}`;
 
-      if (tile === 3) {
-        const open = this.doorStates[key] ?? 0;
-        if (open < 1) {
-          const offset = 1 - open;
-          const hitPos =
-            side === 0
-              ? this.player.x + dist * rayDirX
-              : this.player.y + dist * rayDirY;
-
-          const wallEdge = side === 0 ? mapX + offset : mapY + offset;
-
-          if (hitPos < wallEdge) {
-            let hitX =
-              side === 0
-                ? this.player.y + dist * rayDirY
-                : this.player.x + dist * rayDirX;
-            hitX -= Math.floor(hitX);
-            if (tile === 3) {
-              hitX = Math.min(1, hitX + open);
-            }
-            hits.push({
-              wallType: tile,
-              distance: dist,
-              hitX,
-              side,
-              mapX,
-              mapY,
-              rayDirX,
-              rayDirY,
-            });
-            break;
-          }
-        }
-      } else if (tile > 0 && (tile < 4 || tile > 9)) {
+      if (tile > 0) {
         let hitX =
           side === 0
             ? this.player.y + dist * rayDirY
             : this.player.x + dist * rayDirX;
         hitX -= Math.floor(hitX);
-        hits.push({
-          wallType: tile,
-          distance: dist,
-          hitX,
-          side,
-          mapX,
-          mapY,
-          rayDirX,
-          rayDirY,
-        });
-        break;
+
+        const tileType = this.tileTypes[tile];
+        const adjustedTileId = tile - 1;
+
+        if (tileType === "door") {
+          const open = this.doorStates[key] ?? 0;
+          if (Math.abs(open) < 1) {
+            const offset = 1 - Math.abs(open);
+            const wallEdge = side === 0 ? mapX + offset : mapY + offset;
+            const hitPos = side === 0 ? mapX + hitX : mapY + hitX;
+            if (hitPos < wallEdge) {
+              hitX = Math.min(1, hitX + Math.abs(open));
+              hits.push({
+                wallType: adjustedTileId,
+                distance: dist,
+                hitX,
+                side,
+                mapX,
+                mapY,
+                rayDirX,
+                rayDirY,
+              });
+              break;
+            }
+          }
+        } else {
+          hits.push({
+            wallType: adjustedTileId,
+            distance: dist,
+            hitX,
+            side,
+            mapX,
+            mapY,
+            rayDirX,
+            rayDirY,
+          });
+          break;
+        }
       }
     }
 
@@ -480,6 +598,7 @@ export class RaycastScene extends BaseScene {
           mapY: Math.floor(hitPosY),
           rayDirX,
           rayDirY,
+          orientation: wall.orientation,
         });
       }
     }
@@ -529,11 +648,12 @@ export class RaycastScene extends BaseScene {
         const sprite = this.spritePool[i][j];
         const texture = this.textures[ray.wallType];
 
-        if (ray.wallType === 3) {
+        const tileType = this.tileTypes[ray.wallType + 1];
+        if (tileType === "door") {
           const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
           const doorWidth = texture?.width ?? 64;
 
-          if (texture && open < 1) {
+          if (texture && Math.abs(open) < 1) {
             const texX = Math.floor(ray.hitX * doorWidth);
             const clampedTexX = Math.min(texX, doorWidth - 1);
 
@@ -547,10 +667,9 @@ export class RaycastScene extends BaseScene {
             sprite.width = 1;
             sprite.visible = true;
             sprite.tint = ray.side === 0 ? 0xaaaaaa : 0xffffff;
-            sprite.alpha = 1;
           }
 
-          if (open > 0 && drawStart < drawEnd) {
+          if (Math.abs(open) > 0 && drawStart < drawEnd) {
             this.graphics.beginFill(0x000000);
             this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
             this.graphics.endFill();

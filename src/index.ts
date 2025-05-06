@@ -10,6 +10,7 @@ import { EndlessLevel } from "./scenes/EndlessLevel";
 import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
 import { RaycastScene } from "./scenes/RaycastScene";
+import { Stats } from "pixi-stats";
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
@@ -24,6 +25,10 @@ let currentScale = 1;
 // For pixi debug utils
 (globalThis as any).__PIXI_APP__ = app;
 let currentScene: BaseScene;
+
+// Initialize pixi-stats
+const stats = new Stats(app.renderer);
+
 window.onload = async (): Promise<void> => {
   await loadGameAssets(manifest);
   registerFonts();
