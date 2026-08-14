@@ -11,6 +11,27 @@ import {
 import { BaseScene } from "./BaseScene";
 import { gameConfig } from "../configs/GameConfig";
 
+interface RayHit {
+  wallType: number;
+  distance: number;
+  hitX: number;
+  side: number;
+  mapX: number;
+  mapY: number;
+  rayDirX: number;
+  rayDirY: number;
+  orientation?: "vertical" | "horizontal";
+}
+
+interface RawTextureData {
+  width: number;
+  height: number;
+  pixels: Uint32Array;
+  isPow2: boolean;
+  maskX: number;
+  maskY: number;
+}
+
 export class RaycastScene extends BaseScene {
   private player: {
     x: number;
@@ -28,6 +49,7 @@ export class RaycastScene extends BaseScene {
   };
   private graphics: Graphics;
   private textures: Record<number, Texture> = {};
+  private columnTextures: Record<number, Texture[]> = {};
   private moveSpeed: number = 0.02;
   private rotSpeed: number = 0.05;
   private mouseSensitivity: number = 0.002;
@@ -45,14 +67,25 @@ export class RaycastScene extends BaseScene {
     texture: number;
     orientation: "vertical" | "horizontal";
   }> = [];
+  private activeThinWalls: Array<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    texture: number;
+    orientation: "vertical" | "horizontal";
+  }> = [];
   private spritePool: Sprite[][] = [];
+  private hitPool: RayHit[][] = [];
   private readonly MAX_HITS_PER_COLUMN: number = 3;
-  private readonly MAX_RENDER_DISTANCE: number = 50;
+  private readonly MAX_RENDER_DISTANCE: number = 30;
   private tileTypes: Record<number, string> = {};
-  private rawTextureData: Record<
-    number,
-    { width: number; height: number; pixels: Uint32Array }
-  > = {};
+  private rawTextureData: Record<number, RawTextureData> = {};
+
+  private wallTop: Int32Array = new Int32Array(gameConfig.width);
+  private wallBottom: Int32Array = new Int32Array(gameConfig.width);
+  private hitCounts: Int32Array = new Int32Array(gameConfig.width);
+
   private bgCanvas!: HTMLCanvasElement;
   private bgCtx!: CanvasRenderingContext2D;
   private bgImageData!: ImageData;
@@ -79,7 +112,7 @@ export class RaycastScene extends BaseScene {
       planeY: 0.8,
     };
 
-    // Background sprite for floor & ceiling/sky rendering
+    // Background sprite for floor & ceiling/sky rendering (native 1:1 crisp resolution)
     this.bgCanvas = document.createElement("canvas");
     this.bgCanvas.width = gameConfig.width;
     this.bgCanvas.height = gameConfig.height;
@@ -111,6 +144,22 @@ export class RaycastScene extends BaseScene {
         columnSprites.push(sprite);
       }
       this.spritePool.push(columnSprites);
+
+      // Pre-allocate ray hit pool for zero-allocation raycasting
+      const colHits: RayHit[] = [];
+      for (let j = 0; j < 16; j++) {
+        colHits.push({
+          wallType: 0,
+          distance: 0,
+          hitX: 0,
+          side: 0,
+          mapX: 0,
+          mapY: 0,
+          rayDirX: 0,
+          rayDirY: 0,
+        });
+      }
+      this.hitPool.push(colHits);
     }
 
     this.setupControls();
@@ -120,9 +169,8 @@ export class RaycastScene extends BaseScene {
   }
 
   private initSkyGradient() {
-    const screenW = gameConfig.width;
     const horizon = Math.floor(gameConfig.height / 2);
-    this.skyBuffer = new Uint32Array(screenW * horizon);
+    this.skyBuffer = new Uint32Array(gameConfig.width * horizon);
 
     for (let y = 0; y < horizon; y++) {
       const t = y / horizon;
@@ -131,20 +179,20 @@ export class RaycastScene extends BaseScene {
       const b = Math.floor(120 + (235 - 120) * t);
       const color = 0xff000000 | (b << 16) | (g << 8) | r;
 
-      const rowOffset = y * screenW;
-      for (let x = 0; x < screenW; x++) {
+      const rowOffset = y * gameConfig.width;
+      for (let x = 0; x < gameConfig.width; x++) {
         this.skyBuffer[rowOffset + x] = color;
       }
     }
   }
 
-  private extractTexturePixels(texture: Texture): {
-    width: number;
-    height: number;
-    pixels: Uint32Array;
-  } {
+  private extractTexturePixels(texture: Texture): RawTextureData {
     const width = texture.width || 64;
     const height = texture.height || 64;
+    const isPow2 =
+      (width & (width - 1)) === 0 && (height & (height - 1)) === 0;
+    const maskX = width - 1;
+    const maskY = height - 1;
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -164,12 +212,18 @@ export class RaycastScene extends BaseScene {
         width,
         height,
         pixels: new Uint32Array(imgData.data.buffer),
+        isPow2,
+        maskX,
+        maskY,
       };
     }
     return {
       width: 64,
       height: 64,
       pixels: new Uint32Array(64 * 64).fill(0xff666666),
+      isPow2: true,
+      maskX: 63,
+      maskY: 63,
     };
   }
 
@@ -200,9 +254,20 @@ export class RaycastScene extends BaseScene {
     );
     await Promise.all(texturePromises);
 
+    // Extract raw pixel buffers and pre-slice 1px column textures for zero-allocation rendering
     for (const [tileIdStr, texture] of Object.entries(this.textures)) {
       const tileId = parseInt(tileIdStr);
       this.rawTextureData[tileId] = this.extractTexturePixels(texture);
+
+      const slices: Texture[] = [];
+      const texW = texture.width || 64;
+      const texH = texture.height || 64;
+      for (let x = 0; x < texW; x++) {
+        slices.push(
+          new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH))
+        );
+      }
+      this.columnTextures[tileId] = slices;
     }
 
     this.parseTiledMap(mapData);
@@ -409,6 +474,12 @@ export class RaycastScene extends BaseScene {
     if (this.bgTexture) {
       this.bgTexture.destroy(true);
     }
+    for (const slices of Object.values(this.columnTextures)) {
+      for (const tex of slices) {
+        tex.destroy(false);
+      }
+    }
+    this.columnTextures = {};
     window.removeEventListener("keydown", this.keyDownHandler);
     window.removeEventListener("keyup", this.keyUpHandler);
     window.removeEventListener("mousemove", this.mouseMoveHandler);
@@ -590,7 +661,39 @@ export class RaycastScene extends BaseScene {
     }
   }
 
-  private castRay(column: number) {
+  private cullThinWalls(): void {
+    this.activeThinWalls = [];
+    const invDet =
+      1.0 /
+      (this.player.planeX * this.player.dirY -
+        this.player.dirX * this.player.planeY);
+
+    for (const wall of this.thinWalls) {
+      // Transform wall endpoints into player camera space
+      const dx1 = wall.x1 - this.player.x;
+      const dy1 = wall.y1 - this.player.y;
+      const tx1 = invDet * (this.player.dirY * dx1 - this.player.dirX * dy1);
+      const ty1 = invDet * (-this.player.planeY * dx1 + this.player.planeX * dy1);
+
+      const dx2 = wall.x2 - this.player.x;
+      const dy2 = wall.y2 - this.player.y;
+      const tx2 = invDet * (this.player.dirY * dx2 - this.player.dirX * dy2);
+      const ty2 = invDet * (-this.player.planeY * dx2 + this.player.planeX * dy2);
+
+      // Frustum culling: if both endpoints are behind the player, cull
+      if (ty1 <= 0.05 && ty2 <= 0.05) continue;
+
+      // Frustum culling: if both endpoints are to the left of the FOV, cull
+      if (tx1 < -1.2 * ty1 && tx2 < -1.2 * ty2 && ty1 > 0 && ty2 > 0) continue;
+
+      // Frustum culling: if both endpoints are to the right of the FOV, cull
+      if (tx1 > 1.2 * ty1 && tx2 > 1.2 * ty2 && ty1 > 0 && ty2 > 0) continue;
+
+      this.activeThinWalls.push(wall);
+    }
+  }
+
+  private castRay(column: number): number {
     const screenW = gameConfig.width;
     const cameraX = (2 * column) / screenW - 1;
     const rayDirX = this.player.dirX + this.player.planeX * cameraX;
@@ -621,17 +724,9 @@ export class RaycastScene extends BaseScene {
       sideDistY = (mapY + 1 - this.player.y) * deltaDistY;
     }
 
-    const hits: Array<{
-      wallType: number;
-      distance: number;
-      hitX: number;
-      side: number;
-      mapX: number;
-      mapY: number;
-      rayDirX: number;
-      rayDirY: number;
-      orientation?: "vertical" | "horizontal";
-    }> = [];
+    const pool = this.hitPool[column];
+    let hitCount = 0;
+    let solidWallDist = this.MAX_RENDER_DISTANCE;
 
     while (true) {
       if (sideDistX < sideDistY) {
@@ -674,128 +769,104 @@ export class RaycastScene extends BaseScene {
             const offset = 1 - Math.abs(open);
             const wallEdge = side === 0 ? mapX + offset : mapY + offset;
             const hitPos = side === 0 ? mapX + hitX : mapY + hitX;
-            if (hitPos < wallEdge) {
+            if (hitPos < wallEdge && hitCount < pool.length) {
               hitX = Math.min(1, hitX + Math.abs(open));
-              hits.push({
-                wallType: adjustedTileId,
-                distance: dist,
-                hitX,
-                side,
-                mapX,
-                mapY,
-                rayDirX,
-                rayDirY,
-              });
+              const h = pool[hitCount++];
+              h.wallType = adjustedTileId;
+              h.distance = dist;
+              h.hitX = hitX;
+              h.side = side;
+              h.mapX = mapX;
+              h.mapY = mapY;
+              h.rayDirX = rayDirX;
+              h.rayDirY = rayDirY;
+              solidWallDist = dist;
               break;
             }
           }
-        } else {
-          hits.push({
-            wallType: adjustedTileId,
-            distance: dist,
-            hitX,
-            side,
-            mapX,
-            mapY,
-            rayDirX,
-            rayDirY,
-          });
+        } else if (hitCount < pool.length) {
+          const h = pool[hitCount++];
+          h.wallType = adjustedTileId;
+          h.distance = dist;
+          h.hitX = hitX;
+          h.side = side;
+          h.mapX = mapX;
+          h.mapY = mapY;
+          h.rayDirX = rayDirX;
+          h.rayDirY = rayDirY;
+          solidWallDist = dist;
           break;
         }
       }
     }
 
-    for (const wall of this.thinWalls) {
+    // Only test frustum-visible thin walls that are in front of the solid wall
+    for (const wall of this.activeThinWalls) {
       const x1 = wall.x1;
       const y1 = wall.y1;
       const x2 = wall.x2;
       const y2 = wall.y2;
 
-      // --- OPTIMIZATION: Simple Proximity/Direction Check ---
-      // Calculate the center of the thin wall segment
-      const wallCenterX = (x1 + x2) / 2;
-      const wallCenterY = (y1 + y2) / 2;
-
-      // Vector from player to wall center
-      const toWallX = wallCenterX - this.player.x;
-      const toWallY = wallCenterY - this.player.y;
-
-      const distToWallCenterSq = toWallX * toWallX + toWallY * toWallY;
-
-      // If wall center is too far, skip (use squared distance to avoid sqrt)
-      if (
-        distToWallCenterSq >
-        this.MAX_RENDER_DISTANCE * this.MAX_RENDER_DISTANCE
-      ) {
-        continue;
-      }
-
-      // Check if wall is roughly in front of the player (dot product)
-      // This helps cull walls clearly behind the player
-      const dotProduct = rayDirX * toWallX + rayDirY * toWallY;
-      if (dotProduct < 0 && distToWallCenterSq > 4) {
-        // If behind and not extremely close
-        continue;
-      }
-      // --- END OPTIMIZATION ---
-
       const dx = x2 - x1;
       const dy = y2 - y1;
-
       const denominator = dx * rayDirY - dy * rayDirX;
-      if (Math.abs(denominator) < 0.0001) continue; // Parallel lines or ray collinear with segment
+      if (Math.abs(denominator) < 0.0001) continue;
 
-      // Parameter for ray: P = PlayerPos + u * RayDir
-      const u_numerator = (this.player.x - x1) * dy - (this.player.y - y1) * dx;
-      const u = u_numerator / denominator;
+      const u =
+        ((this.player.x - x1) * dy - (this.player.y - y1) * dx) / denominator;
 
-      // Parameter for wall segment: P = WallP1 + t * (WallP2 - WallP1)
-      const t_numerator =
-        (this.player.x - x1) * rayDirY - (this.player.y - y1) * rayDirX;
-      const t = t_numerator / denominator;
+      // OCCLUSION CULLING: Skip thin walls that are behind the solid wall
+      if (u >= solidWallDist || u < 0.01) continue;
 
-      if (t >= 0 && t <= 1 && u >= 0 && u <= this.MAX_RENDER_DISTANCE) {
-        const dist = u; // 'u' is the distance along the ray to the intersection point
-        // Check if this thin wall hit is closer than an existing grid wall hit (if any)
-        // Or if it should be added for transparency. The current logic sorts all hits.
-        // Ensure distance is positive.
-        if (dist < 0.01) continue; // Avoid hits too close or behind due to precision
+      const t =
+        ((this.player.x - x1) * rayDirY - (this.player.y - y1) * rayDirX) /
+        denominator;
 
-        const hitPosX = this.player.x + dist * rayDirX;
-        const hitPosY = this.player.y + dist * rayDirY;
+      if (t >= 0 && t <= 1 && hitCount < pool.length) {
+        const hitPosX = this.player.x + u * rayDirX;
+        const hitPosY = this.player.y + u * rayDirY;
 
-        // 't' is the normalized position along the thin wall segment (0 to 1)
-        // This is our texture coordinate for the thin wall
-        const hitX = t;
-
-        hits.push({
-          wallType: wall.texture,
-          distance: dist,
-          hitX: hitX, // Use 't' as the texture coordinate for the thin wall
-          side: 2, // Special side value for thin walls
-          mapX: Math.floor(hitPosX), // Approximate map cell for sorting/door checks
-          mapY: Math.floor(hitPosY),
-          rayDirX,
-          rayDirY,
-          orientation: wall.orientation,
-        });
+        const h = pool[hitCount++];
+        h.wallType = wall.texture;
+        h.distance = u;
+        h.hitX = t;
+        h.side = 2;
+        h.mapX = Math.floor(hitPosX);
+        h.mapY = Math.floor(hitPosY);
+        h.rayDirX = rayDirX;
+        h.rayDirY = rayDirY;
+        h.orientation = wall.orientation;
       }
     }
 
-    hits.sort((a, b) => b.distance - a.distance);
-    if (hits.length > this.MAX_HITS_PER_COLUMN) {
-      hits.length = this.MAX_HITS_PER_COLUMN;
+    // Sort hits descending by distance using insertion sort
+    for (let i = 1; i < hitCount; i++) {
+      const item = pool[i];
+      let j = i - 1;
+      while (j >= 0 && pool[j].distance < item.distance) {
+        const temp = pool[j + 1];
+        pool[j + 1] = pool[j];
+        pool[j] = temp;
+        j--;
+      }
+    }
+
+    if (hitCount > this.MAX_HITS_PER_COLUMN) {
+      hitCount = this.MAX_HITS_PER_COLUMN;
     }
 
     const minDistance = 0.05;
-    for (let i = 1; i < hits.length; i++) {
-      if (hits[i].distance + minDistance > hits[i - 1].distance) {
-        hits.splice(i, 1);
+    for (let i = 1; i < hitCount; i++) {
+      if (pool[i].distance + minDistance > pool[i - 1].distance) {
+        for (let k = i; k < hitCount - 1; k++) {
+          pool[k] = pool[k + 1];
+        }
+        hitCount--;
         i--;
       }
     }
 
-    return hits;
+    return hitCount;
   }
 
   private renderFloorAndCeiling() {
@@ -824,13 +895,21 @@ export class RaycastScene extends BaseScene {
         0.18,
         Math.min(1.0, 1.0 - (rowDist / this.MAX_RENDER_DISTANCE) * 0.75)
       );
-      const shadeInt = Math.floor(shade * 256);
+      const shadeInt = (shade * 256) | 0;
 
       let bufIdx = y * screenW;
 
       for (let x = 0; x < screenW; x++) {
-        const cellX = Math.floor(ceilX);
-        const cellY = Math.floor(ceilY);
+        // OCCLUSION CULLING: Skip pixels hidden behind walls
+        if (y >= this.wallTop[x]) {
+          bufIdx++;
+          ceilX += stepX;
+          ceilY += stepY;
+          continue;
+        }
+
+        const cellX = ceilX | 0;
+        const cellY = ceilY | 0;
 
         let tileId = -1;
         if (
@@ -845,24 +924,28 @@ export class RaycastScene extends BaseScene {
         const texData = tileId >= 0 ? this.rawTextureData[tileId] : undefined;
 
         if (texData) {
-          let cxFrac = ceilX - cellX;
-          let cyFrac = ceilY - cellY;
-          if (cxFrac < 0) cxFrac += 1;
-          if (cyFrac < 0) cyFrac += 1;
+          const cxFrac = ceilX - cellX;
+          const cyFrac = ceilY - cellY;
+          const safeX = cxFrac < 0 ? cxFrac + 1 : cxFrac;
+          const safeY = cyFrac < 0 ? cyFrac + 1 : cyFrac;
 
-          const tx = Math.floor(cxFrac * texData.width) % texData.width;
-          const ty = Math.floor(cyFrac * texData.height) % texData.height;
-          const clampedTx = (tx + texData.width) % texData.width;
-          const clampedTy = (ty + texData.height) % texData.height;
+          let tx: number, ty: number;
+          if (texData.isPow2) {
+            tx = ((safeX * texData.width) | 0) & texData.maskX;
+            ty = ((safeY * texData.height) | 0) & texData.maskY;
+          } else {
+            tx = ((safeX * texData.width) | 0) % texData.width;
+            ty = ((safeY * texData.height) | 0) % texData.height;
+            if (tx < 0) tx += texData.width;
+            if (ty < 0) ty += texData.height;
+          }
 
-          const rawPix = texData.pixels[clampedTy * texData.width + clampedTx];
-
+          const rawPix = texData.pixels[ty * texData.width + tx];
           const r = ((rawPix & 0xff) * shadeInt) >> 8;
           const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
           const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
           this.bgBuffer32[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
         } else {
-          // Open sky fallback
           this.bgBuffer32[bufIdx] = this.skyBuffer[bufIdx];
         }
 
@@ -887,13 +970,21 @@ export class RaycastScene extends BaseScene {
         0.18,
         Math.min(1.0, 1.0 - (rowDist / this.MAX_RENDER_DISTANCE) * 0.75)
       );
-      const shadeInt = Math.floor(shade * 256);
+      const shadeInt = (shade * 256) | 0;
 
       let bufIdx = y * screenW;
 
       for (let x = 0; x < screenW; x++) {
-        const cellX = Math.floor(floorX);
-        const cellY = Math.floor(floorY);
+        // OCCLUSION CULLING: Skip pixels hidden behind walls
+        if (y < this.wallBottom[x]) {
+          bufIdx++;
+          floorX += stepX;
+          floorY += stepY;
+          continue;
+        }
+
+        const cellX = floorX | 0;
+        const cellY = floorY | 0;
 
         let tileId = -1;
         if (
@@ -908,18 +999,23 @@ export class RaycastScene extends BaseScene {
         const texData = tileId >= 0 ? this.rawTextureData[tileId] : undefined;
 
         if (texData) {
-          let fx = floorX - cellX;
-          let fy = floorY - cellY;
-          if (fx < 0) fx += 1;
-          if (fy < 0) fy += 1;
+          const fx = floorX - cellX;
+          const fy = floorY - cellY;
+          const safeX = fx < 0 ? fx + 1 : fx;
+          const safeY = fy < 0 ? fy + 1 : fy;
 
-          const tx = Math.floor(fx * texData.width) % texData.width;
-          const ty = Math.floor(fy * texData.height) % texData.height;
-          const clampedTx = (tx + texData.width) % texData.width;
-          const clampedTy = (ty + texData.height) % texData.height;
+          let tx: number, ty: number;
+          if (texData.isPow2) {
+            tx = ((safeX * texData.width) | 0) & texData.maskX;
+            ty = ((safeY * texData.height) | 0) & texData.maskY;
+          } else {
+            tx = ((safeX * texData.width) | 0) % texData.width;
+            ty = ((safeY * texData.height) | 0) % texData.height;
+            if (tx < 0) tx += texData.width;
+            if (ty < 0) ty += texData.height;
+          }
 
-          const rawPix = texData.pixels[clampedTy * texData.width + clampedTx];
-
+          const rawPix = texData.pixels[ty * texData.width + tx];
           const r = ((rawPix & 0xff) * shadeInt) >> 8;
           const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
           const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
@@ -946,60 +1042,84 @@ export class RaycastScene extends BaseScene {
     const screenH = gameConfig.height;
 
     this.graphics.clear();
+
+    // 1. Frustum cull thin walls before casting rays
+    this.cullThinWalls();
+
+    // 2. Raycast all columns to get hits and calculate wall occlusion bounds
+    for (let i = 0; i < screenW; i++) {
+      const hitCount = this.castRay(i);
+      this.hitCounts[i] = hitCount;
+      const pool = this.hitPool[i];
+
+      let minDrawStart = screenH;
+      let maxDrawEnd = 0;
+
+      for (let j = 0; j < hitCount; j++) {
+        const ray = pool[j];
+        const lineHeight = screenH / ray.distance;
+        const drawStart = -lineHeight / 2 + screenH / 2;
+        const drawEnd = lineHeight / 2 + screenH / 2;
+
+        const tileType = this.tileTypes[ray.wallType + 1];
+        if (tileType === "door") {
+          const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
+          if (Math.abs(open) < 0.05) {
+            minDrawStart = Math.min(minDrawStart, drawStart);
+            maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
+          }
+        } else if (tileType !== "thinWall") {
+          minDrawStart = Math.min(minDrawStart, drawStart);
+          maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
+        }
+      }
+
+      this.wallTop[i] = Math.max(0, Math.floor(minDrawStart));
+      this.wallBottom[i] = Math.min(screenH, Math.ceil(maxDrawEnd));
+    }
+
+    // 3. Render floor and ceiling with wall occlusion culling at crisp native 1:1 resolution
     this.renderFloorAndCeiling();
 
+    // 4. Render wall column sprites with viewport culling
     for (let i = 0; i < screenW; i++) {
-      const hits = this.castRay(i);
+      const hitCount = this.hitCounts[i];
+      const pool = this.hitPool[i];
 
       for (const sprite of this.spritePool[i]) {
         sprite.visible = false;
       }
 
-      for (let j = 0; j < hits.length; j++) {
-        const ray = hits[j];
+      for (let j = 0; j < hitCount; j++) {
+        const ray = pool[j];
         const lineHeight = screenH / ray.distance;
         const drawStart = -lineHeight / 2 + screenH / 2;
         const drawEnd = lineHeight / 2 + screenH / 2;
 
+        // Viewport culling: skip drawing if wall slice is outside the screen bounds
+        if (drawEnd <= 0 || drawStart >= screenH) continue;
+
         const sprite = this.spritePool[i][j];
-        const texture = this.textures[ray.wallType];
-
         const tileType = this.tileTypes[ray.wallType + 1];
-        if (tileType === "door") {
-          const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
-          const doorWidth = texture?.width ?? 64;
+        const slices = this.columnTextures[ray.wallType];
 
-          if (texture && Math.abs(open) < 1) {
-            const texX = Math.floor(ray.hitX * doorWidth);
-            const clampedTexX = Math.min(texX, doorWidth - 1);
-
-            const cropped = new Texture(
-              texture.baseTexture,
-              new Rectangle(clampedTexX, 0, 1, texture.height)
-            );
-            sprite.texture = cropped;
-            sprite.y = drawStart;
-            sprite.height = drawEnd - drawStart;
-            sprite.width = 1;
-            sprite.visible = true;
-            sprite.tint = ray.side === 0 ? 0xaaaaaa : 0xffffff;
-          }
-        } else if (texture) {
-          const texWidth = texture.width;
-          const texX = Math.floor(ray.hitX * texWidth);
-          const clampedTexX = Math.min(texX, texWidth - 1);
-
-          const cropped = new Texture(
-            texture.baseTexture,
-            new Rectangle(clampedTexX, 0, 1, texture.height)
+        if (slices && slices.length > 0) {
+          const clampedTexX = Math.min(
+            Math.max(0, Math.floor(ray.hitX * slices.length)),
+            slices.length - 1
           );
-          sprite.texture = cropped;
+
+          sprite.texture = slices[clampedTexX];
           sprite.y = drawStart;
           sprite.height = drawEnd - drawStart;
           sprite.width = 1;
           sprite.visible = true;
-          sprite.tint = ray.side === 0 ? 0xaaaaaa : 0xcccccc;
-          sprite.alpha = 1;
+          sprite.tint =
+            ray.side === 0
+              ? 0xaaaaaa
+              : tileType === "door"
+              ? 0xffffff
+              : 0xcccccc;
         } else {
           this.graphics.beginFill(ray.side === 0 ? 0x666666 : 0x999999);
           this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);

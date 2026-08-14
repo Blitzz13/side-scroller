@@ -22,16 +22,24 @@ The engine dynamically parses Tiled map layers and tilesets:
 - **32-Bit Memory Access**: During level load, texture assets are converted to raw `Uint32Array` buffers (`0xAABBGGRR`) via `extractTexturePixels()`.
 - **Zero GPU Readbacks**: Pixel lookups are performed directly on typed arrays in memory during scanline raycasting.
 
-### C. Background Rendering Target (Floor & Ceiling)
-- An offscreen canvas and `ImageData` buffer render the entire background (`1280 x 720`) in a single pass.
-- Wrapped in a single `pixi.js` `Sprite` (`bgSprite`) placed at the base of the scene graph.
-- **Top Half ($y = 0 \dots 359$)**: Scanline ceiling raycaster with fallback to `skyBuffer` gradient for open outdoor areas.
-- **Bottom Half ($y = 360 \dots 719$)**: Scanline floor raycaster sampling room-specific floor tiles.
+### C. Background Rendering Target (Floor & Ceiling) with Occlusion Culling
+- An offscreen canvas and `ImageData` buffer render the entire background at native $1280 \times 720$ resolution for maximum pixel clarity.
+- **Span-Based Wall Occlusion Culling**:
+  - In Pass 1, column raycasting records the top and bottom screen bounds of all solid opaque walls (`wallTop[x]` and `wallBottom[x]`).
+  - **Ceiling Culling**: For all rows $y < \text{horizon}$, pixels with $y \ge \text{wallTop}[x]$ are occluded by front walls and skipped entirely.
+  - **Floor Culling**: For all rows $y \ge \text{horizon}$, pixels with $y < \text{wallBottom}[x]$ are occluded by front walls and skipped entirely.
+  - Only truly visible ceiling and floor pixels are sampled and drawn.
 
-### D. Wall Raycasting (DDA Algorithm & Sprite Pooling)
-- Column-by-column DDA (Digital Differential Analyzer) raycasting across 1,280 screen columns.
-- Supports up to 3 depth hits per column (`MAX_HITS_PER_COLUMN`) to handle see-through thin walls and partially opened doors.
-- Vertical slice textures are mapped to pooled `Sprite` columns with distance scaling and shading tints.
+### D. Wall Raycasting & Multi-Stage Culling
+- **Thin Wall Frustum Culling (`cullThinWalls`)**:
+  - Thin wall endpoints are projected into player camera space once per frame.
+  - Walls behind the player plane ($ty \le 0$) or outside the FOV frustum are culled before column raycasting starts.
+- **Solid Wall Occlusion Culling**:
+  - As soon as a ray hits an opaque solid wall or closed door at `solidWallDist`, any thin walls or back surfaces with distance $u \ge \text{solidWallDist}$ are culled immediately.
+- **Viewport Vertical Culling**:
+  - Wall column slices projected completely above or below the viewport (`drawEnd <= 0` or `drawStart >= screenH`) are skipped.
+- **Pre-Sliced Column Textures (`columnTextures`)**:
+  - Vertical slice textures are mapped to pooled `Sprite` columns with zero runtime memory allocations.
 
 ---
 
