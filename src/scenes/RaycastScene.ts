@@ -6,7 +6,6 @@ import {
   Texture,
   Ticker,
   Assets,
-  TilingSprite,
 } from "pixi.js";
 import { BaseScene } from "./BaseScene";
 import { gameConfig } from "../configs/GameConfig";
@@ -28,10 +27,12 @@ export class RaycastScene extends BaseScene {
   };
   private graphics: Graphics;
   private textures: Record<number, Texture> = {};
+  private floorTextures: Record<number, Texture> = {};
   private moveSpeed: number = 0.02;
   private rotSpeed: number = 0.05;
   private mouseSensitivity: number = 0.002;
   private map: number[][];
+  private floorMap: number[][];
   private mapWidth: number;
   private mapHeight: number;
   private doorStates: Record<string, number> = {};
@@ -44,7 +45,7 @@ export class RaycastScene extends BaseScene {
     orientation: "vertical" | "horizontal";
   }> = [];
   private spritePool: Sprite[][] = [];
-  private readonly MAX_HITS_PER_COLUMN: number = 3;
+  private readonly MAX_HITS_PER_COLUMN: number = 4; // Wall + floor hits
   private readonly MAX_RENDER_DISTANCE: number = 50;
   private tileTypes: Record<number, string> = {};
 
@@ -52,6 +53,7 @@ export class RaycastScene extends BaseScene {
     super(stage, scale);
 
     this.map = [];
+    this.floorMap = [];
     this.mapWidth = 0;
     this.mapHeight = 0;
 
@@ -93,12 +95,22 @@ export class RaycastScene extends BaseScene {
     const tileset = mapData.tilesets[0];
     if (tileset && tileset.tiles) {
       tileset.tiles.forEach((tile: any) => {
-        const tileId = tile.id;
+        const tileId = tile.id + 1; // Adjust for firstgid = 1
         const imagePath = tile.image;
         const fileName = imagePath.split(/[\\/]/).pop();
         textureMap[tileId] = fileName;
+        const typeProp = tile.properties?.find((prop: any) => prop.name === "type");
+        if (typeProp) {
+          this.tileTypes[tileId] = typeProp.value;
+        }
       });
     }
+
+    // Load floor textures
+    this.floorTextures[6] = await Assets.load("assets/inside_floor.jpg").catch((err) => {
+      console.error("Failed to load inside_floor.jpg:", err);
+      return null;
+    });
 
     const texturePromises = Object.entries(textureMap).map(
       ([tileId, fileName]) =>
@@ -112,6 +124,7 @@ export class RaycastScene extends BaseScene {
 
     this.parseTiledMap(mapData);
     console.log("Parsed map:", this.map);
+    console.log("Floor map:", this.floorMap);
     console.log("Tile types:", this.tileTypes);
     console.log("Thin walls:", this.thinWalls);
 
@@ -136,6 +149,9 @@ export class RaycastScene extends BaseScene {
 
   private parseTiledMap(mapData: any) {
     this.map = Array(mapData.height)
+      .fill(0)
+      .map(() => Array(mapData.width).fill(0));
+    this.floorMap = Array(mapData.height)
       .fill(0)
       .map(() => Array(mapData.width).fill(0));
     this.mapWidth = mapData.width;
@@ -170,6 +186,21 @@ export class RaycastScene extends BaseScene {
             if (tileType === "door") {
               this.doorStates[`${x},${y}`] = 0;
             }
+          }
+        }
+      });
+    }
+
+    const floorLayer = mapData.layers.find(
+      (layer: any) => layer.name === "Floor"
+    );
+    if (floorLayer) {
+      floorLayer.data.forEach((tileId: number, index: number) => {
+        const x = index % floorLayer.width;
+        const y = Math.floor(index / floorLayer.width);
+        if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+          if (tileId !== 0) {
+            this.floorMap[y][x] = tileId;
           }
         }
       });
@@ -407,16 +438,14 @@ export class RaycastScene extends BaseScene {
       const state = this.doorStates[key];
       if (typeof state === "number") {
         if (state < 0) {
-          // Closing the door
           this.doorStates[key] = state + 0.05 * delta;
           if (this.doorStates[key] > 0) {
             this.doorStates[key] = 0;
-          } // Reset to closed
+          }
         } else if (state > 0) {
-          // Opening the door
           this.doorStates[key] = state + 0.05 * delta;
           if (this.doorStates[key] > 1) {
-            this.doorStates[key] = 1; // Fully open
+            this.doorStates[key] = 1;
           }
         }
       }
@@ -453,6 +482,7 @@ export class RaycastScene extends BaseScene {
 
   private castRay(column: number) {
     const screenW = gameConfig.width;
+    const screenH = gameConfig.height;
     const cameraX = (2 * column) / screenW - 1;
     const rayDirX = this.player.dirX + this.player.planeX * cameraX;
     const rayDirY = this.player.dirY + this.player.planeY * cameraX;
@@ -486,14 +516,17 @@ export class RaycastScene extends BaseScene {
       wallType: number;
       distance: number;
       hitX: number;
+      hitY: number;
       side: number;
       mapX: number;
       mapY: number;
       rayDirX: number;
       rayDirY: number;
       orientation?: "vertical" | "horizontal";
+      isFloor?: boolean;
     }> = [];
 
+    // Cast ray for walls
     while (true) {
       if (sideDistX < sideDistY) {
         sideDistX += deltaDistX;
@@ -541,6 +574,7 @@ export class RaycastScene extends BaseScene {
                 wallType: adjustedTileId,
                 distance: dist,
                 hitX,
+                hitY: 0,
                 side,
                 mapX,
                 mapY,
@@ -555,6 +589,7 @@ export class RaycastScene extends BaseScene {
             wallType: adjustedTileId,
             distance: dist,
             hitX,
+            hitY: 0,
             side,
             mapX,
             mapY,
@@ -566,24 +601,61 @@ export class RaycastScene extends BaseScene {
       }
     }
 
+    // Cast ray for floor (adapted from 3DSage's floor casting)
+    const floorRayDirX = rayDirX;
+    const floorRayDirY = rayDirY;
+    for (let y = screenH / 2; y < screenH; y++) {
+      const rayPosZ = 0.5 * screenH; // Vertical position of ray (screen center to bottom)
+      const currentDist = rayPosZ / (y - screenH / 2); // Distance to floor plane (y = 0)
+
+      if (currentDist > 0 && currentDist < this.MAX_RENDER_DISTANCE) {
+        const floorX = this.player.x + currentDist * floorRayDirX;
+        const floorY = this.player.y + currentDist * floorRayDirY;
+
+        const mapX = Math.floor(floorX);
+        const mapY = Math.floor(floorY);
+        const hitX = floorX - mapX; // Texture x-coordinate
+        const hitY = floorY - mapY; // Texture y-coordinate
+
+        if (
+          mapX >= 0 &&
+          mapX < this.mapWidth &&
+          mapY >= 0 &&
+          mapY < this.mapHeight
+        ) {
+          const floorTile = this.floorMap[mapY][mapX];
+          if (floorTile > 0) {
+            hits.push({
+              wallType: floorTile,
+              distance: currentDist,
+              hitX: hitX,
+              hitY: hitY,
+              side: -1,
+              mapX,
+              mapY,
+              rayDirX: floorRayDirX,
+              rayDirY: floorRayDirY,
+              isFloor: true,
+            });
+          }
+        }
+      }
+    }
+
     for (const wall of this.thinWalls) {
       const x1 = wall.x1;
       const y1 = wall.y1;
       const x2 = wall.x2;
       const y2 = wall.y2;
 
-      // --- OPTIMIZATION: Simple Proximity/Direction Check ---
-      // Calculate the center of the thin wall segment
       const wallCenterX = (x1 + x2) / 2;
       const wallCenterY = (y1 + y2) / 2;
 
-      // Vector from player to wall center
       const toWallX = wallCenterX - this.player.x;
       const toWallY = wallCenterY - this.player.y;
 
       const distToWallCenterSq = toWallX * toWallX + toWallY * toWallY;
 
-      // If wall center is too far, skip (use squared distance to avoid sqrt)
       if (
         distToWallCenterSq >
         this.MAX_RENDER_DISTANCE * this.MAX_RENDER_DISTANCE
@@ -591,50 +663,40 @@ export class RaycastScene extends BaseScene {
         continue;
       }
 
-      // Check if wall is roughly in front of the player (dot product)
-      // This helps cull walls clearly behind the player
       const dotProduct = rayDirX * toWallX + rayDirY * toWallY;
       if (dotProduct < 0 && distToWallCenterSq > 4) {
-        // If behind and not extremely close
         continue;
       }
-      // --- END OPTIMIZATION ---
 
       const dx = x2 - x1;
       const dy = y2 - y1;
 
       const denominator = dx * rayDirY - dy * rayDirX;
-      if (Math.abs(denominator) < 0.0001) continue; // Parallel lines or ray collinear with segment
+      if (Math.abs(denominator) < 0.0001) continue;
 
-      // Parameter for ray: P = PlayerPos + u * RayDir
       const u_numerator = (this.player.x - x1) * dy - (this.player.y - y1) * dx;
       const u = u_numerator / denominator;
 
-      // Parameter for wall segment: P = WallP1 + t * (WallP2 - WallP1)
       const t_numerator =
         (this.player.x - x1) * rayDirY - (this.player.y - y1) * rayDirX;
       const t = t_numerator / denominator;
 
       if (t >= 0 && t <= 1 && u >= 0 && u <= this.MAX_RENDER_DISTANCE) {
-        const dist = u; // 'u' is the distance along the ray to the intersection point
-        // Check if this thin wall hit is closer than an existing grid wall hit (if any)
-        // Or if it should be added for transparency. The current logic sorts all hits.
-        // Ensure distance is positive.
-        if (dist < 0.01) continue; // Avoid hits too close or behind due to precision
+        const dist = u;
+        if (dist < 0.01) continue;
 
         const hitPosX = this.player.x + dist * rayDirX;
         const hitPosY = this.player.y + dist * rayDirY;
 
-        // 't' is the normalized position along the thin wall segment (0 to 1)
-        // This is our texture coordinate for the thin wall
         const hitX = t;
 
         hits.push({
           wallType: wall.texture,
           distance: dist,
-          hitX: hitX, // Use 't' as the texture coordinate for the thin wall
-          side: 2, // Special side value for thin walls
-          mapX: Math.floor(hitPosX), // Approximate map cell for sorting/door checks
+          hitX,
+          hitY: 0,
+          side: 2,
+          mapX: Math.floor(hitPosX),
           mapY: Math.floor(hitPosY),
           rayDirX,
           rayDirY,
@@ -665,15 +727,13 @@ export class RaycastScene extends BaseScene {
 
     this.graphics.clear();
 
+    // Render ceiling
+    this.graphics.beginFill(0x87ceeb);
+    this.graphics.drawRect(0, 0, screenW, screenH / 2);
+    this.graphics.endFill();
+
     for (let i = 0; i < screenW; i++) {
       const hits = this.castRay(i);
-
-      this.graphics.beginFill(0x87ceeb);
-      this.graphics.drawRect(i, 0, 1, screenH / 2);
-      this.graphics.endFill();
-      this.graphics.beginFill(0x333333);
-      this.graphics.drawRect(i, screenH / 2, 1, screenH / 2);
-      this.graphics.endFill();
 
       for (const sprite of this.spritePool[i]) {
         sprite.visible = false;
@@ -686,16 +746,57 @@ export class RaycastScene extends BaseScene {
         const drawEnd = lineHeight / 2 + screenH / 2;
 
         const sprite = this.spritePool[i][j];
-        const texture = this.textures[ray.wallType];
+        if (ray.isFloor && this.floorTextures[ray.wallType]) {
+          const texture = this.floorTextures[ray.wallType];
+          const texWidth = texture.width;
+          const texX = Math.floor(ray.hitX * texWidth);
+          const texY = Math.floor(ray.hitY * texWidth);
+          const clampedTexX = Math.min(texX, texWidth - 1);
+          const clampedTexY = Math.min(texY, texWidth - 1);
 
-        const tileType = this.tileTypes[ray.wallType + 1];
-        if (tileType === "door") {
-          const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
-          const doorWidth = texture?.width ?? 64;
+          const cropped = new Texture(
+            texture.baseTexture,
+            new Rectangle(clampedTexX, clampedTexY, 1, 1)
+          );
+          sprite.texture = cropped;
+          sprite.y = drawStart;
+          sprite.height = drawEnd - drawStart;
+          sprite.width = 1;
+          sprite.visible = true;
+          sprite.tint = 0xffffff;
+        } else {
+          const texture = this.textures[ray.wallType];
+          const tileType = this.tileTypes[ray.wallType + 1];
 
-          if (texture && Math.abs(open) < 1) {
-            const texX = Math.floor(ray.hitX * doorWidth);
-            const clampedTexX = Math.min(texX, doorWidth - 1);
+          if (tileType === "door") {
+            const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
+            const doorWidth = texture?.width ?? 64;
+
+            if (texture && Math.abs(open) < 1) {
+              const texX = Math.floor(ray.hitX * doorWidth);
+              const clampedTexX = Math.min(texX, doorWidth - 1);
+
+              const cropped = new Texture(
+                texture.baseTexture,
+                new Rectangle(clampedTexX, 0, 1, texture.height)
+              );
+              sprite.texture = cropped;
+              sprite.y = drawStart;
+              sprite.height = drawEnd - drawStart;
+              sprite.width = 1;
+              sprite.visible = true;
+              sprite.tint = ray.side === 0 ? 0xaaaaaa : 0xffffff;
+            }
+
+            if (Math.abs(open) > 0 && drawStart < drawEnd) {
+              this.graphics.beginFill(0x000000);
+              this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
+              this.graphics.endFill();
+            }
+          } else if (texture) {
+            const texWidth = texture.width;
+            const texX = Math.floor(ray.hitX * texWidth);
+            const clampedTexX = Math.min(texX, texWidth - 1);
 
             const cropped = new Texture(
               texture.baseTexture,
@@ -706,36 +807,20 @@ export class RaycastScene extends BaseScene {
             sprite.height = drawEnd - drawStart;
             sprite.width = 1;
             sprite.visible = true;
-            sprite.tint = ray.side === 0 ? 0xaaaaaa : 0xffffff;
-          }
-
-          if (Math.abs(open) > 0 && drawStart < drawEnd) {
-            this.graphics.beginFill(0x000000);
+            sprite.tint = ray.side === 0 ? 0xaaaaaa : 0xcccccc;
+            sprite.alpha = 1;
+          } else {
+            this.graphics.beginFill(ray.side === 0 ? 0x666666 : 0x999999);
             this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
             this.graphics.endFill();
           }
-        } else if (texture) {
-          const texWidth = texture.width;
-          const texX = Math.floor(ray.hitX * texWidth);
-          const clampedTexX = Math.min(texX, texWidth - 1);
-
-          const cropped = new Texture(
-            texture.baseTexture,
-            new Rectangle(clampedTexX, 0, 1, texture.height)
-          );
-          sprite.texture = cropped;
-          sprite.y = drawStart;
-          sprite.height = drawEnd - drawStart;
-          sprite.width = 1;
-          sprite.visible = true;
-          sprite.tint = ray.side === 0 ? 0xaaaaaa : 0xcccccc;
-          sprite.alpha = 1;
-        } else {
-          this.graphics.beginFill(ray.side === 0 ? 0x666666 : 0x999999);
-          this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
-          this.graphics.endFill();
         }
       }
     }
+
+    // Fallback ground color
+    this.graphics.beginFill(0x333333);
+    this.graphics.drawRect(0, screenH / 2, screenW, screenH / 2);
+    this.graphics.endFill();
   }
 }

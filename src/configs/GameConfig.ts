@@ -103,8 +103,8 @@ export const manifest: AssetsManifest = {
             src: "./assets/fence.png",
           },
           {
-            name: "raycast_test_map",
-            src: "./assets/raycast_test_map.json",
+            name: "floor",
+            src: "./assets/floor.png",
           },
           {
             name: "level2",
