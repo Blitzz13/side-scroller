@@ -33,6 +33,7 @@ export class RaycastScene extends BaseScene {
   private mouseSensitivity: number = 0.002;
   private map: number[][];
   private floorMap: number[][];
+  private ceilingMap: number[][];
   private mapWidth: number;
   private mapHeight: number;
   private doorStates: Record<string, number> = {};
@@ -65,6 +66,7 @@ export class RaycastScene extends BaseScene {
 
     this.map = [];
     this.floorMap = [];
+    this.ceilingMap = [];
     this.mapWidth = 0;
     this.mapHeight = 0;
 
@@ -235,6 +237,9 @@ export class RaycastScene extends BaseScene {
     this.floorMap = Array(mapData.height)
       .fill(0)
       .map(() => Array(mapData.width).fill(-1));
+    this.ceilingMap = Array(mapData.height)
+      .fill(0)
+      .map(() => Array(mapData.width).fill(-1));
     this.mapWidth = mapData.width;
     this.mapHeight = mapData.height;
 
@@ -265,6 +270,23 @@ export class RaycastScene extends BaseScene {
             this.floorMap[y][x] = tileGid - firstgid;
           } else {
             this.floorMap[y][x] = -1;
+          }
+        }
+      });
+    }
+
+    const ceilingLayer = mapData.layers.find(
+      (layer: any) => layer.name === "Ceiling"
+    );
+    if (ceilingLayer) {
+      ceilingLayer.data.forEach((tileGid: number, index: number) => {
+        const x = index % ceilingLayer.width;
+        const y = Math.floor(index / ceilingLayer.width);
+        if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+          if (tileGid !== 0) {
+            this.ceilingMap[y][x] = tileGid - firstgid;
+          } else {
+            this.ceilingMap[y][x] = -1;
           }
         }
       });
@@ -781,16 +803,76 @@ export class RaycastScene extends BaseScene {
     const screenH = gameConfig.height;
     const horizon = Math.floor(screenH / 2);
 
-    // 1. Copy precomputed sky gradient to top half
-    this.bgBuffer32.set(this.skyBuffer);
-
-    // 2. Floor casting for bottom half
     const rayDirX0 = this.player.dirX - this.player.planeX;
     const rayDirY0 = this.player.dirY - this.player.planeY;
     const rayDirX1 = this.player.dirX + this.player.planeX;
     const rayDirY1 = this.player.dirY + this.player.planeY;
     const posZ = 0.5 * screenH;
 
+    // 1. Ceiling casting for top half (y = 0 to horizon - 1)
+    for (let y = 0; y < horizon; y++) {
+      const p = horizon - y;
+      if (p === 0) continue;
+
+      const rowDist = posZ / p;
+      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / screenW;
+      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / screenW;
+      let ceilX = this.player.x + rowDist * rayDirX0;
+      let ceilY = this.player.y + rowDist * rayDirY0;
+
+      const shade = Math.max(
+        0.18,
+        Math.min(1.0, 1.0 - (rowDist / this.MAX_RENDER_DISTANCE) * 0.75)
+      );
+      const shadeInt = Math.floor(shade * 256);
+
+      let bufIdx = y * screenW;
+
+      for (let x = 0; x < screenW; x++) {
+        const cellX = Math.floor(ceilX);
+        const cellY = Math.floor(ceilY);
+
+        let tileId = -1;
+        if (
+          cellX >= 0 &&
+          cellX < this.mapWidth &&
+          cellY >= 0 &&
+          cellY < this.mapHeight
+        ) {
+          tileId = this.ceilingMap[cellY]?.[cellX] ?? -1;
+        }
+
+        const texData = tileId >= 0 ? this.rawTextureData[tileId] : undefined;
+
+        if (texData) {
+          let cxFrac = ceilX - cellX;
+          let cyFrac = ceilY - cellY;
+          if (cxFrac < 0) cxFrac += 1;
+          if (cyFrac < 0) cyFrac += 1;
+
+          const tx = Math.floor(cxFrac * texData.width) % texData.width;
+          const ty = Math.floor(cyFrac * texData.height) % texData.height;
+          const clampedTx = (tx + texData.width) % texData.width;
+          const clampedTy = (ty + texData.height) % texData.height;
+
+          const rawPix = texData.pixels[clampedTy * texData.width + clampedTx];
+
+          const r = ((rawPix & 0xff) * shadeInt) >> 8;
+          const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
+          const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
+          this.bgBuffer32[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
+        } else {
+          // Open sky fallback
+          this.bgBuffer32[bufIdx] = this.skyBuffer[bufIdx];
+        }
+
+        bufIdx++;
+        ceilX += stepX;
+        ceilY += stepY;
+      }
+    }
+
+    // 2. Floor casting for bottom half (y = horizon to screenH - 1)
     for (let y = horizon; y < screenH; y++) {
       const p = y - horizon;
       if (p === 0) continue;

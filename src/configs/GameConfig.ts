@@ -107,6 +107,18 @@ export const manifest: AssetsManifest = {
             src: "./assets/floor.png",
           },
           {
+            name: "ceiling_1",
+            src: "./assets/ceiling_1.jpg",
+          },
+          {
+            name: "ceiling_2",
+            src: "./assets/ceiling_2.jpg",
+          },
+          {
+            name: "ceiling_3",
+            src: "./assets/ceiling_3.jpg",
+          },
+          {
             name: "level2",
             src: "./assets/level2.json",
           },
