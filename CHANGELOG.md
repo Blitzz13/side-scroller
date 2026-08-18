@@ -4,6 +4,37 @@ This document logs recent development changes and enhancements made to the Rayca
 
 ---
 
+## [2026-08-18] - 2.5D Billboard Objects & Items System
+
+### 1. `Objects` Layer Parsing
+- Added `MapObject` interface (`x`, `y`, `texture`, `distance`) and `private mapObjects: MapObject[]` to [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts).
+- Updated `parseTiledMap()` to dynamically parse the `Objects` layer (supporting tilelayers and object layers) from Tiled maps (e.g. `level2.json`).
+- Automatically places objects at cell centers (`x + 0.5`, `y + 0.5`) with 0-indexed tileset texture IDs (`tileGid - firstgid`).
+
+### 2. Camera-Space 3D Sprite Projection & Custom Scaling
+- Implemented standard camera-space matrix transformation:
+  - $\text{invDet} = \frac{1}{\text{player.planeX} \cdot \text{player.dirY} - \text{player.dirX} \cdot \text{player.planeY}}$
+  - $\text{transformX} = \text{invDet} \cdot (\text{player.dirY} \cdot dx - \text{player.dirX} \cdot dy)$
+  - $\text{transformY} = \text{invDet} \cdot (-\text{player.planeY} \cdot dx + \text{player.planeX} \cdot dy)$
+- **Per-Tile & Per-Object Scaling and Elevation from Tiled**:
+  - Supports `scale`, `scaleX`, `scaleY`, `z` / `elevation`, `vOffset` / `yOffset`, and `anchor` (`"ceiling"`, `"floor"`, `"center"`) defined in Tiled custom properties or object instances.
+- **Automatic Image Size Scaling**:
+  - When no explicit scale is provided, automatically scales sprite height relative to standard 512px wall units.
+- **Natural Aspect Ratio Preservation**:
+  - Calculates horizontal width $\text{spriteWidth} = \text{spriteHeight} \times (\text{texture.width} / \text{texture.height})$.
+
+### 3. Z-Buffer Wall Occlusion & Painter's Algorithm Sorting
+- **1D Depth Buffer (`zBuffer`)**: Stored per-column closest wall distance during raycasting.
+- **Farthest-to-Closest Sorting**: Sorted all visible map objects by distance every frame.
+- **Per-Stripe Occlusion**: For every vertical stripe of the billboard sprite, compared sprite depth $\text{transformY} < \text{zBuffer}[\text{stripe}]$ so objects naturally hide behind walls and thin partitions.
+
+### 4. Zero-Allocation Pooled Sprite Rendering & Depth Shading
+- Pre-allocated `objectSpritePool` inside a dedicated `objectContainer` layered on top of walls.
+- Reuses pre-sliced column textures (`columnTextures`) with zero runtime texture allocations.
+- Applied atmospheric distance dimming and depth tinting matching the scene's lighting model.
+
+---
+
 ## [2026-08-18] - Deep CPU Optimization Pass (Flat Arrays, Zero-Allocation Hot Paths)
 
 ### Root Cause of FPS Drops (87 FPS in Certain Views)

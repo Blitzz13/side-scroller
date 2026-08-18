@@ -17,6 +17,7 @@ The engine dynamically parses Tiled map layers and tilesets:
 | **`Walls`** | Tile Layer | Standard solid block walls (e.g. `thickWall`) and interactive doors (`door`). |
 | **`ThinWalls`** | Tile Layer | Sub-grid thin walls placed along cell centers with automatic horizontal/vertical orientation. |
 | **`Doors`** | Tile Layer | Sliding doors that animate open/close on user interaction (`E` key). |
+| **`Objects`** | Tile / Object Layer | Billboard 3D sprites (items, weapons, decorations) that always face the camera with Z-buffer occlusion. |
 
 ### B. High-Performance Texture Sampling
 - **32-Bit Memory Access**: During level load, texture assets are converted to raw `Uint32Array` buffers (`0xAABBGGRR`) via `extractTexturePixels()`.
@@ -40,6 +41,13 @@ The engine dynamically parses Tiled map layers and tilesets:
   - Wall column slices projected completely above or below the viewport (`drawEnd <= 0` or `drawStart >= screenH`) are skipped.
 - **Pre-Sliced Column Textures (`columnTextures`)**:
   - Vertical slice textures are mapped to pooled `Sprite` columns with zero runtime memory allocations.
+
+### E. Billboard Objects & Items System
+- **Dynamic Layer Parsing**: Parses items, pickups, and decorative objects placed in the `Objects` layer of Tiled maps.
+- **Full 360° Billboarding**: All objects automatically rotate in 3D camera space to face the player.
+- **1D Z-Buffer Occlusion**: Objects test each column against the raycast depth buffer (`zBuffer[x]`), rendering only visible stripes and naturally disappearing behind walls, doorframes, and partitions.
+- **Aspect Ratio Preservation**: Automatically scales width based on natural texture dimensions ($W/H$).
+- **Zero Runtime Allocations**: Uses pre-allocated pooled 1px vertical sprites inside an `objectContainer`.
 
 ---
 
@@ -68,17 +76,43 @@ For any vertical screen row $y$:
 6. **Distance Shading / Fog**:
    $$\text{shade} = \text{clamp}\left(1.0 - \frac{\text{rowDistance}}{\text{MAX\_RENDER\_DISTANCE}} \times 0.75, 0.18, 1.0\right)$$
 
+### C. Billboard Sprite Projection
+For each object at $(o_x, o_y)$:
+1. **Relative Position**:
+   $$dx = o_x - p_x, \quad dy = o_y - p_y$$
+2. **Inverse Camera Matrix Transform**:
+   $$\text{invDet} = \frac{1}{c_x \cdot d_y - d_x \cdot c_y}$$
+   $$\text{transformX} = \text{invDet} \cdot (d_y \cdot dx - d_x \cdot dy)$$
+   $$\text{transformY} = \text{invDet} \cdot (-c_y \cdot dx + c_x \cdot dy)$$
+3. **Screen Projection**:
+   $$\text{screenX} = \left\lfloor\frac{\text{screenW}}{2} \cdot \left(1 + \frac{\text{transformX}}{\text{transformY}}\right)\right\rfloor$$
+   $$\text{spriteHeight} = \left|\left\lfloor\frac{\text{screenH}}{\text{transformY}}\right\rfloor\right|, \quad \text{spriteWidth} = \left|\left\lfloor\text{spriteHeight} \times \frac{\text{texWidth}}{\text{texHeight}}\right\rfloor\right|$$
+4. **Z-Buffer Occlusion Test**:
+   For each screen column $\text{stripe} \in [\text{drawStartX}, \text{drawEndX})$:
+   $$\text{Draw stripe if } \text{transformY} < \text{zBuffer}[\text{stripe}]$$
+
 ---
 
 ## 4. Level Customization Guide
 
 To create or customize rooms in `assets/level2.json` (or via the Tiled editor):
 
-1. **Add Tiles**: Add texture images to the tileset (walls, doors, floors, ceilings).
+1. **Add Tiles**: Add texture images to the tileset (walls, doors, floors, ceilings, items/props).
 2. **Floor Layer**: Paint floor tiles on the `Floor` layer (e.g. Tile `5` for indoor metal floor, Tile `6` for outdoor ground).
 3. **Ceiling Layer**: Paint ceiling tiles on the `Ceiling` layer (e.g. Tile `7`, `8`, `9` for interior ceilings, or `0` for sky).
 4. **Walls & Doors**: Paint walls on the `Walls` layer and doors on the `Doors` layer.
-5. **Play**: The engine will automatically load assets, parse all layers, and render the complete environment.
+5. **Objects & Items Layer (`Objects`)**:
+   - Place item/prop tiles on the `Objects` layer (e.g. `E-11-item.png`).
+   - **Custom Properties in Tiled**:
+     | Property Name | Type | Description | Example |
+     | :--- | :--- | :--- | :--- |
+     | **`anchor`** *(or `position`, `align`)* | `string` | Vertical alignment: `"floor"`, `"ceiling"`, or `"center"`. | `"ceiling"` *(for lamps)*, `"floor"` *(for weapons)* |
+     | **`z`** *(or `elevation`, `height`)* | `float` | Exact vertical height factor from `0.0` (floor) to `1.0` (ceiling). | `0.35` *(on a table)*, `0.85` *(high lamp)* |
+     | **`scale`** *(or `size`)* | `float` | Uniform scale multiplier (relative to wall height). | `0.35` (35% wall height) |
+     | **`scaleX`** / **`scaleY`** | `float` | Independent horizontal or vertical scale multipliers. | `scaleX: 0.5, scaleY: 0.35` |
+     | **`vOffset`** *(or `yOffset`, `offset`)* | `float` | Fine vertical shift in world units (`+` moves down, `-` moves up). | `0.05` *(hangs down from ceiling)* |
+   - **Automatic Image Size Scaling**: If no `scale` is explicitly set, sprites automatically scale based on their raw texture height relative to standard 512px wall units.
+6. **Play**: The engine will automatically load assets, parse all layers, and render the complete environment.
 
 ---
 

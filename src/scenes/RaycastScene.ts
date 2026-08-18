@@ -24,6 +24,31 @@ interface RayHit {
   orientation?: "vertical" | "horizontal";
 }
 
+interface MapObject {
+  x: number;
+  y: number;
+  texture: number;
+  distance?: number;
+  scale?: number;
+  scaleX?: number;
+  scaleY?: number;
+  vOffset?: number;
+  z?: number;
+  anchor?: string;
+}
+
+interface TileMeta {
+  type?: string;
+  scale?: number;
+  scaleX?: number;
+  scaleY?: number;
+  vOffset?: number;
+  z?: number;
+  anchor?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+}
+
 interface RawTextureData {
   width: number;
   height: number;
@@ -81,6 +106,7 @@ export class RaycastScene extends BaseScene {
   private readonly MAX_HITS_PER_COLUMN: number = 3;
   private readonly MAX_RENDER_DISTANCE: number = 30;
   private tileTypes: Record<number, string> = {};
+  private tileMeta: Record<number, TileMeta> = {};
   private rawTextureData: Record<number, RawTextureData> = {};
 
   // --- Performance: Flat typed arrays for cache-local map access ---
@@ -104,6 +130,12 @@ export class RaycastScene extends BaseScene {
   private wallTop: Int32Array = new Int32Array(gameConfig.width);
   private wallBottom: Int32Array = new Int32Array(gameConfig.width);
   private hitCounts: Int32Array = new Int32Array(gameConfig.width);
+  private zBuffer: Float64Array = new Float64Array(gameConfig.width);
+
+  private mapObjects: MapObject[] = [];
+  private objectContainer!: Container;
+  private objectSpritePool: Sprite[] = [];
+  private objectSpritePoolIndex: number = 0;
 
   private bgCanvas!: HTMLCanvasElement;
   private bgCtx!: CanvasRenderingContext2D;
@@ -181,6 +213,18 @@ export class RaycastScene extends BaseScene {
         });
       }
       this.hitPool.push(colHits);
+    }
+
+    // Container for billboard sprites (rendered on top of wall columns with depth testing)
+    this.objectContainer = new Container();
+    this.addChild(this.objectContainer);
+
+    for (let i = 0; i < 1000; i++) {
+      const sprite = new Sprite();
+      sprite.width = 1;
+      sprite.visible = false;
+      this.objectContainer.addChild(sprite);
+      this.objectSpritePool.push(sprite);
     }
 
     // Overlay mobile on-screen controls
@@ -336,15 +380,42 @@ export class RaycastScene extends BaseScene {
 
     const firstgid = mapData.tilesets[0]?.firstgid ?? 1;
 
-    const tileset = mapData.tilesets[0];
-    if (tileset && tileset.tiles) {
-      tileset.tiles.forEach((tile: any) => {
-        const gid = tile.id + firstgid;
-        const typeProp = tile.properties?.find(
-          (prop: any) => prop.name === "type"
-        );
-        if (typeProp) {
-          this.tileTypes[gid] = typeProp.value;
+    this.tileMeta = {};
+    if (mapData.tilesets) {
+      mapData.tilesets.forEach((tileset: any) => {
+        const fgid = tileset.firstgid ?? firstgid;
+        if (tileset && tileset.tiles) {
+          tileset.tiles.forEach((tile: any) => {
+            const gid = tile.id + fgid;
+            const meta: TileMeta = {};
+            if (tile.properties) {
+              tile.properties.forEach((prop: any) => {
+                const pName = prop.name.toLowerCase();
+                const pVal = prop.value;
+                if (pName === "type") {
+                  this.tileTypes[gid] = pVal;
+                  meta.type = pVal;
+                }
+                if (pName === "scale" || pName === "size") meta.scale = parseFloat(pVal);
+                if (pName === "scalex" || pName === "sizex") meta.scaleX = parseFloat(pVal);
+                if (pName === "scaley" || pName === "sizey") meta.scaleY = parseFloat(pVal);
+                if (pName === "voffset" || pName === "yoffset" || pName === "offset" || pName === "heightoffset") {
+                  meta.vOffset = parseFloat(pVal);
+                }
+                if (pName === "z" || pName === "elevation" || pName === "altitude" || pName === "height") {
+                  meta.z = parseFloat(pVal);
+                }
+                if (pName === "anchor" || pName === "position" || pName === "align" || pName === "valign") {
+                  meta.anchor = String(pVal).toLowerCase();
+                }
+              });
+            }
+            if (tile.imageheight) {
+              meta.imageHeight = tile.imageheight;
+              meta.imageWidth = tile.imagewidth;
+            }
+            this.tileMeta[tile.id] = meta;
+          });
         }
       });
     }
@@ -493,6 +564,133 @@ export class RaycastScene extends BaseScene {
       });
     }
 
+    // Objects layer parsing (supports both Tiled Object Layers and Tile Layers)
+    this.mapObjects = [];
+    const objectLayers = mapData.layers.filter(
+      (layer: any) =>
+        layer.type === "objectgroup" ||
+        (layer.name &&
+          (layer.name.toLowerCase().includes("object") ||
+            layer.name.toLowerCase().includes("item") ||
+            layer.name.toLowerCase().includes("prop") ||
+            layer.name.toLowerCase().includes("decor") ||
+            layer.name.toLowerCase().includes("pickup")))
+    );
+
+    for (const layer of objectLayers) {
+      // Layer-level default properties (if configured on the layer in Tiled)
+      let layerScale: number | undefined;
+      let layerScaleX: number | undefined;
+      let layerScaleY: number | undefined;
+      let layerVOffset: number | undefined;
+      let layerZ: number | undefined;
+      let layerAnchor: string | undefined;
+
+      if (layer.properties) {
+        layer.properties.forEach((prop: any) => {
+          const pName = prop.name.toLowerCase();
+          const pVal = prop.value;
+          if (pName === "scale" || pName === "size") layerScale = parseFloat(pVal);
+          if (pName === "scalex" || pName === "sizex") layerScaleX = parseFloat(pVal);
+          if (pName === "scaley" || pName === "sizey") layerScaleY = parseFloat(pVal);
+          if (pName === "voffset" || pName === "yoffset" || pName === "offset" || pName === "heightoffset") {
+            layerVOffset = parseFloat(pVal);
+          }
+          if (pName === "z" || pName === "elevation" || pName === "altitude" || pName === "height") {
+            layerZ = parseFloat(pVal);
+          }
+          if (pName === "anchor" || pName === "position" || pName === "align" || pName === "valign") {
+            layerAnchor = String(pVal).toLowerCase();
+          }
+        });
+      }
+
+      const lowerName = layer.name ? layer.name.toLowerCase() : "";
+      if (!layerAnchor) {
+        if (lowerName.includes("ceiling") || lowerName.includes("top")) layerAnchor = "ceiling";
+        else if (lowerName.includes("floor") || lowerName.includes("ground") || lowerName.includes("bottom")) layerAnchor = "floor";
+      }
+
+      if (layer.data) {
+        // Tile Layer
+        layer.data.forEach((tileGid: number, index: number) => {
+          if (tileGid !== 0) {
+            const x = index % layer.width;
+            const y = Math.floor(index / layer.width);
+            const adjustedTileId = tileGid - firstgid;
+            const meta = this.tileMeta[adjustedTileId] || {};
+            this.mapObjects.push({
+              x: x + 0.5,
+              y: y + 0.5,
+              texture: adjustedTileId,
+              scale: layerScale ?? meta.scale,
+              scaleX: layerScaleX ?? meta.scaleX,
+              scaleY: layerScaleY ?? meta.scaleY,
+              vOffset: layerVOffset ?? meta.vOffset,
+              z: layerZ ?? meta.z,
+              anchor: layerAnchor ?? meta.anchor,
+            });
+          }
+        });
+      } else if (layer.objects) {
+        // Object Layer (Object Group in Tiled - supports per-instance custom properties)
+        const tileW = mapData.tilewidth || 64;
+        const tileH = mapData.tileheight || 64;
+        layer.objects.forEach((obj: any) => {
+          const gid = obj.gid ?? 0;
+          if (gid !== 0) {
+            const adjustedTileId = gid - firstgid;
+            const meta = this.tileMeta[adjustedTileId] || {};
+
+            let objScale = layerScale ?? meta.scale;
+            let objScaleX = layerScaleX ?? meta.scaleX;
+            let objScaleY = layerScaleY ?? meta.scaleY;
+            let objVOffset = layerVOffset ?? meta.vOffset;
+            let objZ = layerZ ?? meta.z;
+            let objAnchor = layerAnchor ?? meta.anchor;
+
+            // Specific per-instance custom properties set directly on this object in Tiled
+            if (obj.properties) {
+              obj.properties.forEach((prop: any) => {
+                const pName = prop.name.toLowerCase();
+                const pVal = prop.value;
+                if (pName === "scale" || pName === "size") objScale = parseFloat(pVal);
+                if (pName === "scalex" || pName === "sizex") objScaleX = parseFloat(pVal);
+                if (pName === "scaley" || pName === "sizey") objScaleY = parseFloat(pVal);
+                if (pName === "voffset" || pName === "yoffset" || pName === "offset" || pName === "heightoffset") {
+                  objVOffset = parseFloat(pVal);
+                }
+                if (pName === "z" || pName === "elevation" || pName === "altitude" || pName === "height") {
+                  objZ = parseFloat(pVal);
+                }
+                if (pName === "anchor" || pName === "position" || pName === "align" || pName === "valign") {
+                  objAnchor = String(pVal).toLowerCase();
+                }
+              });
+            }
+
+            // If object was resized with select tool directly in Tiled
+            if (obj.width && obj.height && objScale === undefined && objScaleY === undefined) {
+              objScaleY = obj.height / tileH;
+              objScaleX = obj.width / tileW;
+            }
+
+            this.mapObjects.push({
+              x: (obj.x + (obj.width || tileW) / 2) / tileW,
+              y: (obj.y - (obj.height || tileH) / 2) / tileH,
+              texture: adjustedTileId,
+              scale: objScale,
+              scaleX: objScaleX,
+              scaleY: objScaleY,
+              vOffset: objVOffset,
+              z: objZ,
+              anchor: objAnchor,
+            });
+          }
+        });
+      }
+    }
+
     // --- Performance: Flatten jagged arrays into typed arrays ---
     const totalCells = this.mapHeight * this.mapWidth;
     this.mapFlat = new Int32Array(totalCells);
@@ -535,6 +733,10 @@ export class RaycastScene extends BaseScene {
       }
     }
 
+    for (const obj of this.mapObjects) {
+      if (obj.texture > maxTileId) maxTileId = obj.texture;
+    }
+
     // Build flat texture data array for O(1) indexed access
     this.rawTexArray = new Array(maxTileId + 1);
     for (let i = 0; i <= maxTileId; i++) {
@@ -551,6 +753,12 @@ export class RaycastScene extends BaseScene {
     if (this.mobileControls) {
       this.mobileControls.dispose();
     }
+    if (this.objectContainer) {
+      this.objectContainer.removeChildren();
+      this.objectContainer.destroy({ children: true });
+    }
+    this.objectSpritePool = [];
+    this.objectSpritePoolIndex = 0;
     for (const slices of Object.values(this.columnTextures)) {
       for (const tex of slices) {
         tex.destroy(false);
@@ -1195,6 +1403,8 @@ export class RaycastScene extends BaseScene {
       const hitCount = this.castRay(i);
       this.hitCounts[i] = hitCount;
       const pool = this.hitPool[i];
+      this.zBuffer[i] =
+        hitCount > 0 ? pool[hitCount - 1].distance : this.MAX_RENDER_DISTANCE;
 
       let minDrawStart = screenH;
       let maxDrawEnd = 0;
@@ -1282,5 +1492,199 @@ export class RaycastScene extends BaseScene {
         }
       }
     }
+
+    // 5. Render billboard objects with Z-buffer occlusion
+    this.renderObjects();
+  }
+
+  private renderObjects(): void {
+    if (this.mapObjects.length === 0) {
+      for (let i = 0; i < this.objectSpritePoolIndex; i++) {
+        this.objectSpritePool[i].visible = false;
+      }
+      this.objectSpritePoolIndex = 0;
+      return;
+    }
+
+    const screenW = gameConfig.width;
+    const screenH = gameConfig.height;
+    const posX = this.player.x;
+    const posY = this.player.y;
+    const planeX = this.player.planeX;
+    const planeY = this.player.planeY;
+    const dirX = this.player.dirX;
+    const dirY = this.player.dirY;
+
+    // 1. Calculate squared distance from player to each object
+    for (let i = 0; i < this.mapObjects.length; i++) {
+      const obj = this.mapObjects[i];
+      const dx = obj.x - posX;
+      const dy = obj.y - posY;
+      obj.distance = dx * dx + dy * dy;
+    }
+
+    // 2. Sort objects from farthest to closest (Painter's algorithm)
+    this.mapObjects.sort((a, b) => (b.distance ?? 0) - (a.distance ?? 0));
+
+    let poolIdx = 0;
+    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+
+    for (let i = 0; i < this.mapObjects.length; i++) {
+      const obj = this.mapObjects[i];
+      const spriteX = obj.x - posX;
+      const spriteY = obj.y - posY;
+
+      // Transform sprite position into camera space
+      const transformX = invDet * (dirY * spriteX - dirX * spriteY);
+      const transformY = invDet * (-planeY * spriteX + planeX * spriteY); // depth in front of camera
+
+      // Frustum culling: must be in front of player and within max render distance
+      if (transformY <= 0.1 || transformY > this.MAX_RENDER_DISTANCE) continue;
+
+      const spriteScreenX = Math.floor(
+        (screenW / 2) * (1 + transformX / transformY)
+      );
+
+      const texture = this.textures[obj.texture];
+      const slices = this.columnTextures[obj.texture];
+      if (!texture || !slices || slices.length === 0) continue;
+
+      const meta = this.tileMeta[obj.texture];
+      const texW = texture.width || 64;
+      const texH = texture.height || 64;
+      const aspectRatio = texW / texH;
+
+      // Base wall height projected at this depth
+      const baseHeight = Math.abs(Math.floor(screenH / transformY));
+
+      // Resolve scale:
+      // Priority 1: Object instance scale (from Tiled object layer)
+      // Priority 2: Tile metadata scale (from Tiled tileset custom property)
+      // Priority 3: Automatic image size scaling (relative to 512px standard wall)
+      let effectiveScaleY = obj.scaleY ?? obj.scale ?? meta?.scaleY ?? meta?.scale;
+      let effectiveScaleX = obj.scaleX ?? obj.scale ?? meta?.scaleX ?? meta?.scale;
+
+      if (effectiveScaleY === undefined) {
+        // Automatic scaling based on image size
+        if (texH <= 128) {
+          effectiveScaleY = texH / 512;
+        } else if (texH <= 256) {
+          effectiveScaleY = texH / 512;
+        } else {
+          // For high-res pickup icons/weapons without explicit scale, default to 0.35 (realistic pickup size)
+          effectiveScaleY = 0.35;
+        }
+      }
+      if (effectiveScaleX === undefined) {
+        effectiveScaleX = effectiveScaleY;
+      }
+
+      // Calculate sprite dimensions on screen (preserving aspect ratio and scale)
+      const spriteHeight = Math.max(1, Math.floor(baseHeight * effectiveScaleY));
+      const spriteWidth = Math.max(1, Math.floor(baseHeight * effectiveScaleX * aspectRatio));
+
+      // Vertical positioning & anchor:
+      // "floor" (default for pickups/items) sits cleanly on the floor
+      // "ceiling" attaches to the ceiling (e.g. lamps, chandeliers)
+      // "center" floats at player eye-level
+      // z / elevation: exact height factor between 0.0 (floor) and 1.0 (ceiling)
+      const anchor = (obj.anchor ?? meta?.anchor ?? (effectiveScaleY < 0.8 ? "floor" : "center")).toLowerCase();
+      const z = obj.z ?? meta?.z;
+      const vOffset = obj.vOffset ?? meta?.vOffset ?? 0;
+
+      const floorY = Math.floor(screenH / 2 + baseHeight / 2);
+      const ceilingY = Math.floor(screenH / 2 - baseHeight / 2);
+      const centerY = Math.floor(screenH / 2);
+
+      let drawStartY: number;
+      let drawEndY: number;
+
+      if (z !== undefined) {
+        // Explicit elevation / z from 0.0 (floor) to 1.0 (ceiling)
+        const baseline = floorY - z * baseHeight;
+        if (anchor === "ceiling" || anchor === "top") {
+          drawStartY = Math.floor(baseline);
+          drawEndY = drawStartY + spriteHeight;
+        } else if (anchor === "center" || anchor === "middle" || anchor === "eye") {
+          drawStartY = Math.floor(baseline - spriteHeight / 2);
+          drawEndY = Math.floor(baseline + spriteHeight / 2);
+        } else {
+          // Default: bottom of sprite sits at z elevation
+          drawEndY = Math.floor(baseline);
+          drawStartY = drawEndY - spriteHeight;
+        }
+      } else if (anchor === "ceiling" || anchor === "top") {
+        // Attach top of sprite to the ceiling line
+        drawStartY = ceilingY;
+        drawEndY = ceilingY + spriteHeight;
+      } else if (anchor === "floor" || anchor === "bottom" || anchor === "ground") {
+        // Sit bottom of sprite on the floor line
+        drawEndY = floorY;
+        drawStartY = floorY - spriteHeight;
+      } else {
+        // Centered vertically around player eye level (screen center)
+        drawStartY = Math.floor(centerY - spriteHeight / 2);
+        drawEndY = Math.floor(centerY + spriteHeight / 2);
+      }
+
+      // Apply vertical offset in world units relative to base wall height (+ moves down, - moves up)
+      if (vOffset !== 0) {
+        const offsetPixels = Math.floor(vOffset * baseHeight);
+        drawStartY += offsetPixels;
+        drawEndY += offsetPixels;
+      }
+
+      const actualHeight = drawEndY - drawStartY;
+      if (actualHeight <= 0) continue;
+
+      const drawStartX = Math.floor(spriteScreenX - spriteWidth / 2);
+      const drawEndX = Math.floor(spriteScreenX + spriteWidth / 2);
+
+      const clipStartX = Math.max(0, drawStartX);
+      const clipEndX = Math.min(screenW, drawEndX);
+
+      // Distance-based atmospheric depth dimming
+      const shade = Math.max(
+        0.18,
+        Math.min(1.0, 1.0 - (transformY / this.MAX_RENDER_DISTANCE) * 0.75)
+      );
+      const shadeInt = (shade * 255) | 0;
+      const tint = (shadeInt << 16) | (shadeInt << 8) | shadeInt;
+
+      for (let stripe = clipStartX; stripe < clipEndX; stripe++) {
+        // Check Z-Buffer: only draw stripe if it is closer than the wall in this column
+        if (transformY < this.zBuffer[stripe]) {
+          const texX = Math.floor(
+            ((stripe - drawStartX) * texW) / spriteWidth
+          );
+          const clampedTexX = Math.min(Math.max(0, texX), slices.length - 1);
+
+          let sprite: Sprite;
+          if (poolIdx < this.objectSpritePool.length) {
+            sprite = this.objectSpritePool[poolIdx];
+          } else {
+            sprite = new Sprite();
+            sprite.width = 1;
+            this.objectContainer.addChild(sprite);
+            this.objectSpritePool.push(sprite);
+          }
+          poolIdx++;
+
+          sprite.texture = slices[clampedTexX];
+          sprite.x = stripe;
+          sprite.y = drawStartY;
+          sprite.width = 1;
+          sprite.height = actualHeight;
+          sprite.tint = tint;
+          sprite.visible = true;
+        }
+      }
+    }
+
+    // Hide any unused sprites from previous frames
+    for (let i = poolIdx; i < this.objectSpritePoolIndex; i++) {
+      this.objectSpritePool[i].visible = false;
+    }
+    this.objectSpritePoolIndex = poolIdx;
   }
 }
