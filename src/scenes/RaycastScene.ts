@@ -10,6 +10,7 @@ import {
 } from "pixi.js";
 import { BaseScene } from "./BaseScene";
 import { gameConfig } from "../configs/GameConfig";
+import { MobileControls } from "../ui/MobileControls";
 
 interface RayHit {
   wallType: number;
@@ -94,6 +95,8 @@ export class RaycastScene extends BaseScene {
   private bgSprite!: Sprite;
   private skyBuffer: Uint32Array = new Uint32Array(0);
 
+  private mobileControls!: MobileControls;
+
   constructor(stage: Container, scale: number, level: string = "level2") {
     super(stage, scale);
 
@@ -161,6 +164,11 @@ export class RaycastScene extends BaseScene {
       }
       this.hitPool.push(colHits);
     }
+
+    // Overlay mobile on-screen controls
+    this.mobileControls = new MobileControls();
+    this.mobileControls.on("action", () => this.tryOpenDoor());
+    this.addChild(this.mobileControls);
 
     this.setupControls();
     this.loadLevel(level).then(() => {
@@ -474,6 +482,9 @@ export class RaycastScene extends BaseScene {
     if (this.bgTexture) {
       this.bgTexture.destroy(true);
     }
+    if (this.mobileControls) {
+      this.mobileControls.dispose();
+    }
     for (const slices of Object.values(this.columnTextures)) {
       for (const tex of slices) {
         tex.destroy(false);
@@ -494,10 +505,14 @@ export class RaycastScene extends BaseScene {
     window.addEventListener("keyup", this.keyUpHandler);
     window.addEventListener("mousemove", this.mouseMoveHandler);
 
+    const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
     this.stage.interactive = true;
-    this.stage.on("mousedown", async () => {
-      if (!document.pointerLockElement) {
-        await document.body.requestPointerLock();
+    this.stage.on("mousedown", async (e: any) => {
+      // Only lock pointer on desktop when clicking outside mobile UI controls
+      if (!isMobile && !document.pointerLockElement && e?.target === this.stage) {
+        try {
+          await document.body.requestPointerLock();
+        } catch (err) {}
       }
     });
 
@@ -512,7 +527,7 @@ export class RaycastScene extends BaseScene {
     if (document.pointerLockElement === document.body) {
       this.stage.interactive = true;
     } else {
-      this.stage.interactive = true; // Keep interactive to allow re-locking
+      this.stage.interactive = true;
     }
   };
 
@@ -529,10 +544,7 @@ export class RaycastScene extends BaseScene {
     if (e.key in this.keys) this.keys[e.key] = false;
   };
 
-  private mouseMoveHandler = (e: MouseEvent) => {
-    if (document.pointerLockElement !== document.body) return;
-
-    const angle = e.movementX * this.mouseSensitivity;
+  private rotatePlayer(angle: number): void {
     const cos = Math.cos(-angle);
     const sin = Math.sin(-angle);
 
@@ -543,6 +555,12 @@ export class RaycastScene extends BaseScene {
     const oldPlaneX = this.player.planeX;
     this.player.planeX = this.player.planeX * cos - this.player.planeY * sin;
     this.player.planeY = oldPlaneX * sin + this.player.planeY * cos;
+  }
+
+  private mouseMoveHandler = (e: MouseEvent) => {
+    if (document.pointerLockElement !== document.body) return;
+    const angle = e.movementX * this.mouseSensitivity;
+    this.rotatePlayer(angle);
   };
 
   private tick(delta: number) {
@@ -554,33 +572,57 @@ export class RaycastScene extends BaseScene {
   private updatePlayer(delta: number) {
     const moveSpeed = this.moveSpeed * delta;
 
-    if (this.keys.w) {
-      const newX = this.player.x + this.player.dirX * moveSpeed;
-      const newY = this.player.y + this.player.dirY * moveSpeed;
+    // Mobile joystick input
+    const joyVector = this.mobileControls?.moveVector ?? { x: 0, y: 0 };
+    const joyX = joyVector.x;
+    const joyY = joyVector.y; // Negative is forward, positive is backward
+
+    // 1. Forward / Backward Movement
+    if (this.keys.w || joyY < -0.15) {
+      const intensity = this.keys.w ? 1 : Math.min(1, -joyY);
+      const newX = this.player.x + this.player.dirX * moveSpeed * intensity;
+      const newY = this.player.y + this.player.dirY * moveSpeed * intensity;
+      if (this.tryMove(newX, newY)) {
+        this.player.x = newX;
+        this.player.y = newY;
+      }
+    } else if (this.keys.s || joyY > 0.15) {
+      const intensity = this.keys.s ? 1 : Math.min(1, joyY);
+      const newX = this.player.x - this.player.dirX * moveSpeed * intensity;
+      const newY = this.player.y - this.player.dirY * moveSpeed * intensity;
       if (this.tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
       }
     }
 
-    if (this.keys.s) {
-      const newX = this.player.x - this.player.dirX * moveSpeed;
-      const newY = this.player.y - this.player.dirY * moveSpeed;
-      if (this.tryMove(newX, newY)) {
-        this.player.x = newX;
-        this.player.y = newY;
-      }
-    }
-
-    if (this.keys.a || this.keys.d) {
+    // 2. Strafe Left / Right Movement
+    if (this.keys.a || this.keys.d || Math.abs(joyX) > 0.15) {
       const strafeDirX = this.player.dirY;
       const strafeDirY = -this.player.dirX;
-      const sign = this.keys.a ? -1 : 1;
-      const newX = this.player.x + strafeDirX * moveSpeed * sign;
-      const newY = this.player.y + strafeDirY * moveSpeed * sign;
+      let sign = 0;
+      let intensity = 1;
+      if (this.keys.a) {
+        sign = -1;
+      } else if (this.keys.d) {
+        sign = 1;
+      } else {
+        sign = Math.sign(joyX);
+        intensity = Math.min(1, Math.abs(joyX));
+      }
+      const newX = this.player.x + strafeDirX * moveSpeed * sign * intensity;
+      const newY = this.player.y + strafeDirY * moveSpeed * sign * intensity;
       if (this.tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
+      }
+    }
+
+    // 3. Mobile Camera Rotation (swipe look area & turn buttons)
+    if (this.mobileControls) {
+      const lookDelta = this.mobileControls.consumeLookDelta();
+      if (lookDelta !== 0) {
+        this.rotatePlayer(lookDelta);
       }
     }
   }

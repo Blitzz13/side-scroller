@@ -5,7 +5,7 @@ import { gameConfig, manifest, registerFonts } from "./configs/GameConfig";
 import { BaseScene } from "./scenes/BaseScene";
 import { EndGame } from "./scenes/EndGame";
 import { Scene } from "./enums/Scene";
-import { loadGameAssets } from "./Utils";
+import { loadGameAssets, toggleFullscreen } from "./Utils";
 import { EndlessLevel } from "./scenes/EndlessLevel";
 import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
@@ -26,6 +26,23 @@ let currentScale = 1;
 (globalThis as any).__PIXI_APP__ = app;
 let currentScene: BaseScene;
 
+const isAndroid = /android/i.test(navigator.userAgent);
+
+function setupAndroidFullscreen(): void {
+  if (!isAndroid) return;
+
+  const onFirstInteraction = () => {
+    toggleFullscreen();
+    if (screen.orientation && (screen.orientation as any).lock) {
+      (screen.orientation as any).lock("landscape").catch(() => {});
+    }
+  };
+
+  document.body.addEventListener("touchend", onFirstInteraction, { once: true });
+  document.body.addEventListener("click", onFirstInteraction, { once: true });
+  app.view.addEventListener("touchend", onFirstInteraction, { once: true });
+}
+
 window.onload = async (): Promise<void> => {
   await loadGameAssets(manifest);
   registerFonts();
@@ -34,6 +51,7 @@ window.onload = async (): Promise<void> => {
   // Add Pixi Stats and adjust its z-index
   const stats = new Stats(app.renderer);
 
+  setupAndroidFullscreen();
   resizeCanvas();
   app.stage.interactive = true;
   changeScene(Scene.Raycast);
@@ -99,3 +117,8 @@ function resizeCanvas(): void {
 
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
+window.addEventListener("orientationchange", () => {
+  setTimeout(resizeCanvas, 150);
+});
+document.addEventListener("fullscreenchange", resizeCanvas);
+document.addEventListener("webkitfullscreenchange", resizeCanvas);

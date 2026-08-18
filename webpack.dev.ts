@@ -9,6 +9,9 @@ module.exports = () => {
         devtool: "inline-source-map",
 
         devServer: {
+            host: "0.0.0.0",
+            port: 8080,
+            allowedHosts: "all",
             open: true,
             client: {
                 overlay: {

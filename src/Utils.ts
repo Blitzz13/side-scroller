@@ -46,3 +46,40 @@ export async function loadGameAssets(manifest: AssetsManifest): Promise<void> {
   await Assets.init({ manifest });
   await Assets.loadBundle(manifest.bundles.map(x => x.name));
 }
+
+export function toggleFullscreen(): void {
+  const doc = document as any;
+  const isFullscreen =
+    doc.fullscreenElement ||
+    doc.webkitFullscreenElement ||
+    doc.mozFullScreenElement ||
+    doc.msFullscreenElement;
+
+  if (!isFullscreen) {
+    const el = (document.documentElement || document.body) as any;
+    const req =
+      el.requestFullscreen ||
+      el.webkitRequestFullscreen ||
+      el.webkitRequestFullScreen ||
+      el.mozRequestFullScreen ||
+      el.msRequestFullscreen;
+    if (req) {
+      try {
+        const p = req.call(el, { navigationUI: "hide" });
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) {}
+    }
+  } else {
+    const exit =
+      doc.exitFullscreen ||
+      doc.webkitExitFullscreen ||
+      doc.mozCancelFullScreen ||
+      doc.msExitFullscreen;
+    if (exit) {
+      try {
+        const p = exit.call(doc);
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) {}
+    }
+  }
+}

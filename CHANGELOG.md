@@ -109,11 +109,51 @@ When facing away from close walls and looking into open rooms/corridors, multipl
 
 ---
 
+## [2026-08-14] - Mobile Touch Controls (Thumbstick, Swipe Look & Action Buttons)
+
+### Mobile UI Components Created:
+1. **[`VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts)**:
+   - Analog virtual thumbstick with base boundary and draggable knob.
+   - Outputs normalized 2D movement vector (`x`, `y` from `-1` to `+1`) for walking and strafing.
+2. **[`VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts)**:
+   - Multi-touch responsive button component supporting press holding (`isPressed`) and tap events.
+3. **[`TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts)**:
+   - Full-height touch surface covering the right half of the screen for fluid swipe-to-look camera rotation.
+4. **[`MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts)**:
+   - Composite overlay container housing:
+     - **Left Thumbstick**: Forward/Backward and Strafe Left/Right movement.
+     - **Right Swipe Area**: Fluid camera rotation by dragging anywhere on the right screen half.
+     - **`<` & `>` Buttons**: Quick turn left / turn right buttons for fine-tuning orientation.
+     - **`[E]` Action Button**: Tap to open/close doors.
+
+---
+
+## [2026-08-14] - Android Fullscreen & Dedicated UI Button
+
+### Mobile Fullscreen & Orientation Fixes:
+1. **Dedicated Fullscreen Button (`[FS]`)**:
+   - Added a visible `[FS]` touch button to the top-right corner of [`MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts).
+   - Directly toggles fullscreen using the browser's User Activation token upon tap.
+2. **Direct First-Touch Activation**:
+   - Switched from `touchstart` to `touchend` and `click` on the canvas/document in [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts) to satisfy Chromium's transient user activation policy on Android Chrome and Brave.
+3. **Cross-Browser Fullscreen Helper (`toggleFullscreen`)**:
+   - Added `toggleFullscreen()` in [`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts) supporting `document.documentElement`, `document.body`, and vendor-prefixed APIs.
+4. **Pointer Lock Desktop Separation**:
+   - Prevented mobile touch events from erroneously trying to request desktop pointer locks.
+
+---
+
 ## File Modification Summary
 
 | File | Changes Made |
 | :--- | :--- |
-| [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) | Implemented thin wall frustum culling (`cullThinWalls`), solid wall occlusion culling in `castRay`, and viewport culling in `renderScene`. |
+| [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts) | Added dedicated `[FS]` button for reliable mobile fullscreen triggering. |
+| [`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts) | Implemented cross-browser `toggleFullscreen()` utility. |
+| [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts) | Updated fullscreen activation handlers for Chrome / Brave mobile compatibility. |
+| [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) | Disabled pointer lock requests on touch devices to avoid gesture interference. |
+| [`src/ui/VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts) | Created touch virtual thumbstick component with clamped knob motion. |
+| [`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts) | Created touch button component with active press states and tap events. |
+| [`src/ui/TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts) | Created right-side touch look swipe area for camera rotation. |
 | [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) | Added `ceiling_1.jpg`, `ceiling_2.jpg`, and `ceiling_3.jpg` to the environment bundle. |
 | [`assets/level2.json`](file:///D:/Projects/side-scroller/assets/level2.json) | Configured `Floor` and `Ceiling` tile layers with indoor and outdoor surfaces. |
 | [`RAYCAST_ENGINE.md`](file:///D:/Projects/side-scroller/RAYCAST_ENGINE.md) | Comprehensive system and architecture documentation. |
