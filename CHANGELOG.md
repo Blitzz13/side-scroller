@@ -4,6 +4,41 @@ This document logs recent development changes and enhancements made to the Rayca
 
 ---
 
+## [2026-08-18] - Deep CPU Optimization Pass (Flat Arrays, Zero-Allocation Hot Paths)
+
+### Root Cause of FPS Drops (87 FPS in Certain Views)
+When standing in specific positions looking down long corridors or into open rooms, the vast majority of screen pixels are **not** occluded by walls, forcing the CPU to:
+1. Process up to **921,600 floor/ceiling pixels** per frame with per-pixel hash-map lookups and jagged array double-dereferences.
+2. Allocate thousands of **template literal strings** (`\`${mapX},${mapY}\``) per frame inside the DDA raycasting loop for door state lookups, causing GC pressure.
+3. Perform **string comparison** tile type checks (`=== "door"`) in the hottest inner loops.
+
+### Optimizations Implemented:
+1. **Flat Typed Array Maps** (`Int32Array`):
+   - Replaced jagged `number[][]` maps (`this.map`, `floorMap`, `ceilingMap`) with flat `Int32Array` (`mapFlat`, `floorMapFlat`, `ceilingMapFlat`) using `y * mapWidth + x` indexing.
+   - Eliminates double pointer dereference and improves CPU cache locality for sequential access.
+2. **Numeric Tile Type Flags** (`Uint8Array`):
+   - Replaced `Record<number, string>` tile type lookups (`this.tileTypes[tile]`) with pre-computed `Uint8Array` flags (`TILE_EMPTY=0`, `TILE_WALL=1`, `TILE_DOOR=2`, `TILE_THIN=3`).
+   - Eliminates string hash lookups and string comparisons in the DDA loop and renderScene.
+3. **Flat Door State Array** (`Float64Array`):
+   - Replaced `Record<string, number>` door state lookups (`this.doorStates[\`${x},${y}\`]`) with `Float64Array` indexed by `y * mapWidth + x`.
+   - **Eliminates all template literal string allocations** in the per-ray DDA loop (~thousands per frame).
+4. **Flat Texture Data Array** (`rawTexArray`):
+   - Replaced `Record<number, RawTextureData>` hash-map lookups with a flat `Array` indexed by tileId for O(1) access.
+   - Eliminates object property hash lookups for every floor/ceiling pixel.
+5. **Hoisted Field Accesses in Floor/Ceiling Renderer**:
+   - All `this.*` property accesses hoisted to local variables at function entry.
+   - Pre-computed `invScreenW`, `invMaxDist`, ray direction deltas (`drdx`, `drdy`), and player position as locals.
+   - Reduces property chain lookups from ~921,600/frame to 1/frame.
+6. **Row-Level Early Termination**:
+   - Ceiling rows beyond `MAX_RENDER_DISTANCE` are bulk-filled with sky via `buf.set()`.
+   - Floor rows beyond `MAX_RENDER_DISTANCE` are bulk-filled with fog via `buf.fill()`.
+   - Skips all per-pixel computation for distant rows.
+7. **Global Row-Skip Bounds**:
+   - Computes `globalMinWallTop` and `globalMaxWallBottom` across all columns after wall raycasting.
+   - Enables future row-level skip optimization in floor/ceiling rendering.
+
+---
+
 ## [2026-08-14] - Multi-Surface Floor & Ceiling Raycasting System
 
 ### 1. Multi-Surface Textured Floor Raycasting

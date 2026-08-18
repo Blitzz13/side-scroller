@@ -83,6 +83,24 @@ export class RaycastScene extends BaseScene {
   private tileTypes: Record<number, string> = {};
   private rawTextureData: Record<number, RawTextureData> = {};
 
+  // --- Performance: Flat typed arrays for cache-local map access ---
+  private mapFlat!: Int32Array;
+  private floorMapFlat!: Int32Array;
+  private ceilingMapFlat!: Int32Array;
+  // Numeric door states keyed by flat index (y * mapWidth + x) instead of string keys
+  private doorStatesFlat!: Float64Array;
+  // Numeric tile type flags (0=empty, 1=thickWall, 2=door, 3=thinWall)
+  private static readonly TILE_EMPTY = 0;
+  private static readonly TILE_WALL = 1;
+  private static readonly TILE_DOOR = 2;
+  private static readonly TILE_THIN = 3;
+  private tileTypeFlags!: Uint8Array;
+  // Flat texture data array indexed by tileId for O(1) lookup
+  private rawTexArray: (RawTextureData | undefined)[] = [];
+  // Global row-skip bounds
+  private globalMinWallTop: number = 0;
+  private globalMaxWallBottom: number = 0;
+
   private wallTop: Int32Array = new Int32Array(gameConfig.width);
   private wallBottom: Int32Array = new Int32Array(gameConfig.width);
   private hitCounts: Int32Array = new Int32Array(gameConfig.width);
@@ -474,6 +492,54 @@ export class RaycastScene extends BaseScene {
         }
       });
     }
+
+    // --- Performance: Flatten jagged arrays into typed arrays ---
+    const totalCells = this.mapHeight * this.mapWidth;
+    this.mapFlat = new Int32Array(totalCells);
+    this.floorMapFlat = new Int32Array(totalCells);
+    this.ceilingMapFlat = new Int32Array(totalCells);
+    this.doorStatesFlat = new Float64Array(totalCells);
+    this.tileTypeFlags = new Uint8Array(totalCells);
+
+    let maxTileId = 0;
+    for (let y = 0; y < this.mapHeight; y++) {
+      for (let x = 0; x < this.mapWidth; x++) {
+        const idx = y * this.mapWidth + x;
+        const wallTile = this.map[y][x];
+        this.mapFlat[idx] = wallTile;
+        this.floorMapFlat[idx] = this.floorMap[y][x];
+        this.ceilingMapFlat[idx] = this.ceilingMap[y][x];
+
+        // Convert string tile types to numeric flags
+        const typeStr = this.tileTypes[wallTile];
+        if (typeStr === "door") {
+          this.tileTypeFlags[idx] = RaycastScene.TILE_DOOR;
+        } else if (typeStr === "thinWall") {
+          this.tileTypeFlags[idx] = RaycastScene.TILE_THIN;
+        } else if (wallTile > 0) {
+          this.tileTypeFlags[idx] = RaycastScene.TILE_WALL;
+        }
+
+        // Initialize door states from string-keyed map
+        const doorKey = `${x},${y}`;
+        if (doorKey in this.doorStates) {
+          this.doorStatesFlat[idx] = this.doorStates[doorKey];
+        }
+
+        // Track max tile IDs for flat texture array
+        const floorTile = this.floorMap[y][x];
+        const ceilTile = this.ceilingMap[y][x];
+        if (floorTile > maxTileId) maxTileId = floorTile;
+        if (ceilTile > maxTileId) maxTileId = ceilTile;
+        if (wallTile > 0 && wallTile - 1 > maxTileId) maxTileId = wallTile - 1;
+      }
+    }
+
+    // Build flat texture data array for O(1) indexed access
+    this.rawTexArray = new Array(maxTileId + 1);
+    for (let i = 0; i <= maxTileId; i++) {
+      this.rawTexArray[i] = this.rawTextureData[i];
+    }
   }
 
   public dispose(): void {
@@ -671,6 +737,10 @@ export class RaycastScene extends BaseScene {
             this.doorStates[key] = 1; // Fully open
           }
         }
+        // Sync to flat array for zero-allocation lookups during raycasting
+        const parts = key.split(",");
+        const flatIdx = parseInt(parts[1]) * this.mapWidth + parseInt(parts[0]);
+        this.doorStatesFlat[flatIdx] = this.doorStates[key];
       }
     }
   }
@@ -696,8 +766,10 @@ export class RaycastScene extends BaseScene {
 
         if (currentState === 0) {
           this.doorStates[key] = 0.01;
+          this.doorStatesFlat[y * this.mapWidth + x] = 0.01;
         } else if (currentState === 1) {
           this.doorStates[key] = -1;
+          this.doorStatesFlat[y * this.mapWidth + x] = -1;
         }
       }
     }
@@ -792,8 +864,8 @@ export class RaycastScene extends BaseScene {
       )
         break;
 
-      const tile = this.map[mapY][mapX];
-      const key = `${mapX},${mapY}`;
+      const flatIdx = mapY * this.mapWidth + mapX;
+      const tile = this.mapFlat[flatIdx];
 
       if (tile > 0) {
         let hitX =
@@ -802,11 +874,11 @@ export class RaycastScene extends BaseScene {
             : this.player.x + dist * rayDirX;
         hitX -= Math.floor(hitX);
 
-        const tileType = this.tileTypes[tile];
+        const tileFlag = this.tileTypeFlags[flatIdx];
         const adjustedTileId = tile - 1;
 
-        if (tileType === "door") {
-          const open = this.doorStates[key] ?? 0;
+        if (tileFlag === RaycastScene.TILE_DOOR) {
+          const open = this.doorStatesFlat[flatIdx];
           if (Math.abs(open) < 1) {
             const offset = 1 - Math.abs(open);
             const wallEdge = side === 0 ? mapX + offset : mapY + offset;
@@ -914,36 +986,62 @@ export class RaycastScene extends BaseScene {
   private renderFloorAndCeiling() {
     const screenW = gameConfig.width;
     const screenH = gameConfig.height;
-    const horizon = Math.floor(screenH / 2);
-
-    const rayDirX0 = this.player.dirX - this.player.planeX;
-    const rayDirY0 = this.player.dirY - this.player.planeY;
-    const rayDirX1 = this.player.dirX + this.player.planeX;
-    const rayDirY1 = this.player.dirY + this.player.planeY;
+    const horizon = screenH >> 1;
     const posZ = 0.5 * screenH;
+    const maxDist = this.MAX_RENDER_DISTANCE;
+    const invMaxDist = 0.75 / maxDist;
+    const mapW = this.mapWidth;
+    const mapH = this.mapHeight;
+    const buf = this.bgBuffer32;
+    const sky = this.skyBuffer;
+    const floorMap = this.floorMapFlat;
+    const ceilMap = this.ceilingMapFlat;
+    const texArr = this.rawTexArray;
+    const wTop = this.wallTop;
+    const wBot = this.wallBottom;
+
+    const planeX = this.player.planeX;
+    const planeY = this.player.planeY;
+    const dirX = this.player.dirX;
+    const dirY = this.player.dirY;
+    const posX = this.player.x;
+    const posY = this.player.y;
+
+    const rdx0 = dirX - planeX;
+    const rdy0 = dirY - planeY;
+    const rdx1 = dirX + planeX;
+    const rdy1 = dirY + planeY;
+    const drdx = rdx1 - rdx0;
+    const drdy = rdy1 - rdy0;
+
+    // Pre-compute inverse screenW for step calculations
+    const invScreenW = 1.0 / screenW;
 
     // 1. Ceiling casting for top half (y = 0 to horizon - 1)
     for (let y = 0; y < horizon; y++) {
       const p = horizon - y;
-      if (p === 0) continue;
-
       const rowDist = posZ / p;
-      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / screenW;
-      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / screenW;
-      let ceilX = this.player.x + rowDist * rayDirX0;
-      let ceilY = this.player.y + rowDist * rayDirY0;
 
-      const shade = Math.max(
-        0.18,
-        Math.min(1.0, 1.0 - (rowDist / this.MAX_RENDER_DISTANCE) * 0.75)
-      );
-      const shadeInt = (shade * 256) | 0;
+      // Early termination: if this row is beyond render distance, fill with sky
+      if (rowDist > maxDist) {
+        const rowStart = y * screenW;
+        buf.set(sky.subarray(rowStart, rowStart + screenW), rowStart);
+        continue;
+      }
+
+      const stepX = rowDist * drdx * invScreenW;
+      const stepY = rowDist * drdy * invScreenW;
+      let ceilX = posX + rowDist * rdx0;
+      let ceilY = posY + rowDist * rdy0;
+
+      const shade = 1.0 - rowDist * invMaxDist;
+      const shadeInt = (Math.max(0.18, Math.min(1.0, shade)) * 256) | 0;
 
       let bufIdx = y * screenW;
 
       for (let x = 0; x < screenW; x++) {
         // OCCLUSION CULLING: Skip pixels hidden behind walls
-        if (y >= this.wallTop[x]) {
+        if (y >= wTop[x]) {
           bufIdx++;
           ceilX += stepX;
           ceilY += stepY;
@@ -953,42 +1051,39 @@ export class RaycastScene extends BaseScene {
         const cellX = ceilX | 0;
         const cellY = ceilY | 0;
 
-        let tileId = -1;
         if (
-          cellX >= 0 &&
-          cellX < this.mapWidth &&
-          cellY >= 0 &&
-          cellY < this.mapHeight
+          cellX >= 0 && cellX < mapW &&
+          cellY >= 0 && cellY < mapH
         ) {
-          tileId = this.ceilingMap[cellY]?.[cellX] ?? -1;
-        }
+          const tileId = ceilMap[cellY * mapW + cellX];
+          if (tileId >= 0) {
+            const texData = texArr[tileId];
+            if (texData) {
+              const cxFrac = ceilX - cellX;
+              const cyFrac = ceilY - cellY;
+              const safeX = cxFrac < 0 ? cxFrac + 1 : cxFrac;
+              const safeY = cyFrac < 0 ? cyFrac + 1 : cyFrac;
 
-        const texData = tileId >= 0 ? this.rawTextureData[tileId] : undefined;
+              const tx = texData.isPow2
+                ? ((safeX * texData.width) | 0) & texData.maskX
+                : ((safeX * texData.width) | 0) % texData.width;
+              const ty = texData.isPow2
+                ? ((safeY * texData.height) | 0) & texData.maskY
+                : ((safeY * texData.height) | 0) % texData.height;
 
-        if (texData) {
-          const cxFrac = ceilX - cellX;
-          const cyFrac = ceilY - cellY;
-          const safeX = cxFrac < 0 ? cxFrac + 1 : cxFrac;
-          const safeY = cyFrac < 0 ? cyFrac + 1 : cyFrac;
-
-          let tx: number, ty: number;
-          if (texData.isPow2) {
-            tx = ((safeX * texData.width) | 0) & texData.maskX;
-            ty = ((safeY * texData.height) | 0) & texData.maskY;
+              const rawPix = texData.pixels[ty * texData.width + tx];
+              const r = ((rawPix & 0xff) * shadeInt) >> 8;
+              const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
+              const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
+              buf[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
+            } else {
+              buf[bufIdx] = sky[bufIdx];
+            }
           } else {
-            tx = ((safeX * texData.width) | 0) % texData.width;
-            ty = ((safeY * texData.height) | 0) % texData.height;
-            if (tx < 0) tx += texData.width;
-            if (ty < 0) ty += texData.height;
+            buf[bufIdx] = sky[bufIdx];
           }
-
-          const rawPix = texData.pixels[ty * texData.width + tx];
-          const r = ((rawPix & 0xff) * shadeInt) >> 8;
-          const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
-          const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
-          this.bgBuffer32[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
         } else {
-          this.bgBuffer32[bufIdx] = this.skyBuffer[bufIdx];
+          buf[bufIdx] = sky[bufIdx];
         }
 
         bufIdx++;
@@ -1003,22 +1098,29 @@ export class RaycastScene extends BaseScene {
       if (p === 0) continue;
 
       const rowDist = posZ / p;
-      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / screenW;
-      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / screenW;
-      let floorX = this.player.x + rowDist * rayDirX0;
-      let floorY = this.player.y + rowDist * rayDirY0;
 
-      const shade = Math.max(
-        0.18,
-        Math.min(1.0, 1.0 - (rowDist / this.MAX_RENDER_DISTANCE) * 0.75)
-      );
-      const shadeInt = (shade * 256) | 0;
+      // Early termination: if this row is beyond render distance, fill with fog
+      if (rowDist > maxDist) {
+        const fogVal = (0x33 * 46) >> 8; // min shade (0.18) applied to 0x33
+        const fogColor = 0xff000000 | (fogVal << 16) | (fogVal << 8) | fogVal;
+        const rowStart = y * screenW;
+        buf.fill(fogColor, rowStart, rowStart + screenW);
+        continue;
+      }
+
+      const stepX = rowDist * drdx * invScreenW;
+      const stepY = rowDist * drdy * invScreenW;
+      let floorX = posX + rowDist * rdx0;
+      let floorY = posY + rowDist * rdy0;
+
+      const shade = 1.0 - rowDist * invMaxDist;
+      const shadeInt = (Math.max(0.18, Math.min(1.0, shade)) * 256) | 0;
 
       let bufIdx = y * screenW;
 
       for (let x = 0; x < screenW; x++) {
         // OCCLUSION CULLING: Skip pixels hidden behind walls
-        if (y < this.wallBottom[x]) {
+        if (y < wBot[x]) {
           bufIdx++;
           floorX += stepX;
           floorY += stepY;
@@ -1028,45 +1130,45 @@ export class RaycastScene extends BaseScene {
         const cellX = floorX | 0;
         const cellY = floorY | 0;
 
-        let tileId = -1;
         if (
-          cellX >= 0 &&
-          cellX < this.mapWidth &&
-          cellY >= 0 &&
-          cellY < this.mapHeight
+          cellX >= 0 && cellX < mapW &&
+          cellY >= 0 && cellY < mapH
         ) {
-          tileId = this.floorMap[cellY]?.[cellX] ?? -1;
-        }
+          const tileId = floorMap[cellY * mapW + cellX];
+          if (tileId >= 0) {
+            const texData = texArr[tileId];
+            if (texData) {
+              const fx = floorX - cellX;
+              const fy = floorY - cellY;
+              const safeX = fx < 0 ? fx + 1 : fx;
+              const safeY = fy < 0 ? fy + 1 : fy;
 
-        const texData = tileId >= 0 ? this.rawTextureData[tileId] : undefined;
+              const tx = texData.isPow2
+                ? ((safeX * texData.width) | 0) & texData.maskX
+                : ((safeX * texData.width) | 0) % texData.width;
+              const ty = texData.isPow2
+                ? ((safeY * texData.height) | 0) & texData.maskY
+                : ((safeY * texData.height) | 0) % texData.height;
 
-        if (texData) {
-          const fx = floorX - cellX;
-          const fy = floorY - cellY;
-          const safeX = fx < 0 ? fx + 1 : fx;
-          const safeY = fy < 0 ? fy + 1 : fy;
-
-          let tx: number, ty: number;
-          if (texData.isPow2) {
-            tx = ((safeX * texData.width) | 0) & texData.maskX;
-            ty = ((safeY * texData.height) | 0) & texData.maskY;
+              const rawPix = texData.pixels[ty * texData.width + tx];
+              const r = ((rawPix & 0xff) * shadeInt) >> 8;
+              const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
+              const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
+              buf[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
+            } else {
+              const base = 0x33;
+              const val = (base * shadeInt) >> 8;
+              buf[bufIdx] = 0xff000000 | (val << 16) | (val << 8) | val;
+            }
           } else {
-            tx = ((safeX * texData.width) | 0) % texData.width;
-            ty = ((safeY * texData.height) | 0) % texData.height;
-            if (tx < 0) tx += texData.width;
-            if (ty < 0) ty += texData.height;
+            const base = 0x33;
+            const val = (base * shadeInt) >> 8;
+            buf[bufIdx] = 0xff000000 | (val << 16) | (val << 8) | val;
           }
-
-          const rawPix = texData.pixels[ty * texData.width + tx];
-          const r = ((rawPix & 0xff) * shadeInt) >> 8;
-          const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
-          const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
-          this.bgBuffer32[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
         } else {
           const base = 0x33;
           const val = (base * shadeInt) >> 8;
-          this.bgBuffer32[bufIdx] =
-            0xff000000 | (val << 16) | (val << 8) | val;
+          buf[bufIdx] = 0xff000000 | (val << 16) | (val << 8) | val;
         }
 
         bufIdx++;
@@ -1103,14 +1205,15 @@ export class RaycastScene extends BaseScene {
         const drawStart = -lineHeight / 2 + screenH / 2;
         const drawEnd = lineHeight / 2 + screenH / 2;
 
-        const tileType = this.tileTypes[ray.wallType + 1];
-        if (tileType === "door") {
-          const open = this.doorStates[`${ray.mapX},${ray.mapY}`] ?? 0;
+        const flatIdx = ray.mapY * this.mapWidth + ray.mapX;
+        const tileFlag = this.tileTypeFlags[flatIdx];
+        if (tileFlag === RaycastScene.TILE_DOOR) {
+          const open = this.doorStatesFlat[flatIdx];
           if (Math.abs(open) < 0.05) {
             minDrawStart = Math.min(minDrawStart, drawStart);
             maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
           }
-        } else if (tileType !== "thinWall") {
+        } else if (tileFlag !== RaycastScene.TILE_THIN) {
           minDrawStart = Math.min(minDrawStart, drawStart);
           maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
         }
@@ -1119,6 +1222,16 @@ export class RaycastScene extends BaseScene {
       this.wallTop[i] = Math.max(0, Math.floor(minDrawStart));
       this.wallBottom[i] = Math.min(screenH, Math.ceil(maxDrawEnd));
     }
+
+    // Compute global row-skip bounds for floor/ceiling early termination
+    let gMinTop = screenH;
+    let gMaxBot = 0;
+    for (let i = 0; i < screenW; i++) {
+      if (this.wallTop[i] < gMinTop) gMinTop = this.wallTop[i];
+      if (this.wallBottom[i] > gMaxBot) gMaxBot = this.wallBottom[i];
+    }
+    this.globalMinWallTop = gMinTop;
+    this.globalMaxWallBottom = gMaxBot;
 
     // 3. Render floor and ceiling with wall occlusion culling at crisp native 1:1 resolution
     this.renderFloorAndCeiling();
