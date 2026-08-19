@@ -47,25 +47,71 @@ export class RaycastWeaponView extends Container {
   private drawCrosshair(): void {
     const cx = gameConfig.width / 2;
     const cy = gameConfig.height / 2;
-    const size = 12;
-    const gap = 4;
+    const size = 14;
+    const gap = 5;
+    const thickness = 2.5;
+    const halfThick = thickness / 2;
+    const outline = 1.2;
 
     this.crosshair.clear();
-    // Center subtle dot
-    this.crosshair.beginFill(0x44eeff, 0.85);
-    this.crosshair.drawCircle(cx, cy, 2);
+
+    // 1. Black outer contrast border (visible on bright walls, sky, dark floors)
+    const shadowColor = 0x000000;
+    const shadowAlpha = 0.85;
+
+    // Center dot outline
+    this.crosshair.beginFill(shadowColor, shadowAlpha);
+    this.crosshair.drawCircle(cx, cy, 2.5 + outline);
     this.crosshair.endFill();
 
-    // 4 crosshair lines with outer shadow
-    this.crosshair.lineStyle(1.5, 0x44eeff, 0.7);
-    this.crosshair.moveTo(cx, cy - gap);
-    this.crosshair.lineTo(cx, cy - gap - size);
-    this.crosshair.moveTo(cx, cy + gap);
-    this.crosshair.lineTo(cx, cy + gap + size);
-    this.crosshair.moveTo(cx - gap, cy);
-    this.crosshair.lineTo(cx - gap - size, cy);
-    this.crosshair.moveTo(cx + gap, cy);
-    this.crosshair.lineTo(cx + gap + size, cy);
+    // 4 bars outline
+    this.crosshair.beginFill(shadowColor, shadowAlpha);
+    // Top
+    this.crosshair.drawRect(
+      cx - halfThick - outline,
+      cy - gap - size - outline,
+      thickness + outline * 2,
+      size + outline * 2
+    );
+    // Bottom
+    this.crosshair.drawRect(
+      cx - halfThick - outline,
+      cy + gap - outline,
+      thickness + outline * 2,
+      size + outline * 2
+    );
+    // Left
+    this.crosshair.drawRect(
+      cx - gap - size - outline,
+      cy - halfThick - outline,
+      size + outline * 2,
+      thickness + outline * 2
+    );
+    // Right
+    this.crosshair.drawRect(
+      cx + gap - outline,
+      cy - halfThick - outline,
+      size + outline * 2,
+      thickness + outline * 2
+    );
+    this.crosshair.endFill();
+
+    // 2. Bright Cyan crosshair bars and center dot (solid 100% opacity)
+    const crossColor = 0x00ffff;
+    const crossAlpha = 0.95;
+
+    this.crosshair.beginFill(crossColor, crossAlpha);
+    // Top bar
+    this.crosshair.drawRect(cx - halfThick, cy - gap - size, thickness, size);
+    // Bottom bar
+    this.crosshair.drawRect(cx - halfThick, cy + gap, thickness, size);
+    // Left bar
+    this.crosshair.drawRect(cx - gap - size, cy - halfThick, size, thickness);
+    // Right bar
+    this.crosshair.drawRect(cx + gap, cy - halfThick, size, thickness);
+    // Center dot
+    this.crosshair.drawCircle(cx, cy, 2);
+    this.crosshair.endFill();
   }
 
   public equip(
