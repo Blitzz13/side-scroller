@@ -1332,7 +1332,11 @@ export class RaycastScene extends BaseScene {
     }
 
     this.bgCtx.putImageData(this.bgImageData, 0, 0);
-    this.bgTexture.update();
+    if ((this.bgTexture as any).source?.update) {
+      (this.bgTexture as any).source.update();
+    } else {
+      this.bgTexture.update();
+    }
   }
 
   private renderScene() {
@@ -1357,19 +1361,28 @@ export class RaycastScene extends BaseScene {
 
       for (let j = 0; j < hitCount; j++) {
         const ray = pool[j];
-        const lineHeight = screenH / ray.distance;
-        const drawStart = -lineHeight / 2 + screenH / 2;
-        const drawEnd = lineHeight / 2 + screenH / 2;
+
+        // Thin walls (side === 2) are transparent barriers and must NEVER occlude floor or ceiling
+        if (ray.side === 2) {
+          continue;
+        }
 
         const flatIdx = ray.mapY * this.mapWidth + ray.mapX;
         const tileFlag = this.tileTypeFlags[flatIdx];
+
         if (tileFlag === RaycastScene.TILE_DOOR) {
           const open = this.doorStatesFlat[flatIdx];
           if (Math.abs(open) < 0.05) {
+            const lineHeight = screenH / ray.distance;
+            const drawStart = -lineHeight / 2 + screenH / 2;
+            const drawEnd = lineHeight / 2 + screenH / 2;
             minDrawStart = Math.min(minDrawStart, drawStart);
             maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
           }
         } else if (tileFlag !== RaycastScene.TILE_THIN) {
+          const lineHeight = screenH / ray.distance;
+          const drawStart = -lineHeight / 2 + screenH / 2;
+          const drawEnd = lineHeight / 2 + screenH / 2;
           minDrawStart = Math.min(minDrawStart, drawStart);
           maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
         }
