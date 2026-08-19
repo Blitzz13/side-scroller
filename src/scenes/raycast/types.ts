@@ -1,4 +1,24 @@
-export type RaycastPickupType = "health" | "weapon" | "ammo";
+import { RaycastPickupType } from "../../enums/RaycastPickupType";
+import { RaycastWeaponType } from "../../enums/RaycastWeaponType";
+import { IRaycastWeaponConfig } from "../../configs/interfaces/IRaycastWeaponConfig";
+import { IRaycastPickupConfig } from "../../configs/interfaces/IRaycastPickupConfig";
+import {
+  raycastWeaponConfigs,
+  getRaycastWeaponConfig,
+} from "../../configs/RaycastWeaponConfigs";
+import {
+  raycastPickupConfigs,
+  getRaycastPickupConfig,
+} from "../../configs/RaycastPickupConfigs";
+
+export { RaycastPickupType, RaycastWeaponType };
+export { IRaycastWeaponConfig, IRaycastPickupConfig };
+export {
+  raycastWeaponConfigs,
+  getRaycastWeaponConfig,
+  raycastPickupConfigs,
+  getRaycastPickupConfig,
+};
 
 export interface RaycastPickupItem {
   id: number;
@@ -6,7 +26,7 @@ export interface RaycastPickupItem {
   y: number;
   texture: number; // tile ID
   type: RaycastPickupType;
-  weaponType?: string;
+  weaponType?: RaycastWeaponType;
   amount: number;
   collected: boolean;
   scale?: number;
@@ -15,36 +35,14 @@ export interface RaycastPickupItem {
   vOffset?: number;
   z?: number;
   anchor?: string;
+  config?: IRaycastPickupConfig;
 }
-
-export interface RaycastWeaponDef {
-  id: string;
-  name: string;
-  equippedTexture: string;
-  itemTexture: string;
-  fireSounds: string[];
-  fireRate: number; // minimum ms between shots
-  damage: number;
-  defaultAmmo: number;
-}
-
-export const RAYCAST_WEAPONS: Record<string, RaycastWeaponDef> = {
-  e_11: {
-    id: "e_11",
-    name: "E-11 Blaster Rifle",
-    equippedTexture: "assets/E_11-equiped.png",
-    itemTexture: "assets/E-11-item.png",
-    fireSounds: ["blaster_1", "blaster_2", "blaster_3", "blaster_4"],
-    fireRate: 200,
-    damage: 25,
-    defaultAmmo: 20,
-  },
-};
 
 export interface RaycastPlayerState {
   health: number;
   maxHealth: number;
-  equippedWeapon: string | null;
+  equippedWeapon: RaycastWeaponType | null;
+  weaponConfig: IRaycastWeaponConfig | null;
   ammo: number;
   maxAmmo: number;
 }

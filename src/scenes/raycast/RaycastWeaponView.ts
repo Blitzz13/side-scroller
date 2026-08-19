@@ -1,13 +1,13 @@
 import { Container, Graphics, Sprite, Texture } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { gameConfig } from "../../configs/GameConfig";
-import { RAYCAST_WEAPONS, RaycastWeaponDef } from "./types";
+import { IRaycastWeaponConfig, RaycastWeaponType, getRaycastWeaponConfig } from "./types";
 
 export class RaycastWeaponView extends Container {
   private weaponSprite: Sprite;
   private muzzleFlash: Graphics;
   private crosshair: Graphics;
-  private currentWeapon: RaycastWeaponDef | null = null;
+  private currentWeapon: IRaycastWeaponConfig | null = null;
 
   // Animation states
   private bobTimer: number = 0;
@@ -57,31 +57,24 @@ export class RaycastWeaponView extends Container {
 
     // 4 crosshair lines with outer shadow
     this.crosshair.lineStyle(1.5, 0x44eeff, 0.7);
-    // Top
     this.crosshair.moveTo(cx, cy - gap);
     this.crosshair.lineTo(cx, cy - gap - size);
-    // Bottom
     this.crosshair.moveTo(cx, cy + gap);
     this.crosshair.lineTo(cx, cy + gap + size);
-    // Left
     this.crosshair.moveTo(cx - gap, cy);
     this.crosshair.lineTo(cx - gap - size, cy);
-    // Right
     this.crosshair.moveTo(cx + gap, cy);
     this.crosshair.lineTo(cx + gap + size, cy);
   }
 
-  public equip(weaponId: string, customTexture?: Texture): void {
-    const def = RAYCAST_WEAPONS[weaponId] || {
-      id: weaponId,
-      name: "Blaster",
-      equippedTexture: "assets/E_11-equiped.png",
-      itemTexture: "assets/E-11-item.png",
-      fireSounds: ["blaster_1", "blaster_2", "blaster_3", "blaster_4"],
-      fireRate: 200,
-      damage: 25,
-      defaultAmmo: 20,
-    };
+  public equip(
+    weapon: RaycastWeaponType | IRaycastWeaponConfig | string,
+    customTexture?: Texture
+  ): void {
+    const def =
+      typeof weapon === "object"
+        ? weapon
+        : getRaycastWeaponConfig(weapon as RaycastWeaponType) || getRaycastWeaponConfig(RaycastWeaponType.E11)!;
 
     this.currentWeapon = def;
 
@@ -105,7 +98,7 @@ export class RaycastWeaponView extends Container {
     return this.currentWeapon !== null && this.weaponSprite.visible;
   }
 
-  public get weaponDef(): RaycastWeaponDef | null {
+  public get weaponConfig(): IRaycastWeaponConfig | null {
     return this.currentWeapon;
   }
 
@@ -120,14 +113,14 @@ export class RaycastWeaponView extends Container {
     this.flashTimer = 5; // ~5 frames
     this.drawMuzzleFlash();
 
-    // Play blaster sound
-    if (this.currentWeapon.fireSounds && this.currentWeapon.fireSounds.length > 0) {
-      const soundIndex = Math.floor(Math.random() * this.currentWeapon.fireSounds.length);
-      const sndName = this.currentWeapon.fireSounds[soundIndex];
+    // Play blaster shoot sound from config array
+    if (this.currentWeapon.shootSounds && this.currentWeapon.shootSounds.length > 0) {
+      const soundIndex = Math.floor(Math.random() * this.currentWeapon.shootSounds.length);
+      const snd = this.currentWeapon.shootSounds[soundIndex];
       try {
-        sound.play(sndName, { volume: 1.2 });
+        sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
       } catch (e) {
-        console.warn(`Failed to play ${sndName}:`, e);
+        console.warn(`Failed to play shoot sound ${snd.src}:`, e);
       }
     }
 

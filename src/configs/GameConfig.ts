@@ -69,6 +69,10 @@ export const manifest: AssetsManifest = {
             alias: "blaster_4",
             src: "./assets/sounds/blaster_4.mp3"
           },
+          {
+            alias: "w_e_11_blaster_rifle",
+            src: "./assets/sounds/w-e-11-blaster-rifle.mp3"
+          },
         ]
       },
       {

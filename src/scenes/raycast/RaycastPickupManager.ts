@@ -1,5 +1,13 @@
 import { sound } from "@pixi/sound";
-import { MapObject, RaycastPickupItem, RaycastPickupType, TileMeta } from "./types";
+import {
+  MapObject,
+  RaycastPickupItem,
+  RaycastPickupType,
+  RaycastWeaponType,
+  TileMeta,
+  getRaycastPickupConfig,
+  getRaycastWeaponConfig,
+} from "./types";
 
 export class RaycastPickupManager {
   private pickups: RaycastPickupItem[] = [];
@@ -104,8 +112,20 @@ export class RaycastPickupManager {
             const anchor = layerAnchor ?? meta.anchor ?? "floor";
 
             if (isPickup) {
+              const pConfig = getRaycastPickupConfig(typeStr);
               const pickupType: RaycastPickupType =
-                typeStr === "weapon" ? "weapon" : typeStr === "ammo" ? "ammo" : "health";
+                pConfig?.type ??
+                (typeStr.includes("weapon")
+                  ? RaycastPickupType.WEAPON
+                  : typeStr.includes("ammo")
+                  ? RaycastPickupType.AMMO
+                  : RaycastPickupType.HEALTH);
+
+              const weaponConfig = getRaycastWeaponConfig(meta.weaponType || "e_11");
+              const weaponEnum: RaycastWeaponType | undefined =
+                pickupType === RaycastPickupType.WEAPON
+                  ? weaponConfig?.type ?? RaycastWeaponType.E11
+                  : undefined;
 
               this.pickups.push({
                 id: this.nextId++,
@@ -113,8 +133,8 @@ export class RaycastPickupManager {
                 y,
                 texture: adjustedTileId,
                 type: pickupType,
-                weaponType: meta.weaponType || (pickupType === "weapon" ? "e_11" : undefined),
-                amount: meta.amount ?? 20,
+                weaponType: weaponEnum,
+                amount: meta.amount ?? pConfig?.amount ?? 20,
                 collected: false,
                 scale,
                 scaleX,
@@ -122,6 +142,7 @@ export class RaycastPickupManager {
                 vOffset,
                 z,
                 anchor,
+                config: pConfig,
               });
             } else {
               this.staticObjects.push({
@@ -217,8 +238,20 @@ export class RaycastPickupManager {
               normalizedType === "ammo";
 
             if (isPickup) {
+              const pConfig = getRaycastPickupConfig(normalizedType);
               const pickupType: RaycastPickupType =
-                normalizedType === "weapon" ? "weapon" : normalizedType === "ammo" ? "ammo" : "health";
+                pConfig?.type ??
+                (normalizedType.includes("weapon")
+                  ? RaycastPickupType.WEAPON
+                  : normalizedType.includes("ammo")
+                  ? RaycastPickupType.AMMO
+                  : RaycastPickupType.HEALTH);
+
+              const weaponConfig = getRaycastWeaponConfig(objWeaponType || "e_11");
+              const weaponEnum: RaycastWeaponType | undefined =
+                pickupType === RaycastPickupType.WEAPON
+                  ? weaponConfig?.type ?? RaycastWeaponType.E11
+                  : undefined;
 
               this.pickups.push({
                 id: this.nextId++,
@@ -226,8 +259,8 @@ export class RaycastPickupManager {
                 y,
                 texture: adjustedTileId,
                 type: pickupType,
-                weaponType: objWeaponType || (pickupType === "weapon" ? "e_11" : undefined),
-                amount: objAmount,
+                weaponType: weaponEnum,
+                amount: objAmount || pConfig?.amount || 20,
                 collected: false,
                 scale: objScale,
                 scaleX: objScaleX,
@@ -235,6 +268,7 @@ export class RaycastPickupManager {
                 vOffset: objVOffset,
                 z: objZ,
                 anchor: objAnchor,
+                config: pConfig,
               });
             } else {
               this.staticObjects.push({
@@ -302,13 +336,15 @@ export class RaycastPickupManager {
         pickup.collected = true;
         collected.push(pickup);
 
-        // Play appropriate pickup sound
+        // Play appropriate pickup sound from config or default fallback
         try {
-          if (pickup.type === "health") {
-            sound.play("repair_sound", { volume: 1 });
-          } else if (pickup.type === "weapon" || pickup.type === "ammo") {
-            sound.play("reload_sound", { volume: 1 });
-          }
+          const snd =
+            pickup.config?.pickUpSound ??
+            (pickup.type === RaycastPickupType.HEALTH
+              ? { src: "repair_sound", volume: 1, loop: false }
+              : { src: "reload_sound", volume: 1, loop: false });
+
+          sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
         } catch (e) {
           console.warn("Could not play pickup sound:", e);
         }

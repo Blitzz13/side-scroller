@@ -1,5 +1,12 @@
 import { RaycastHUD } from "./RaycastHUD";
-import { RaycastPickupItem, RaycastPlayerState, RAYCAST_WEAPONS } from "./types";
+import {
+  IRaycastWeaponConfig,
+  RaycastPickupItem,
+  RaycastPickupType,
+  RaycastPlayerState,
+  RaycastWeaponType,
+  getRaycastWeaponConfig,
+} from "./types";
 import { RaycastWeaponView } from "./RaycastWeaponView";
 
 export class RaycastPlayerController {
@@ -16,6 +23,7 @@ export class RaycastPlayerController {
       health: 100,
       maxHealth: 100,
       equippedWeapon: null,
+      weaponConfig: null,
       ammo: 0,
       maxAmmo: 99,
     };
@@ -33,20 +41,24 @@ export class RaycastPlayerController {
   }
 
   public get isWeaponEquipped(): boolean {
-    return this.state.equippedWeapon !== null;
+    return this.state.equippedWeapon !== null && this.state.weaponConfig !== null;
   }
 
-  public get equippedWeapon(): string | null {
+  public get equippedWeapon(): RaycastWeaponType | null {
     return this.state.equippedWeapon;
+  }
+
+  public get weaponConfig(): IRaycastWeaponConfig | null {
+    return this.state.weaponConfig;
   }
 
   public handlePickups(items: RaycastPickupItem[]): void {
     for (const item of items) {
-      if (item.type === "health") {
+      if (item.type === RaycastPickupType.HEALTH) {
         this.heal(item.amount);
-      } else if (item.type === "weapon") {
-        this.equipWeapon(item.weaponType || "e_11", item.amount);
-      } else if (item.type === "ammo") {
+      } else if (item.type === RaycastPickupType.WEAPON) {
+        this.equipWeapon(item.weaponType ?? RaycastWeaponType.E11, item.amount);
+      } else if (item.type === RaycastPickupType.AMMO) {
         this.addAmmo(item.amount);
       }
     }
@@ -68,14 +80,23 @@ export class RaycastPlayerController {
     this.hud.flashScreen(0xff0000, 0.35);
   }
 
-  public equipWeapon(weaponId: string, ammoCount: number): void {
-    const def = RAYCAST_WEAPONS[weaponId];
-    const weaponName = def?.name || "E-11 Blaster";
+  public equipWeapon(
+    weapon: RaycastWeaponType | IRaycastWeaponConfig | string,
+    ammoCount: number
+  ): void {
+    const config =
+      typeof weapon === "object"
+        ? weapon
+        : getRaycastWeaponConfig(weapon) || getRaycastWeaponConfig(RaycastWeaponType.E11)!;
 
-    this.state.equippedWeapon = weaponId;
+    const weaponName = config.name;
+
+    this.state.equippedWeapon = config.type;
+    this.state.weaponConfig = config;
+    this.state.maxAmmo = config.maxAmmo;
     this.state.ammo = Math.min(this.state.maxAmmo, this.state.ammo + ammoCount);
 
-    this.weaponView.equip(weaponId);
+    this.weaponView.equip(config);
     this.hud.setWeapon(weaponName, this.state.ammo);
     this.hud.showToast(`[+] Equipped ${weaponName} (+${ammoCount} Ammo)`, 0x00e5ff);
     this.hud.flashScreen(0x00ccff, 0.25);
@@ -83,9 +104,7 @@ export class RaycastPlayerController {
 
   public addAmmo(count: number): void {
     this.state.ammo = Math.min(this.state.maxAmmo, this.state.ammo + count);
-    const weaponName = this.state.equippedWeapon
-      ? RAYCAST_WEAPONS[this.state.equippedWeapon]?.name || "Blaster"
-      : null;
+    const weaponName = this.state.weaponConfig?.name || null;
 
     this.hud.setWeapon(weaponName, this.state.ammo);
     this.hud.showToast(`[+] Ammo Pack (+${count} Ammo)`, 0xffaa00);
@@ -93,12 +112,11 @@ export class RaycastPlayerController {
   }
 
   public tryShoot(): boolean {
-    if (!this.state.equippedWeapon || this.state.ammo <= 0) {
+    if (!this.state.weaponConfig || this.state.ammo <= 0) {
       return false;
     }
 
-    const def = RAYCAST_WEAPONS[this.state.equippedWeapon];
-    const fireRate = def?.fireRate ?? 200;
+    const fireRate = this.state.weaponConfig.rateOfFire ?? 200;
     const now = Date.now();
 
     if (now - this.lastShotTime < fireRate) {
@@ -109,7 +127,7 @@ export class RaycastPlayerController {
     this.state.ammo--;
 
     this.weaponView.shoot();
-    this.hud.setWeapon(def?.name || "E-11 Blaster", this.state.ammo);
+    this.hud.setWeapon(this.state.weaponConfig.name, this.state.ammo);
 
     return true;
   }
