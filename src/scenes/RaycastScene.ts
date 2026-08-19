@@ -222,11 +222,13 @@ export class RaycastScene extends BaseScene {
     this.playerController = new RaycastPlayerController(this.weaponView, this.hud);
     this.pickupManager = new RaycastPickupManager();
 
-    // Overlay mobile on-screen controls
-    this.mobileControls = new MobileControls();
-    this.mobileControls.on("action", () => this.tryOpenDoor());
-    this.mobileControls.on("fire", () => this.tryShoot());
-    this.addChild(this.mobileControls);
+    // Overlay mobile on-screen controls (only on mobile devices)
+    if (this.isMobileDevice()) {
+      this.mobileControls = new MobileControls();
+      this.mobileControls.on("action", () => this.tryOpenDoor());
+      this.mobileControls.on("fire", () => this.tryShoot());
+      this.addChild(this.mobileControls);
+    }
 
     this.setupControls();
     this.loadLevel(level).then(() => {
@@ -680,32 +682,26 @@ export class RaycastScene extends BaseScene {
     window.removeEventListener("keydown", this.keyDownHandler);
     window.removeEventListener("keyup", this.keyUpHandler);
     window.removeEventListener("mousemove", this.mouseMoveHandler);
+    window.removeEventListener("mousedown", this.mouseDownHandler);
     document.removeEventListener(
       "pointerlockchange",
       this.pointerLockChangeHandler
     );
   }
 
+  private isMobileDevice(): boolean {
+    const ua = navigator.userAgent || "";
+    const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua);
+    const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    const isCoarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    return isMobileUA || (hasTouch && isCoarsePointer);
+  }
+
   private setupControls() {
     window.addEventListener("keydown", this.keyDownHandler);
     window.addEventListener("keyup", this.keyUpHandler);
     window.addEventListener("mousemove", this.mouseMoveHandler);
-
-    const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-    this.stage.interactive = true;
-    this.stage.on("pointerdown", async (e: any) => {
-      // Only lock pointer on desktop when clicking outside mobile UI controls
-      if (!isMobile && !document.pointerLockElement && e?.target === this.stage) {
-        try {
-          await document.body.requestPointerLock();
-        } catch (err) {}
-      }
-
-      // Shoot on pointer click when clicking on 3D canvas or locked
-      if (e?.target === this.stage || document.pointerLockElement === document.body) {
-        this.tryShoot();
-      }
-    });
+    window.addEventListener("mousedown", this.mouseDownHandler);
 
     document.addEventListener(
       "pointerlockchange",
@@ -713,13 +709,28 @@ export class RaycastScene extends BaseScene {
     );
   }
 
+  private mouseDownHandler = (e: MouseEvent) => {
+    // Only handle primary left click
+    if (e.button !== 0) return;
+
+    if (!this.isMobileDevice()) {
+      // If pointer is not locked yet, request pointer lock on left click on desktop
+      if (!document.pointerLockElement) {
+        try {
+          const p: any = (document.body as any).requestPointerLock?.();
+          if (p && typeof p.catch === "function") {
+            p.catch(() => {});
+          }
+        } catch (err) {}
+      }
+
+      // Always shoot on left click (works reliably when pointer is locked & mouse cursor is hidden)
+      this.tryShoot();
+    }
+  };
+
   private pointerLockChangeHandler = () => {
     console.log("Pointer lock state:", document.pointerLockElement);
-    if (document.pointerLockElement === document.body) {
-      this.stage.interactive = true;
-    } else {
-      this.stage.interactive = true;
-    }
   };
 
   private tryShoot(): void {
