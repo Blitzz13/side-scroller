@@ -177,6 +177,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/E-11-item.png",
           },
           {
+            name: "e_11_equiped",
+            src: "./assets/E_11-equiped.png",
+          },
+          {
             name: "explosion",
             src: "./assets/explosion.json"
           }

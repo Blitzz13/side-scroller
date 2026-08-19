@@ -11,6 +11,7 @@ export class MobileControls extends Container implements IDisposable {
   private lookArea: TouchLookArea;
   private btnTurnLeft: VirtualButton;
   private btnTurnRight: VirtualButton;
+  private btnFire: VirtualButton;
   private btnAction: VirtualButton;
   private btnFullscreen: VirtualButton;
   private buttonTurnSpeed: number = 0.04;
@@ -32,24 +33,32 @@ export class MobileControls extends Container implements IDisposable {
     this.addChild(this.joystick);
 
     // 3. Quick Turn Left Button (<)
-    this.btnTurnLeft = new VirtualButton(40, "<", 0x111111);
+    this.btnTurnLeft = new VirtualButton(36, "<", 0x111111);
     this.btnTurnLeft.position.set(screenW - 270, screenH - 130);
     this.addChild(this.btnTurnLeft);
 
     // 4. Quick Turn Right Button (>)
-    this.btnTurnRight = new VirtualButton(40, ">", 0x111111);
-    this.btnTurnRight.position.set(screenW - 170, screenH - 130);
+    this.btnTurnRight = new VirtualButton(36, ">", 0x111111);
+    this.btnTurnRight.position.set(screenW - 180, screenH - 130);
     this.addChild(this.btnTurnRight);
 
-    // 5. Action / Interact Button ([E] Open Door / Use)
-    this.btnAction = new VirtualButton(44, "E", 0x224422);
-    this.btnAction.position.set(screenW - 100, screenH - 240);
+    // 5. Fire / Shoot Button
+    this.btnFire = new VirtualButton(46, "FIRE", 0x882222);
+    this.btnFire.position.set(screenW - 85, screenH - 130);
+    this.btnFire.on("tap", () => {
+      (this as any).emit("fire");
+    });
+    this.addChild(this.btnFire);
+
+    // 6. Action / Interact Button ([E] Open Door / Use)
+    this.btnAction = new VirtualButton(42, "E", 0x224422);
+    this.btnAction.position.set(screenW - 85, screenH - 230);
     this.btnAction.on("tap", () => {
       (this as any).emit("action");
     });
     this.addChild(this.btnAction);
 
-    // 6. Fullscreen Button ([FS])
+    // 7. Fullscreen Button ([FS])
     this.btnFullscreen = new VirtualButton(36, "FS", 0x222244);
     this.btnFullscreen.position.set(screenW - 70, 60);
     this.btnFullscreen.on("tap", () => {
@@ -81,6 +90,7 @@ export class MobileControls extends Container implements IDisposable {
     this.lookArea.dispose();
     this.btnTurnLeft.dispose();
     this.btnTurnRight.dispose();
+    this.btnFire.dispose();
     this.btnAction.dispose();
     this.btnFullscreen.dispose();
     this.destroy({ children: true });

@@ -11,6 +11,11 @@ import {
 import { BaseScene } from "./BaseScene";
 import { gameConfig } from "../configs/GameConfig";
 import { MobileControls } from "../ui/MobileControls";
+import { MapObject, TileMeta } from "./raycast/types";
+import { RaycastPickupManager } from "./raycast/RaycastPickupManager";
+import { RaycastWeaponView } from "./raycast/RaycastWeaponView";
+import { RaycastHUD } from "./raycast/RaycastHUD";
+import { RaycastPlayerController } from "./raycast/RaycastPlayerController";
 
 interface RayHit {
   wallType: number;
@@ -22,31 +27,6 @@ interface RayHit {
   rayDirX: number;
   rayDirY: number;
   orientation?: "vertical" | "horizontal";
-}
-
-interface MapObject {
-  x: number;
-  y: number;
-  texture: number;
-  distance?: number;
-  scale?: number;
-  scaleX?: number;
-  scaleY?: number;
-  vOffset?: number;
-  z?: number;
-  anchor?: string;
-}
-
-interface TileMeta {
-  type?: string;
-  scale?: number;
-  scaleX?: number;
-  scaleY?: number;
-  vOffset?: number;
-  z?: number;
-  anchor?: string;
-  imageWidth?: number;
-  imageHeight?: number;
 }
 
 interface RawTextureData {
@@ -146,6 +126,10 @@ export class RaycastScene extends BaseScene {
   private skyBuffer: Uint32Array = new Uint32Array(0);
 
   private mobileControls!: MobileControls;
+  private weaponView!: RaycastWeaponView;
+  private hud!: RaycastHUD;
+  private playerController!: RaycastPlayerController;
+  private pickupManager!: RaycastPickupManager;
 
   constructor(stage: Container, scale: number, level: string = "level2") {
     super(stage, scale);
@@ -227,9 +211,21 @@ export class RaycastScene extends BaseScene {
       this.objectSpritePool.push(sprite);
     }
 
+    // First-person equipped weapon view (rendered in front of 3D world, behind HUD)
+    this.weaponView = new RaycastWeaponView();
+    this.addChild(this.weaponView);
+
+    // Modern Star Wars HUD (health bar, ammo counter, pickup toasts, screen flash)
+    this.hud = new RaycastHUD();
+    this.addChild(this.hud);
+
+    this.playerController = new RaycastPlayerController(this.weaponView, this.hud);
+    this.pickupManager = new RaycastPickupManager();
+
     // Overlay mobile on-screen controls
     this.mobileControls = new MobileControls();
     this.mobileControls.on("action", () => this.tryOpenDoor());
+    this.mobileControls.on("fire", () => this.tryShoot());
     this.addChild(this.mobileControls);
 
     this.setupControls();
@@ -322,6 +318,11 @@ export class RaycastScene extends BaseScene {
           })
           .catch((err) => console.error(`Failed to load ${fileName}:`, err))
     );
+    texturePromises.push(
+      Assets.load("assets/E_11-equiped.png").catch((err) =>
+        console.error("Failed to load E_11-equiped.png:", err)
+      )
+    );
     await Promise.all(texturePromises);
 
     // Extract raw pixel buffers and pre-slice 1px column textures for zero-allocation rendering
@@ -388,6 +389,9 @@ export class RaycastScene extends BaseScene {
           tileset.tiles.forEach((tile: any) => {
             const gid = tile.id + fgid;
             const meta: TileMeta = {};
+            if (tile.type) {
+              meta.tileClass = tile.type;
+            }
             if (tile.properties) {
               tile.properties.forEach((prop: any) => {
                 const pName = prop.name.toLowerCase();
@@ -395,6 +399,20 @@ export class RaycastScene extends BaseScene {
                 if (pName === "type") {
                   this.tileTypes[gid] = pVal;
                   meta.type = pVal;
+                }
+                if (pName === "weapontype") {
+                  meta.weaponType = String(pVal);
+                }
+                if (pName === "amount") {
+                  meta.amount = typeof pVal === "number" ? pVal : parseInt(pVal, 10);
+                }
+                if (pName === "object" && typeof pVal === "object" && pVal !== null) {
+                  if (pVal.scale !== undefined) meta.scale = parseFloat(pVal.scale);
+                  if (pVal.anchor !== undefined) meta.anchor = String(pVal.anchor).toLowerCase();
+                  if (pVal.scaleX !== undefined) meta.scaleX = parseFloat(pVal.scaleX);
+                  if (pVal.scaleY !== undefined) meta.scaleY = parseFloat(pVal.scaleY);
+                  if (pVal.vOffset !== undefined) meta.vOffset = parseFloat(pVal.vOffset);
+                  if (pVal.z !== undefined) meta.z = parseFloat(pVal.z);
                 }
                 if (pName === "scale" || pName === "size") meta.scale = parseFloat(pVal);
                 if (pName === "scalex" || pName === "sizex") meta.scaleX = parseFloat(pVal);
@@ -564,132 +582,14 @@ export class RaycastScene extends BaseScene {
       });
     }
 
-    // Objects layer parsing (supports both Tiled Object Layers and Tile Layers)
-    this.mapObjects = [];
-    const objectLayers = mapData.layers.filter(
-      (layer: any) =>
-        layer.type === "objectgroup" ||
-        (layer.name &&
-          (layer.name.toLowerCase().includes("object") ||
-            layer.name.toLowerCase().includes("item") ||
-            layer.name.toLowerCase().includes("prop") ||
-            layer.name.toLowerCase().includes("decor") ||
-            layer.name.toLowerCase().includes("pickup")))
+    // Objects and pickups layer parsing (handled via RaycastPickupManager)
+    this.pickupManager.parseMapPickups(
+      mapData,
+      this.tileMeta,
+      this.tileTypes,
+      firstgid
     );
-
-    for (const layer of objectLayers) {
-      // Layer-level default properties (if configured on the layer in Tiled)
-      let layerScale: number | undefined;
-      let layerScaleX: number | undefined;
-      let layerScaleY: number | undefined;
-      let layerVOffset: number | undefined;
-      let layerZ: number | undefined;
-      let layerAnchor: string | undefined;
-
-      if (layer.properties) {
-        layer.properties.forEach((prop: any) => {
-          const pName = prop.name.toLowerCase();
-          const pVal = prop.value;
-          if (pName === "scale" || pName === "size") layerScale = parseFloat(pVal);
-          if (pName === "scalex" || pName === "sizex") layerScaleX = parseFloat(pVal);
-          if (pName === "scaley" || pName === "sizey") layerScaleY = parseFloat(pVal);
-          if (pName === "voffset" || pName === "yoffset" || pName === "offset" || pName === "heightoffset") {
-            layerVOffset = parseFloat(pVal);
-          }
-          if (pName === "z" || pName === "elevation" || pName === "altitude" || pName === "height") {
-            layerZ = parseFloat(pVal);
-          }
-          if (pName === "anchor" || pName === "position" || pName === "align" || pName === "valign") {
-            layerAnchor = String(pVal).toLowerCase();
-          }
-        });
-      }
-
-      const lowerName = layer.name ? layer.name.toLowerCase() : "";
-      if (!layerAnchor) {
-        if (lowerName.includes("ceiling") || lowerName.includes("top")) layerAnchor = "ceiling";
-        else if (lowerName.includes("floor") || lowerName.includes("ground") || lowerName.includes("bottom")) layerAnchor = "floor";
-      }
-
-      if (layer.data) {
-        // Tile Layer
-        layer.data.forEach((tileGid: number, index: number) => {
-          if (tileGid !== 0) {
-            const x = index % layer.width;
-            const y = Math.floor(index / layer.width);
-            const adjustedTileId = tileGid - firstgid;
-            const meta = this.tileMeta[adjustedTileId] || {};
-            this.mapObjects.push({
-              x: x + 0.5,
-              y: y + 0.5,
-              texture: adjustedTileId,
-              scale: layerScale ?? meta.scale,
-              scaleX: layerScaleX ?? meta.scaleX,
-              scaleY: layerScaleY ?? meta.scaleY,
-              vOffset: layerVOffset ?? meta.vOffset,
-              z: layerZ ?? meta.z,
-              anchor: layerAnchor ?? meta.anchor,
-            });
-          }
-        });
-      } else if (layer.objects) {
-        // Object Layer (Object Group in Tiled - supports per-instance custom properties)
-        const tileW = mapData.tilewidth || 64;
-        const tileH = mapData.tileheight || 64;
-        layer.objects.forEach((obj: any) => {
-          const gid = obj.gid ?? 0;
-          if (gid !== 0) {
-            const adjustedTileId = gid - firstgid;
-            const meta = this.tileMeta[adjustedTileId] || {};
-
-            let objScale = layerScale ?? meta.scale;
-            let objScaleX = layerScaleX ?? meta.scaleX;
-            let objScaleY = layerScaleY ?? meta.scaleY;
-            let objVOffset = layerVOffset ?? meta.vOffset;
-            let objZ = layerZ ?? meta.z;
-            let objAnchor = layerAnchor ?? meta.anchor;
-
-            // Specific per-instance custom properties set directly on this object in Tiled
-            if (obj.properties) {
-              obj.properties.forEach((prop: any) => {
-                const pName = prop.name.toLowerCase();
-                const pVal = prop.value;
-                if (pName === "scale" || pName === "size") objScale = parseFloat(pVal);
-                if (pName === "scalex" || pName === "sizex") objScaleX = parseFloat(pVal);
-                if (pName === "scaley" || pName === "sizey") objScaleY = parseFloat(pVal);
-                if (pName === "voffset" || pName === "yoffset" || pName === "offset" || pName === "heightoffset") {
-                  objVOffset = parseFloat(pVal);
-                }
-                if (pName === "z" || pName === "elevation" || pName === "altitude" || pName === "height") {
-                  objZ = parseFloat(pVal);
-                }
-                if (pName === "anchor" || pName === "position" || pName === "align" || pName === "valign") {
-                  objAnchor = String(pVal).toLowerCase();
-                }
-              });
-            }
-
-            // If object was resized with select tool directly in Tiled
-            if (obj.width && obj.height && objScale === undefined && objScaleY === undefined) {
-              objScaleY = obj.height / tileH;
-              objScaleX = obj.width / tileW;
-            }
-
-            this.mapObjects.push({
-              x: (obj.x + (obj.width || tileW) / 2) / tileW,
-              y: (obj.y - (obj.height || tileH) / 2) / tileH,
-              texture: adjustedTileId,
-              scale: objScale,
-              scaleX: objScaleX,
-              scaleY: objScaleY,
-              vOffset: objVOffset,
-              z: objZ,
-              anchor: objAnchor,
-            });
-          }
-        });
-      }
-    }
+    this.mapObjects = this.pickupManager.getVisibleMapObjects();
 
     // --- Performance: Flatten jagged arrays into typed arrays ---
     const totalCells = this.mapHeight * this.mapWidth;
@@ -753,6 +653,18 @@ export class RaycastScene extends BaseScene {
     if (this.mobileControls) {
       this.mobileControls.dispose();
     }
+    if (this.weaponView) {
+      this.weaponView.dispose();
+    }
+    if (this.hud) {
+      this.hud.dispose();
+    }
+    if (this.pickupManager) {
+      this.pickupManager.dispose();
+    }
+    if (this.playerController) {
+      this.playerController.dispose();
+    }
     if (this.objectContainer) {
       this.objectContainer.removeChildren();
       this.objectContainer.destroy({ children: true });
@@ -781,12 +693,17 @@ export class RaycastScene extends BaseScene {
 
     const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
     this.stage.interactive = true;
-    this.stage.on("mousedown", async (e: any) => {
+    this.stage.on("pointerdown", async (e: any) => {
       // Only lock pointer on desktop when clicking outside mobile UI controls
       if (!isMobile && !document.pointerLockElement && e?.target === this.stage) {
         try {
           await document.body.requestPointerLock();
         } catch (err) {}
+      }
+
+      // Shoot on pointer click when clicking on 3D canvas or locked
+      if (e?.target === this.stage || document.pointerLockElement === document.body) {
+        this.tryShoot();
       }
     });
 
@@ -805,12 +722,19 @@ export class RaycastScene extends BaseScene {
     }
   };
 
+  private tryShoot(): void {
+    this.playerController.tryShoot();
+  }
+
   private keyDownHandler = (e: KeyboardEvent) => {
     if (e.key in this.keys) {
       this.keys[e.key] = true;
     }
-    if (e.key === "e") {
+    if (e.key === "e" || e.key === "E") {
       this.tryOpenDoor();
+    }
+    if (e.code === "Space") {
+      this.tryShoot();
     }
   };
 
@@ -840,6 +764,28 @@ export class RaycastScene extends BaseScene {
   private tick(delta: number) {
     this.updatePlayer(delta);
     this.updateDoors(delta);
+
+    // Check for item pickups
+    const collected = this.pickupManager.checkPlayerPickups(
+      this.player.x,
+      this.player.y
+    );
+    if (collected.length > 0) {
+      this.playerController.handlePickups(collected);
+    }
+
+    // Determine movement for weapon bobbing
+    const joyVector = this.mobileControls?.moveVector ?? { x: 0, y: 0 };
+    const isMoving =
+      this.keys.w ||
+      this.keys.s ||
+      this.keys.a ||
+      this.keys.d ||
+      Math.abs(joyVector.x) > 0.15 ||
+      Math.abs(joyVector.y) > 0.15;
+
+    this.playerController.update(delta, isMoving);
+
     this.renderScene();
   }
 
@@ -1494,6 +1440,7 @@ export class RaycastScene extends BaseScene {
     }
 
     // 5. Render billboard objects with Z-buffer occlusion
+    this.mapObjects = this.pickupManager.getVisibleMapObjects();
     this.renderObjects();
   }
 
