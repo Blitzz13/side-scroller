@@ -64,6 +64,15 @@ This document logs recent development changes and enhancements made to the Rayca
   - Each frame, iterates across the sprite's screen columns and checks `transformY < zBuffer[col]`. Consecutive visible columns are coalesced into rectangular mask runs for efficiency.
   - Enemies now smoothly emerge from behind wall edges column-by-column instead of popping in/out as a whole sprite.
 
+---
+
+### 7. Crisp Pixel-Art Texture Filtering (`SCALE_MODES.NEAREST`)
+- **Nearest-Neighbor Filtering** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Configured `SCALE_MODES.NEAREST` on the stormtrooper spritesheet base texture (`baseTexture.scaleMode = SCALE_MODES.NEAREST`), replacing bilinear smoothing with pixel-crisp nearest-neighbor texture sampling.
+  - Enabled `roundPixels = true` on `AnimatedSprite` to avoid subpixel antialiasing blur.
+
+---
+
 ## [2026-08-23] - Mobile High-DPI Text Sharpness & Configurable Muzzle Flash System
 
 ### 1. High-DPI (Retina) Resolution & Mobile Text Sharpness

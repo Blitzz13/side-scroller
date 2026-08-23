@@ -1,4 +1,4 @@
-import { Assets, Container, Graphics, Spritesheet } from "pixi.js";
+import { Assets, Container, Graphics, SCALE_MODES, Spritesheet } from "pixi.js";
 import { RaycastEnemy } from "./RaycastEnemy";
 import {
   IRaycastEnemyConfig,
@@ -24,6 +24,9 @@ export class RaycastEnemyManager {
     try {
       const sheet = await Assets.load("assets/storm_trooper.json");
       if (sheet) {
+        if (sheet.baseTexture) {
+          sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+        }
         this.spritesheets["assets/storm_trooper.json"] = sheet;
       }
     } catch (err) {

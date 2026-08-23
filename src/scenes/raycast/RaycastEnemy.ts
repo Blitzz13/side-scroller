@@ -1,4 +1,4 @@
-import { AnimatedSprite, Graphics, Spritesheet, Texture } from "pixi.js";
+import { AnimatedSprite, Graphics, SCALE_MODES, Spritesheet, Texture } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
 
@@ -50,6 +50,10 @@ export class RaycastEnemy {
   }
 
   public initAnimatedSprite(spritesheet: Spritesheet): void {
+    if (spritesheet.baseTexture) {
+      spritesheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+    }
+
     const texs = spritesheet.textures;
 
     // Helper to get frame array
@@ -57,7 +61,9 @@ export class RaycastEnemy {
       const frames: Texture[] = [];
       for (let i = 1; i <= count; i++) {
         const t = texs[`${prefix}_${i}.png`];
-        if (t) frames.push(t);
+        if (t) {
+          frames.push(t);
+        }
       }
       return frames.length > 0 ? frames : [texs[`${prefix}.png`] || Texture.WHITE];
     };
@@ -65,7 +71,10 @@ export class RaycastEnemy {
     // Helper for single frame
     const getSingle = (name: string): Texture[] => {
       const t = texs[`${name}.png`] || texs[name];
-      return t ? [t] : [Texture.WHITE];
+      if (t) {
+        return [t];
+      }
+      return [Texture.WHITE];
     };
 
     this.animations = {
@@ -95,6 +104,7 @@ export class RaycastEnemy {
     this.animatedSprite = new AnimatedSprite(initialTextures);
     this.animatedSprite.anchor.set(0.5, 1.0); // Pivot at bottom center on the floor
     this.animatedSprite.animationSpeed = 0.16;
+    this.animatedSprite.roundPixels = true; // Avoid subpixel interpolation blur
     this.animatedSprite.visible = false;
     this.currentAnimKey = "standing_towards";
   }
