@@ -1,9 +1,9 @@
-import { BitmapText, Container, Graphics, FederatedPointerEvent } from "pixi.js";
+import { Container, Graphics, FederatedPointerEvent, Text } from "pixi.js";
 import { IDisposable } from "../characters/interfaces/IDisposable";
 
 export class VirtualButton extends Container implements IDisposable {
   private bgGraphic: Graphics;
-  private labelText: BitmapText;
+  private labelText: Text;
   private radius: number;
   private _isPressed: boolean = false;
   private activePointerId: number | null = null;
@@ -12,7 +12,7 @@ export class VirtualButton extends Container implements IDisposable {
     radius: number = 36,
     label: string = "",
     bgColor: number = 0x111111,
-    fontName: string = "arial32"
+    _fontName: string = "arial32"
   ) {
     super();
 
@@ -21,9 +21,16 @@ export class VirtualButton extends Container implements IDisposable {
     this.bgGraphic = new Graphics();
     this.drawButton(false, bgColor);
 
-    this.labelText = new BitmapText(label, {
-      fontName: fontName,
+    const dpr = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));
+    this.labelText = new Text(label, {
+      fontFamily: "Arial, sans-serif",
+      fontSize: label.length > 2 ? 15 : 20,
+      fontWeight: "bold",
+      fill: 0xffffff,
+      align: "center",
+      letterSpacing: 0.5,
     });
+    this.labelText.resolution = dpr;
     this.labelText.anchor.set(0.5);
     this.labelText.position.set(0, 0);
 

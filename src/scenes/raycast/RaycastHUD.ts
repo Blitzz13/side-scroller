@@ -1,4 +1,4 @@
-import { BitmapText, Container, Graphics, Sprite, Texture } from "pixi.js";
+import { Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
 import { gameConfig } from "../../configs/GameConfig";
 
 export class RaycastHUD extends Container {
@@ -6,19 +6,19 @@ export class RaycastHUD extends Container {
   private healthContainer: Container;
   private healthBarBg: Graphics;
   private healthBarFill: Graphics;
-  private healthText: BitmapText;
+  private healthText: Text;
   private healthIcon: Sprite;
 
   // Weapon & Ammo components
   private weaponContainer: Container;
-  private weaponNameText: BitmapText;
-  private ammoText: BitmapText;
+  private weaponNameText: Text;
+  private ammoText: Text;
   private ammoIcon: Sprite;
 
   // Toast notification
   private toastContainer: Container;
   private toastBg: Graphics;
-  private toastText: BitmapText;
+  private toastText: Text;
   private toastTimer: number = 0;
 
   // Screen Flash
@@ -31,6 +31,7 @@ export class RaycastHUD extends Container {
 
     const screenW = gameConfig.width;
     const screenH = gameConfig.height;
+    const dpr = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));
 
     // 1. Fullscreen flash overlay (bottom-most in HUD layer)
     this.flashOverlay = new Graphics();
@@ -62,12 +63,16 @@ export class RaycastHUD extends Container {
     this.healthBarFill = new Graphics();
     this.healthContainer.addChild(this.healthBarFill);
 
-    // Health text
-    this.healthText = new BitmapText("100 HP", {
-      fontName: "arial32",
+    // Health text (crisp vector text at high resolution)
+    this.healthText = new Text("100 HP", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 20,
+      fontWeight: "bold",
+      fill: 0xffffff,
+      letterSpacing: 0.5,
     });
-    this.healthText.scale.set(0.65);
-    this.healthText.position.set(55, 12);
+    this.healthText.resolution = dpr;
+    this.healthText.position.set(55, 10);
     this.healthContainer.addChild(this.healthText);
 
     this.addChild(this.healthContainer);
@@ -94,17 +99,25 @@ export class RaycastHUD extends Container {
     this.ammoIcon.position.set(12, 12);
     this.weaponContainer.addChild(this.ammoIcon);
 
-    this.weaponNameText = new BitmapText("UNARMED", {
-      fontName: "arial32",
+    this.weaponNameText = new Text("UNARMED", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 14,
+      fontWeight: "bold",
+      fill: 0xffaa00,
+      letterSpacing: 0.5,
     });
-    this.weaponNameText.scale.set(0.5);
-    this.weaponNameText.position.set(55, 10);
+    this.weaponNameText.resolution = dpr;
+    this.weaponNameText.position.set(55, 8);
     this.weaponContainer.addChild(this.weaponNameText);
 
-    this.ammoText = new BitmapText("--", {
-      fontName: "arial32",
+    this.ammoText = new Text("--", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 20,
+      fontWeight: "bold",
+      fill: 0xffffff,
+      letterSpacing: 0.5,
     });
-    this.ammoText.scale.set(0.65);
+    this.ammoText.resolution = dpr;
     this.ammoText.position.set(55, 28);
     this.weaponContainer.addChild(this.ammoText);
 
@@ -118,10 +131,18 @@ export class RaycastHUD extends Container {
     this.toastBg = new Graphics();
     this.toastContainer.addChild(this.toastBg);
 
-    this.toastText = new BitmapText("", {
-      fontName: "arial32",
+    this.toastText = new Text("", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 18,
+      fontWeight: "bold",
+      fill: 0xffffff,
+      align: "center",
+      dropShadow: true,
+      dropShadowColor: 0x000000,
+      dropShadowDistance: 1,
+      dropShadowBlur: 2,
     });
-    this.toastText.scale.set(0.6);
+    this.toastText.resolution = dpr;
     this.toastContainer.addChild(this.toastText);
 
     this.addChild(this.toastContainer);
@@ -165,8 +186,8 @@ export class RaycastHUD extends Container {
     this.toastText.text = message;
     const paddingX = 20;
     const paddingY = 8;
-    const textW = this.toastText.textWidth * 0.6;
-    const textH = this.toastText.textHeight * 0.6;
+    const textW = this.toastText.width;
+    const textH = this.toastText.height;
 
     this.toastBg.clear();
     this.toastBg.beginFill(0x060f18, 0.85);

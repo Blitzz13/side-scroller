@@ -6,14 +6,22 @@ export const gameConfig = {
 }
 
 export function registerFonts(): void {
-  BitmapFont.from("arial32", {
-    fontFamily: "Arial",
-    fontSize: 32,
-    lineHeight: 33,
-    fill: 0xffffff,
-  },{
-    chars: BitmapFont.ASCII,
-  });
+  const dpr = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));
+  BitmapFont.from(
+    "arial32",
+    {
+      fontFamily: "Arial",
+      fontSize: 32,
+      lineHeight: 33,
+      fill: 0xffffff,
+    },
+    {
+      chars: BitmapFont.ASCII,
+      resolution: dpr,
+      textureWidth: 1024,
+      textureHeight: 1024,
+    }
+  );
 }
 
 export const manifest: AssetsManifest = {
