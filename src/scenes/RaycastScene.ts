@@ -16,6 +16,7 @@ import { RaycastPickupManager } from "./raycast/RaycastPickupManager";
 import { RaycastWeaponView } from "./raycast/RaycastWeaponView";
 import { RaycastHUD } from "./raycast/RaycastHUD";
 import { RaycastPlayerController } from "./raycast/RaycastPlayerController";
+import { RaycastEnemyManager } from "./raycast/RaycastEnemyManager";
 
 interface RayHit {
   wallType: number;
@@ -130,6 +131,8 @@ export class RaycastScene extends BaseScene {
   private hud!: RaycastHUD;
   private playerController!: RaycastPlayerController;
   private pickupManager!: RaycastPickupManager;
+  private enemyContainer!: Container;
+  private enemyManager!: RaycastEnemyManager;
 
   constructor(stage: Container, scale: number, level: string = "level2") {
     super(stage, scale);
@@ -211,11 +214,18 @@ export class RaycastScene extends BaseScene {
       this.objectSpritePool.push(sprite);
     }
 
+    // Container for animated enemy sprites with hardware rotation & Z-ordering (in 3D world)
+    this.enemyContainer = new Container();
+    this.enemyContainer.sortableChildren = true;
+    this.addChild(this.enemyContainer);
+
+    this.enemyManager = new RaycastEnemyManager(this.enemyContainer);
+
     // First-person equipped weapon view (rendered in front of 3D world, behind HUD)
     this.weaponView = new RaycastWeaponView();
     this.addChild(this.weaponView);
 
-    // Modern Star Wars HUD (health bar, ammo counter, pickup toasts, screen flash)
+    // Modern Star Wars HUD (crosshair, health bar, ammo counter, pickup toasts, screen flash)
     this.hud = new RaycastHUD();
     this.addChild(this.hud);
 
@@ -344,6 +354,9 @@ export class RaycastScene extends BaseScene {
     }
 
     this.parseTiledMap(mapData);
+    await this.enemyManager.initSpritesheets();
+    this.enemyManager.parseMapEnemies(mapData);
+
     console.log("Parsed map:", this.map);
     console.log("Parsed floor map:", this.floorMap);
     console.log("Tile types:", this.tileTypes);
@@ -664,12 +677,19 @@ export class RaycastScene extends BaseScene {
     if (this.pickupManager) {
       this.pickupManager.dispose();
     }
+    if (this.enemyManager) {
+      this.enemyManager.dispose();
+    }
     if (this.playerController) {
       this.playerController.dispose();
     }
     if (this.objectContainer) {
       this.objectContainer.removeChildren();
       this.objectContainer.destroy({ children: true });
+    }
+    if (this.enemyContainer) {
+      this.enemyContainer.removeChildren();
+      this.enemyContainer.destroy({ children: true });
     }
     this.objectSpritePool = [];
     this.objectSpritePoolIndex = 0;
@@ -734,7 +754,21 @@ export class RaycastScene extends BaseScene {
   };
 
   private tryShoot(): void {
-    this.playerController.tryShoot();
+    const didShoot = this.playerController.tryShoot();
+    if (didShoot) {
+      const damage = this.playerController.weaponConfig?.damage ?? 25;
+      this.enemyManager.handlePlayerShot(
+        this.player.x,
+        this.player.y,
+        this.player.dirX,
+        this.player.dirY,
+        damage,
+        this.MAX_RENDER_DISTANCE,
+        (enemy) => {
+          this.hud.showToast(`[!] Neutralized ${enemy.config.name} (+E-11)`, 0x00ff88);
+        }
+      );
+    }
   }
 
   private keyDownHandler = (e: KeyboardEvent) => {
@@ -775,6 +809,20 @@ export class RaycastScene extends BaseScene {
   private tick(delta: number) {
     this.updatePlayer(delta);
     this.updateDoors(delta);
+
+    // Update enemy AI, navigation, line of sight, and shooting
+    this.enemyManager.update(
+      delta,
+      this.player.x,
+      this.player.y,
+      this.mapFlat,
+      this.mapWidth,
+      this.mapHeight,
+      this.doorStatesFlat,
+      this.thinWalls,
+      this.playerController,
+      this.pickupManager
+    );
 
     // Check for item pickups
     const collected = this.pickupManager.checkPlayerPickups(
@@ -1463,9 +1511,21 @@ export class RaycastScene extends BaseScene {
       }
     }
 
-    // 5. Render billboard objects with Z-buffer occlusion
+    // 5. Render billboard pickups with Z-buffer occlusion
     this.mapObjects = this.pickupManager.getVisibleMapObjects();
     this.renderObjects();
+
+    // 6. Render animated enemy sprites with hardware rotation & Z-buffer occlusion
+    this.enemyManager.render(
+      this.player.x,
+      this.player.y,
+      this.player.dirX,
+      this.player.dirY,
+      this.player.planeX,
+      this.player.planeY,
+      this.zBuffer,
+      this.MAX_RENDER_DISTANCE
+    );
   }
 
   private renderObjects(): void {
@@ -1516,11 +1576,11 @@ export class RaycastScene extends BaseScene {
         (screenW / 2) * (1 + transformX / transformY)
       );
 
-      const texture = this.textures[obj.texture];
-      const slices = this.columnTextures[obj.texture];
+      const texture = obj.customTexture ?? this.textures[obj.texture];
+      const slices = obj.customSlices ?? this.columnTextures[obj.texture];
       if (!texture || !slices || slices.length === 0) continue;
 
-      const meta = this.tileMeta[obj.texture];
+      const meta = obj.customTexture ? undefined : this.tileMeta[obj.texture];
       const texW = texture.width || 64;
       const texH = texture.height || 64;
       const aspectRatio = texW / texH;
@@ -1629,6 +1689,7 @@ export class RaycastScene extends BaseScene {
             ((stripe - drawStartX) * texW) / spriteWidth
           );
           const clampedTexX = Math.min(Math.max(0, texX), slices.length - 1);
+          const sliceIndex = obj.flipX ? slices.length - 1 - clampedTexX : clampedTexX;
 
           let sprite: Sprite;
           if (poolIdx < this.objectSpritePool.length) {
@@ -1641,12 +1702,12 @@ export class RaycastScene extends BaseScene {
           }
           poolIdx++;
 
-          sprite.texture = slices[clampedTexX];
+          sprite.texture = slices[sliceIndex];
           sprite.x = stripe;
           sprite.y = drawStartY;
           sprite.width = 1;
           sprite.height = actualHeight;
-          sprite.tint = tint;
+          sprite.tint = obj.tint ?? tint;
           sprite.visible = true;
         }
       }

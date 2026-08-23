@@ -4,6 +4,46 @@ This document logs recent development changes and enhancements made to the Rayca
 
 ---
 
+## [2026-08-23] - Configurable Enemy AI, 8-Directional Sprites, Combat System & Weapon Drops
+
+### 1. Extensible Enemy Configuration System
+- **Interface & Types** ([`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Created `IRaycastEnemyConfig` interface and `RaycastEnemyType` enum.
+  - Supported configurable parameters:
+    - `maxHealth`, `speed`, `sightRange`, `attackRange`, `minDistance`, `rateOfFire`, `damage`, `accuracy`, `scale`, `spritesheet`.
+    - `dropWeapon`, `dropAmmo`, `dropChance`.
+    - `painSounds`, `deathSounds`, `attackSounds`.
+- **Global Registry** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Configured `stormtrooperConfig` for the Imperial Stormtrooper with `assets/storm_trooper.json` animations, sound effects, and 100% E-11 blaster rifle drop upon death.
+  - Implemented `getRaycastEnemyConfig()` helper for flexible enemy retrieval and easy addition of new enemy types.
+
+---
+
+### 2. Stormtrooper Enemy AI & Combat Engine
+- **Finite State Machine & Navigation** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **`idle`**: Stands and scans for the player within `sightRange`.
+  - **`chase`**: Pursues the player across the map, navigating around solid walls, closed doors, and thin walls with collision checking. Plays 6-frame walking animations matching direction.
+  - **`attack`**: Halts at configurable `attackRange` (maintaining `minDistance`), faces player, enters shooting pose (`storm_trooper/shooting.png`), plays blaster firing sound, and deals damage to the player based on distance-adjusted accuracy.
+  - **`dead`**: Plays 6-stage death animation sequence (`death_1_1` -> `death_1_6`) and remains as a corpse on the floor.
+- **Line-of-Sight (LOS) Traversal** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Implemented DDA raycasting traversal to check clear visibility between enemies and the player across solid walls and open/closed doors.
+- **Player Hit Detection & Damage** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Integrated ray-cylinder intersection to hit test living enemies along the player's crosshair aiming vector.
+  - Deals weapon damage, triggers pain sound effect (`stormtrooper_pain_1.mp3`), red flash visual effect, and alerts idle enemies.
+  - When neutralized: triggers death sound effect (`stormtrooper_death_1.mp3`), spawns an `E-11` weapon pickup on the ground, and notifies the player via HUD toast.
+
+---
+
+### 3. 8-Directional PixiJS `AnimatedSprite` & Atlas Rotation Support
+- **Directional Sprite Math** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Evaluates relative viewing angle $\Delta = \theta_{\text{toPlayer}} - \theta_{\text{facing}}$ into 8 orientations (`towards`, `towards_left_diagonal`, `left`, `away_left_diagonal`, `away` with horizontal mirroring for right sides).
+- **Native `AnimatedSprite` Integration** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+- **Proportional Frame Height Scaling (`referenceHeight`)** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Scaled screen height and width relative to the enemy's standard standing height (`referenceHeight = 67`).
+  - Ensures falling/death frames (which shrink from 67px standing to 20px lying down) stay naturally scaled on the floor without stretching or appearing gigantic.
+
+---
+
 ## [2026-08-23] - Mobile High-DPI Text Sharpness & Configurable Muzzle Flash System
 
 ### 1. High-DPI (Retina) Resolution & Mobile Text Sharpness
@@ -255,8 +295,16 @@ When facing away from close walls and looking into open rooms/corridors, multipl
 
 | File | Changes Made |
 | :--- | :--- |
+| [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts) | Created `RaycastEnemyType` enum. |
+| [`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts) | Created `IRaycastEnemyConfig` interface with full combat, AI, audio, and loot drop options. |
+| [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts) | Created `stormtrooperConfig` and global `raycastEnemyConfigs` registry. |
+| [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts) | Created `RaycastEnemy` entity with 8-direction sprite calculation, state machine, and death animation. |
+| [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts) | Created `RaycastEnemyManager` for spritesheet pre-slicing, LOS checks, hit testing, AI updates, and loot spawning. |
+| [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts) | Added `spawnPickup()` method for runtime item and weapon drops. |
+| [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) | Integrated enemy manager into raycast loop, player hit detection, and billboard rendering pipeline. |
+| [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) | Added `stormtrooper_pain_1`, `stormtrooper_death_1`, and `storm_trooper` spritesheet to manifest. |
+| [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts) | Exported enemy types and extended `MapObject` with custom textures, slices, tint, and flipX. |
 | [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts) | Added `autoDensity`, `antialias`, and `resolution: devicePixelRatio` to Pixi `Application`. |
-| [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) | Added high-density texture atlas resolution settings to `registerFonts()`. |
 | [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts) | Migrated HUD labels to high-resolution vector `Text` with device pixel density and crisp styling. |
 | [`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts) | Migrated touch button labels to high-resolution vector `Text`. |
 | [`src/style.css`](file:///D:/Projects/side-scroller/src/style.css) | Added font-smoothing rules and full-viewport touch styling. |
@@ -264,12 +312,10 @@ When facing away from close walls and looking into open rooms/corridors, multipl
 | [`src/configs/interfaces/IRaycastWeaponConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastWeaponConfig.ts) | Added `IMuzzleFlashConfig`, `IMuzzleFlashLayer`, and `IMuzzleFlashSparks` interfaces. |
 | [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts) | Added explicit `muzzleFlash` configuration to `e11Config`. |
 | [`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts) | Made muzzle flash offsets, colors, layers, durations, and sprite textures dynamic from weapon config. |
-| [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts) | Exported muzzle flash interfaces. |
 | [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts) | Added dedicated `[FS]` button for reliable mobile fullscreen triggering. |
 | [`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts) | Implemented cross-browser `toggleFullscreen()` utility. |
-| [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) | Disabled pointer lock requests on touch devices to avoid gesture interference. |
 | [`src/ui/VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts) | Created touch virtual thumbstick component with clamped knob motion. |
 | [`src/ui/TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts) | Created right-side touch look swipe area for camera rotation. |
-| [`assets/level2.json`](file:///D:/Projects/side-scroller/assets/level2.json) | Configured `Floor` and `Ceiling` tile layers with indoor and outdoor surfaces. |
+| [`assets/level2.json`](file:///D:/Projects/side-scroller/assets/level2.json) | Configured `Floor`, `Ceiling`, and `Enemies` tile layers. |
 | [`RAYCAST_ENGINE.md`](file:///D:/Projects/side-scroller/RAYCAST_ENGINE.md) | Comprehensive system and architecture documentation. |
 | [`CHANGELOG.md`](file:///D:/Projects/side-scroller/CHANGELOG.md) | Log of all recent changes and implementation details. |

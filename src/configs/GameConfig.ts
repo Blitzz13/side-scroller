@@ -81,6 +81,14 @@ export const manifest: AssetsManifest = {
             alias: "w_e_11_blaster_rifle",
             src: "./assets/sounds/w-e-11-blaster-rifle.mp3"
           },
+          {
+            alias: "stormtrooper_pain_1",
+            src: "./assets/stormtrooper_pain_1.mp3"
+          },
+          {
+            alias: "stormtrooper_death_1",
+            src: "./assets/stormtrooper_death_1.mp3"
+          },
         ]
       },
       {
@@ -162,6 +170,10 @@ export const manifest: AssetsManifest = {
           {
             name: "viper_droid",
             src: "./assets/viper_droid.json",
+          },
+          {
+            name: "storm_trooper",
+            src: "./assets/storm_trooper.json",
           }
         ],
       },

@@ -354,6 +354,34 @@ export class RaycastPickupManager {
     return collected;
   }
 
+  public spawnPickup(
+    type: RaycastPickupType,
+    x: number,
+    y: number,
+    weaponType: RaycastWeaponType = RaycastWeaponType.E11,
+    amount: number = 20,
+    tileId: number = 9
+  ): RaycastPickupItem {
+    const config = getRaycastPickupConfig(type === RaycastPickupType.WEAPON ? "e_11" : "ammo");
+    const item: RaycastPickupItem = {
+      id: this.nextId++,
+      x,
+      y,
+      texture: tileId,
+      type,
+      weaponType,
+      amount,
+      collected: false,
+      scale: config?.scale ?? 0.22,
+      scaleX: config?.scaleX ?? 0.22,
+      scaleY: config?.scaleY ?? 0.22,
+      anchor: "floor",
+      config,
+    };
+    this.pickups.push(item);
+    return item;
+  }
+
   public get activePickupsCount(): number {
     return this.pickups.filter((p) => !p.collected).length;
   }

@@ -10,5 +10,7 @@ export interface IRaycastPickupConfig {
   pickUpSound: ISoundConfig;
   weaponType?: RaycastWeaponType;
   scale?: number;
+  scaleX?: number;
+  scaleY?: number;
   anchor?: "floor" | "ceiling" | "center" | string;
 }

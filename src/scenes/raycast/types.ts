@@ -1,5 +1,7 @@
+import { Texture } from "pixi.js";
 import { RaycastPickupType } from "../../enums/RaycastPickupType";
 import { RaycastWeaponType } from "../../enums/RaycastWeaponType";
+import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
 import {
   IRaycastWeaponConfig,
   IMuzzleFlashConfig,
@@ -7,6 +9,7 @@ import {
   IMuzzleFlashSparks,
 } from "../../configs/interfaces/IRaycastWeaponConfig";
 import { IRaycastPickupConfig } from "../../configs/interfaces/IRaycastPickupConfig";
+import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
 import {
   raycastWeaponConfigs,
   getRaycastWeaponConfig,
@@ -15,20 +18,27 @@ import {
   raycastPickupConfigs,
   getRaycastPickupConfig,
 } from "../../configs/RaycastPickupConfigs";
+import {
+  raycastEnemyConfigs,
+  getRaycastEnemyConfig,
+} from "../../configs/RaycastEnemyConfigs";
 
-export { RaycastPickupType, RaycastWeaponType };
+export { RaycastPickupType, RaycastWeaponType, RaycastEnemyType };
 export {
   IRaycastWeaponConfig,
   IMuzzleFlashConfig,
   IMuzzleFlashLayer,
   IMuzzleFlashSparks,
   IRaycastPickupConfig,
+  IRaycastEnemyConfig,
 };
 export {
   raycastWeaponConfigs,
   getRaycastWeaponConfig,
   raycastPickupConfigs,
   getRaycastPickupConfig,
+  raycastEnemyConfigs,
+  getRaycastEnemyConfig,
 };
 
 export interface RaycastPickupItem {
@@ -70,6 +80,11 @@ export interface MapObject {
   z?: number;
   anchor?: string;
   pickupRef?: RaycastPickupItem;
+  customTexture?: Texture;
+  customSlices?: Texture[];
+  flipX?: boolean;
+  tint?: number;
+  enemyRef?: any;
 }
 
 export interface TileMeta {

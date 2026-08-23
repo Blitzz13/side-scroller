@@ -1,0 +1,1167 @@
+{
+  "frames": {
+    "storm_trooper/walking_towards_6.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 68
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 68
+      },
+      "sourceSize": {
+        "w": 30,
+        "h": 68
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_left_diagonal_1.png": {
+      "frame": {
+        "x": 30,
+        "y": 0,
+        "w": 26,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 26,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 26,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_towards_4.png": {
+      "frame": {
+        "x": 56,
+        "y": 0,
+        "w": 29,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 29,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 29,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_diagonal_6.png": {
+      "frame": {
+        "x": 0,
+        "y": 68,
+        "w": 41,
+        "h": 67
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 41,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 41,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_diagonal_3.png": {
+      "frame": {
+        "x": 85,
+        "y": 0,
+        "w": 47,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 47,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 47,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_diagonal_1.png": {
+      "frame": {
+        "x": 0,
+        "y": 109,
+        "w": 40,
+        "h": 67
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 40,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_4.png": {
+      "frame": {
+        "x": 67,
+        "y": 67,
+        "w": 36,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 36,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 36,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_4.png": {
+      "frame": {
+        "x": 103,
+        "y": 67,
+        "w": 28,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 28,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/standing_towards_left_diagonal.png": {
+      "frame": {
+        "x": 132,
+        "y": 0,
+        "w": 35,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 35,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 35,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/standing_towards.png": {
+      "frame": {
+        "x": 131,
+        "y": 67,
+        "w": 32,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/standing_left.png": {
+      "frame": {
+        "x": 0,
+        "y": 149,
+        "w": 26,
+        "h": 67
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 26,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 26,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/standing_away_left_diagonal.png": {
+      "frame": {
+        "x": 67,
+        "y": 134,
+        "w": 25,
+        "h": 67
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 25,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 25,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_1.png": {
+      "frame": {
+        "x": 167,
+        "y": 0,
+        "w": 39,
+        "h": 66
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 39,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 39,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/standing_away.png": {
+      "frame": {
+        "x": 134,
+        "y": 134,
+        "w": 29,
+        "h": 66
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 29,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 29,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_towards_5.png": {
+      "frame": {
+        "x": 163,
+        "y": 67,
+        "w": 30,
+        "h": 66
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 30,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_towards_3.png": {
+      "frame": {
+        "x": 0,
+        "y": 175,
+        "w": 28,
+        "h": 66
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 28,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_towards_1.png": {
+      "frame": {
+        "x": 67,
+        "y": 159,
+        "w": 29,
+        "h": 66
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 29,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 29,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_1.png": {
+      "frame": {
+        "x": 133,
+        "y": 163,
+        "w": 28,
+        "h": 66
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 28,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_diagonal_4.png": {
+      "frame": {
+        "x": 0,
+        "y": 203,
+        "w": 42,
+        "h": 66
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 42,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 42,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_3.png": {
+      "frame": {
+        "x": 66,
+        "y": 188,
+        "w": 28,
+        "h": 66
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 28,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_3.png": {
+      "frame": {
+        "x": 132,
+        "y": 191,
+        "w": 49,
+        "h": 66
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 49,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 49,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_5.png": {
+      "frame": {
+        "x": 66,
+        "y": 216,
+        "w": 29,
+        "h": 66
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 29,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 29,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_left_diagonal_4.png": {
+      "frame": {
+        "x": 206,
+        "y": 0,
+        "w": 27,
+        "h": 66
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 27,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 27,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_left_diagonal_2.png": {
+      "frame": {
+        "x": 193,
+        "y": 66,
+        "w": 25,
+        "h": 66
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 25,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 25,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_6.png": {
+      "frame": {
+        "x": 200,
+        "y": 132,
+        "w": 28,
+        "h": 65
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 28,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_diagonal_5.png": {
+      "frame": {
+        "x": 233,
+        "y": 0,
+        "w": 40,
+        "h": 65
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 40,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_left_diagonal_6.png": {
+      "frame": {
+        "x": 218,
+        "y": 66,
+        "w": 38,
+        "h": 65
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 38,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 38,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_2.png": {
+      "frame": {
+        "x": 0,
+        "y": 245,
+        "w": 50,
+        "h": 65
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 50,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 50,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_2.png": {
+      "frame": {
+        "x": 198,
+        "y": 197,
+        "w": 28,
+        "h": 65
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 28,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_diagonal_2.png": {
+      "frame": {
+        "x": 228,
+        "y": 131,
+        "w": 45,
+        "h": 65
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 45,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 45,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_5.png": {
+      "frame": {
+        "x": 198,
+        "y": 225,
+        "w": 43,
+        "h": 65
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 43,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 43,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_left_6.png": {
+      "frame": {
+        "x": 132,
+        "y": 240,
+        "w": 46,
+        "h": 65
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 46,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 46,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_left_diagonal_3.png": {
+      "frame": {
+        "x": 65,
+        "y": 245,
+        "w": 28,
+        "h": 65
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 28,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 28,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_towards_2.png": {
+      "frame": {
+        "x": 241,
+        "y": 225,
+        "w": 29,
+        "h": 65
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 29,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 29,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/walking_away_left_diagonal_5.png": {
+      "frame": {
+        "x": 273,
+        "y": 0,
+        "w": 38,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 38,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 38,
+        "h": 64
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_1_1.png": {
+      "frame": {
+        "x": 256,
+        "y": 65,
+        "w": 30,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 30,
+        "h": 63
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/shooting.png": {
+      "frame": {
+        "x": 273,
+        "y": 128,
+        "w": 30,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 30,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 30,
+        "h": 63
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_1_3.png": {
+      "frame": {
+        "x": 0,
+        "y": 295,
+        "w": 42,
+        "h": 62
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 42,
+        "h": 62
+      },
+      "sourceSize": {
+        "w": 42,
+        "h": 62
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_2_1.png": {
+      "frame": {
+        "x": 65,
+        "y": 273,
+        "w": 33,
+        "h": 62
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 33,
+        "h": 62
+      },
+      "sourceSize": {
+        "w": 33,
+        "h": 62
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_1_2.png": {
+      "frame": {
+        "x": 98,
+        "y": 273,
+        "w": 31,
+        "h": 61
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 31,
+        "h": 61
+      },
+      "sourceSize": {
+        "w": 31,
+        "h": 61
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_2_2.png": {
+      "frame": {
+        "x": 273,
+        "y": 191,
+        "w": 36,
+        "h": 59
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 36,
+        "h": 59
+      },
+      "sourceSize": {
+        "w": 36,
+        "h": 59
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_1_4.png": {
+      "frame": {
+        "x": 129,
+        "y": 290,
+        "w": 44,
+        "h": 55
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 44,
+        "h": 55
+      },
+      "sourceSize": {
+        "w": 44,
+        "h": 55
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_2_3.png": {
+      "frame": {
+        "x": 270,
+        "y": 250,
+        "w": 39,
+        "h": 55
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 39,
+        "h": 55
+      },
+      "sourceSize": {
+        "w": 39,
+        "h": 55
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_2_4.png": {
+      "frame": {
+        "x": 184,
+        "y": 290,
+        "w": 42,
+        "h": 50
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 42,
+        "h": 50
+      },
+      "sourceSize": {
+        "w": 42,
+        "h": 50
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_2_5.png": {
+      "frame": {
+        "x": 311,
+        "y": 0,
+        "w": 45,
+        "h": 39
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 45,
+        "h": 39
+      },
+      "sourceSize": {
+        "w": 45,
+        "h": 39
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_1_5.png": {
+      "frame": {
+        "x": 309,
+        "y": 64,
+        "w": 44,
+        "h": 40
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 44,
+        "h": 40
+      },
+      "sourceSize": {
+        "w": 44,
+        "h": 40
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_1_6.png": {
+      "frame": {
+        "x": 286,
+        "y": 108,
+        "w": 44,
+        "h": 20
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 44,
+        "h": 20
+      },
+      "sourceSize": {
+        "w": 44,
+        "h": 20
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "storm_trooper/death_2_6.png": {
+      "frame": {
+        "x": 286,
+        "y": 108,
+        "w": 44,
+        "h": 20
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 44,
+        "h": 20
+      },
+      "sourceSize": {
+        "w": 44,
+        "h": 20
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "storm_trooper.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 350,
+      "h": 337
+    },
+    "scale": 1
+  }
+}
