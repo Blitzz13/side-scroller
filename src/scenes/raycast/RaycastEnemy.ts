@@ -1,4 +1,4 @@
-import { AnimatedSprite, Spritesheet, Texture } from "pixi.js";
+import { AnimatedSprite, Graphics, Spritesheet, Texture } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
 
@@ -17,6 +17,7 @@ export class RaycastEnemy {
 
   // Animated sprite
   public animatedSprite!: AnimatedSprite;
+  public occlusionMask: Graphics | null = null;
   public isFlipped: boolean = false;
   private animations: Record<string, Texture[]> = {};
   private currentAnimKey: string = "";
@@ -332,8 +333,13 @@ export class RaycastEnemy {
 
   public dispose(): void {
     if (this.animatedSprite) {
+      this.animatedSprite.mask = null;
       this.animatedSprite.stop();
       this.animatedSprite.destroy();
+    }
+    if (this.occlusionMask) {
+      this.occlusionMask.destroy();
+      this.occlusionMask = null;
     }
   }
 }

@@ -1,4 +1,4 @@
-import { Assets, Container, Spritesheet } from "pixi.js";
+import { Assets, Container, Graphics, Spritesheet } from "pixi.js";
 import { RaycastEnemy } from "./RaycastEnemy";
 import {
   IRaycastEnemyConfig,
@@ -94,7 +94,12 @@ export class RaycastEnemyManager {
     const enemy = new RaycastEnemy(this.nextEnemyId++, config, x, y, sheet);
 
     if (enemy.animatedSprite) {
+      // Per-enemy Graphics mask for partial wall occlusion
+      const mask = new Graphics();
+      this.container.addChild(mask);
       this.container.addChild(enemy.animatedSprite);
+      enemy.animatedSprite.mask = mask;
+      enemy.occlusionMask = mask;
     }
 
     this.enemies.push(enemy);
@@ -364,26 +369,54 @@ export class RaycastEnemyManager {
       );
 
       const floorY = Math.floor(screenH / 2 + baseHeight / 2);
+      const halfW = spriteWidth / 2;
 
-      // Occlusion test across sprite columns against Z-buffer
-      const leftCol = Math.max(
-        0,
-        Math.min(screenW - 1, Math.floor(spriteScreenX - spriteWidth * 0.35))
-      );
-      const centerCol = Math.max(0, Math.min(screenW - 1, spriteScreenX));
-      const rightCol = Math.max(
-        0,
-        Math.min(screenW - 1, Math.floor(spriteScreenX + spriteWidth * 0.35))
-      );
+      // Compute visible screen columns for this sprite
+      const drawStartX = Math.max(0, Math.floor(spriteScreenX - halfW));
+      const drawEndX = Math.min(screenW - 1, Math.floor(spriteScreenX + halfW));
 
-      const isOccluded =
-        transformY > zBuffer[centerCol] &&
-        transformY > zBuffer[leftCol] &&
-        transformY > zBuffer[rightCol];
+      // Per-column occlusion mask: draw only columns where enemy is in front of wall
+      const mask = enemy.occlusionMask;
+      if (mask) {
+        mask.clear();
 
-      if (isOccluded) {
-        sprite.visible = false;
-        continue;
+        let runStart = -1;
+        for (let col = drawStartX; col <= drawEndX; col++) {
+          if (transformY < zBuffer[col]) {
+            // This column is visible
+            if (runStart < 0) runStart = col;
+          } else {
+            // This column is occluded; flush any open run
+            if (runStart >= 0) {
+              mask.beginFill(0xffffff);
+              mask.drawRect(runStart, 0, col - runStart, screenH);
+              mask.endFill();
+              runStart = -1;
+            }
+          }
+        }
+        // Flush last open run
+        if (runStart >= 0) {
+          mask.beginFill(0xffffff);
+          mask.drawRect(runStart, 0, drawEndX - runStart + 1, screenH);
+          mask.endFill();
+        }
+
+        // If mask is completely empty, sprite is fully occluded
+        if (runStart < 0 && drawStartX <= drawEndX) {
+          // Check if we ever drew anything
+          let anyVisible = false;
+          for (let col = drawStartX; col <= drawEndX; col++) {
+            if (transformY < zBuffer[col]) {
+              anyVisible = true;
+              break;
+            }
+          }
+          if (!anyVisible) {
+            sprite.visible = false;
+            continue;
+          }
+        }
       }
 
       sprite.visible = true;
@@ -463,6 +496,9 @@ export class RaycastEnemyManager {
 
   private disposeEnemies(): void {
     for (const enemy of this.enemies) {
+      if (enemy.occlusionMask) {
+        this.container.removeChild(enemy.occlusionMask);
+      }
       if (enemy.animatedSprite) {
         this.container.removeChild(enemy.animatedSprite);
       }

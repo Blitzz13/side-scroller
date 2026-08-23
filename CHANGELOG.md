@@ -38,11 +38,31 @@ This document logs recent development changes and enhancements made to the Rayca
 - **Directional Sprite Math** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
   - Evaluates relative viewing angle $\Delta = \theta_{\text{toPlayer}} - \theta_{\text{facing}}$ into 8 orientations (`towards`, `towards_left_diagonal`, `left`, `away_left_diagonal`, `away` with horizontal mirroring for right sides).
 - **Native `AnimatedSprite` Integration** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
-- **Proportional Frame Height Scaling (`referenceHeight`)** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
-  - Scaled screen height and width relative to the enemy's standard standing height (`referenceHeight = 67`).
-  - Ensures falling/death frames (which shrink from 67px standing to 20px lying down) stay naturally scaled on the floor without stretching or appearing gigantic.
+  - Upgraded enemy rendering to PixiJS `AnimatedSprite`, leveraging Pixi's built-in UV rotation matrices for spritesheets with `"rotated": true` packed frames.
+  - Fixes sideways/corrupted sprite rendering on rotated atlas frames.
+  - Smooth hardware-accelerated 6-frame walk animations, shooting pose, and death sequence.
 
 ---
+
+### 4. Proportional Frame Height Scaling (`referenceHeight`)
+- **Config & Rendering** ([`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Added `referenceHeight` config property (default `67`) — the pixel height of the enemy's standard standing frame.
+  - Sprite width and height are now scaled as `baseHeight × scale × (texDim / referenceHeight)`, so death/falling frames (which shrink from 67px to ~20px) render at their natural proportional size instead of being stretched to full standing height.
+
+---
+
+### 5. Display Layer Ordering Fix
+- **Container Hierarchy** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Fixed enemy sprites rendering on top of the weapon view and crosshair HUD.
+  - Reordered `addChild` calls so `enemyContainer` is added before `weaponView` and `hud`, ensuring correct front-to-back layering: `bgSprite` → wall columns → `objectContainer` (pickups) → `enemyContainer` → `weaponView` → `hud` → mobile controls.
+
+---
+
+### 6. Per-Column Partial Wall Occlusion
+- **Graphics Mask System** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Replaced all-or-nothing 3-point occlusion test with per-column `Graphics` mask per enemy.
+  - Each frame, iterates across the sprite's screen columns and checks `transformY < zBuffer[col]`. Consecutive visible columns are coalesced into rectangular mask runs for efficiency.
+  - Enemies now smoothly emerge from behind wall edges column-by-column instead of popping in/out as a whole sprite.
 
 ## [2026-08-23] - Mobile High-DPI Text Sharpness & Configurable Muzzle Flash System
 
