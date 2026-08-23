@@ -174,12 +174,12 @@ export class RaycastEnemy {
     tryMoveEnemy: (enemy: RaycastEnemy, newX: number, newY: number) => boolean,
     onShootPlayer: (damage: number, accuracy: number, distance: number) => void
   ): void {
-    if (this.state === "dead") {
-      return;
-    }
-
     if (this.painTimer > 0) {
       this.painTimer = Math.max(0, this.painTimer - delta);
+    }
+
+    if (this.state === "dead") {
+      return;
     }
 
     if (this.shootingTimer > 0) {

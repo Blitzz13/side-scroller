@@ -73,6 +73,13 @@ This document logs recent development changes and enhancements made to the Rayca
 
 ---
 
+### 8. Enemy Death Pain Tint Fix
+- **Pain Timer Countdown on Death** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Moved `this.painTimer` decrement above the `if (this.state === "dead") return;` early return in `update()`.
+  - Fixes the bug where defeated enemies remained tinted red indefinitely because their pain timers never counted down after transitioning to the `"dead"` state.
+
+---
+
 ## [2026-08-23] - Mobile High-DPI Text Sharpness & Configurable Muzzle Flash System
 
 ### 1. High-DPI (Retina) Resolution & Mobile Text Sharpness
