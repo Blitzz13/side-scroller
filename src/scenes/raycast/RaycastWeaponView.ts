@@ -16,6 +16,8 @@ export class RaycastWeaponView extends Container {
   private recoilRotation: number = 0;
   private flashTimer: number = 0;
 
+  private flashSprite: Sprite;
+
   // Base positioning (centered/right-aligned bottom first-person view)
   private readonly baseScale: number = 1.05;
   private readonly basePosX: number = gameConfig.width * 0.58;
@@ -29,10 +31,15 @@ export class RaycastWeaponView extends Container {
     this.drawCrosshair();
     this.addChild(this.crosshair);
 
-    // 2. Muzzle flash effect
+    // 2. Muzzle flash effect (procedural graphics + optional sprite)
     this.muzzleFlash = new Graphics();
     this.muzzleFlash.visible = false;
     this.addChild(this.muzzleFlash);
+
+    this.flashSprite = new Sprite();
+    this.flashSprite.anchor.set(0.5, 0.5);
+    this.flashSprite.visible = false;
+    this.addChild(this.flashSprite);
 
     // 3. Weapon sprite (drawn on top of 3D world, below HUD)
     // Anchor set at 85% down the weapon (near rear grip/stock)
@@ -139,6 +146,8 @@ export class RaycastWeaponView extends Container {
   public unequip(): void {
     this.currentWeapon = null;
     this.weaponSprite.visible = false;
+    this.muzzleFlash.visible = false;
+    if (this.flashSprite) this.flashSprite.visible = false;
   }
 
   public get isEquipped(): boolean {
@@ -160,9 +169,17 @@ export class RaycastWeaponView extends Container {
     this.weaponSprite.y = this.basePosY + this.recoilOffset;
     this.weaponSprite.rotation = this.recoilRotation;
 
-    // Trigger muzzle flash
-    this.flashTimer = 5; // ~5 frames
-    this.drawMuzzleFlash();
+    // Trigger configurable muzzle flash
+    const flashCfg = this.currentWeapon.muzzleFlash;
+    const isEnabled = flashCfg?.enabled ?? true;
+    if (isEnabled) {
+      this.flashTimer = flashCfg?.duration ?? 5;
+      this.drawMuzzleFlash();
+    } else {
+      this.flashTimer = 0;
+      this.muzzleFlash.visible = false;
+      if (this.flashSprite) this.flashSprite.visible = false;
+    }
 
     // Play blaster shoot sound from config array
     if (this.currentWeapon.shootSounds && this.currentWeapon.shootSounds.length > 0) {
@@ -180,34 +197,120 @@ export class RaycastWeaponView extends Container {
 
   private drawMuzzleFlash(): void {
     this.muzzleFlash.clear();
+    if (this.flashSprite) this.flashSprite.visible = false;
+
     if (!this.weaponSprite.visible) {
       this.muzzleFlash.visible = false;
       return;
     }
 
-    // Exact rotated muzzle tip position at front barrel opening relative to rear anchor (0.5, 0.85)
-    const cos = Math.cos(this.weaponSprite.rotation);
-    const sin = Math.sin(this.weaponSprite.rotation);
-    const localMuzzleX = 97 * this.baseScale;
-    const localMuzzleY = -284 * this.baseScale;
+    const cfg = this.currentWeapon?.muzzleFlash;
+    if (cfg && cfg.enabled === false) {
+      this.muzzleFlash.visible = false;
+      return;
+    }
 
-    const muzzleX = this.weaponSprite.x //+ (localMuzzleX * cos - localMuzzleY * sin);
-    const muzzleY = this.weaponSprite.y //+ (localMuzzleX * sin + localMuzzleY * cos);
+    const scale = (cfg?.scale ?? 1.0) * this.baseScale;
+    const followRotation = cfg?.followRotation ?? true;
 
-    // Outer plasma glow
-    this.muzzleFlash.beginFill(0xff3300, 0.4);
-    this.muzzleFlash.drawCircle(muzzleX, muzzleY, 32);
-    this.muzzleFlash.endFill();
+    // Direct configured offsets per weapon relative to weapon anchor
+    const rawOffsetX = (cfg?.offsetX ?? 0) * this.baseScale;
+    const rawOffsetY = (cfg?.offsetY ?? 0) * this.baseScale;
 
-    // Inner bright blaster flash
-    this.muzzleFlash.beginFill(0xff8800, 0.85);
-    this.muzzleFlash.drawCircle(muzzleX, muzzleY, 18);
-    this.muzzleFlash.endFill();
+    let muzzleX = this.weaponSprite.x;
+    let muzzleY = this.weaponSprite.y;
 
-    // Core white-hot spark
-    this.muzzleFlash.beginFill(0xffffff, 0.95);
-    this.muzzleFlash.drawCircle(muzzleX, muzzleY, 8);
-    this.muzzleFlash.endFill();
+    if (followRotation && this.weaponSprite.rotation !== 0) {
+      const cos = Math.cos(this.weaponSprite.rotation);
+      const sin = Math.sin(this.weaponSprite.rotation);
+      muzzleX += rawOffsetX * cos - rawOffsetY * sin;
+      muzzleY += rawOffsetX * sin + rawOffsetY * cos;
+    } else {
+      muzzleX += rawOffsetX;
+      muzzleY += rawOffsetY;
+    }
+
+    // 1. Optional Sprite Texture
+    if (cfg?.texture) {
+      try {
+        this.flashSprite.texture = Texture.from(cfg.texture);
+        this.flashSprite.position.set(muzzleX, muzzleY);
+        this.flashSprite.rotation = followRotation ? this.weaponSprite.rotation : 0;
+        this.flashSprite.scale.set(scale);
+        this.flashSprite.visible = true;
+      } catch (e) {
+        console.warn(`Failed to load muzzle flash texture ${cfg.texture}:`, e);
+      }
+    }
+
+    // 2. Custom multi-layer circles if defined
+    if (cfg?.layers && cfg.layers.length > 0) {
+      for (const layer of cfg.layers) {
+        const lx = muzzleX + (layer.offsetX ?? 0) * scale;
+        const ly = muzzleY + (layer.offsetY ?? 0) * scale;
+        const radius = layer.radius * scale;
+        const alpha = layer.alpha ?? 1.0;
+
+        this.muzzleFlash.beginFill(layer.color, alpha);
+        this.muzzleFlash.drawCircle(lx, ly, radius);
+        this.muzzleFlash.endFill();
+      }
+    } else {
+      // 3. Standard configured 3-tier blaster flash layers
+      const outerColor = cfg?.outerColor ?? 0xff3300;
+      const outerRadius = (cfg?.outerRadius ?? 32) * scale;
+      const outerAlpha = cfg?.outerAlpha ?? 0.4;
+
+      const innerColor = cfg?.innerColor ?? 0xff8800;
+      const innerRadius = (cfg?.innerRadius ?? 18) * scale;
+      const innerAlpha = cfg?.innerAlpha ?? 0.85;
+
+      const coreColor = cfg?.coreColor ?? 0xffffff;
+      const coreRadius = (cfg?.coreRadius ?? 8) * scale;
+      const coreAlpha = cfg?.coreAlpha ?? 0.95;
+
+      // Outer plasma glow
+      if (outerRadius > 0 && outerAlpha > 0) {
+        this.muzzleFlash.beginFill(outerColor, outerAlpha);
+        this.muzzleFlash.drawCircle(muzzleX, muzzleY, outerRadius);
+        this.muzzleFlash.endFill();
+      }
+
+      // Inner bright blaster flash
+      if (innerRadius > 0 && innerAlpha > 0) {
+        this.muzzleFlash.beginFill(innerColor, innerAlpha);
+        this.muzzleFlash.drawCircle(muzzleX, muzzleY, innerRadius);
+        this.muzzleFlash.endFill();
+      }
+
+      // Core white-hot spark
+      if (coreRadius > 0 && coreAlpha > 0) {
+        this.muzzleFlash.beginFill(coreColor, coreAlpha);
+        this.muzzleFlash.drawCircle(muzzleX, muzzleY, coreRadius);
+        this.muzzleFlash.endFill();
+      }
+    }
+
+    // 4. Optional sparks / burst rays if configured
+    if (cfg?.sparks && cfg.sparks.count > 0) {
+      const sparkCount = cfg.sparks.count;
+      const sparkLength = (cfg.sparks.length ?? 24) * scale;
+      const sparkColor = cfg.sparks.color ?? 0xffdd44;
+      const sparkAlpha = cfg.sparks.alpha ?? 0.8;
+
+      this.muzzleFlash.lineStyle(2 * scale, sparkColor, sparkAlpha);
+      for (let i = 0; i < sparkCount; i++) {
+        const angle = (i * (Math.PI * 2)) / sparkCount + (Math.random() * 0.4 - 0.2);
+        const len = sparkLength * (0.7 + Math.random() * 0.6);
+        const sx = muzzleX + Math.cos(angle) * (8 * scale);
+        const sy = muzzleY + Math.sin(angle) * (8 * scale);
+        const ex = muzzleX + Math.cos(angle) * len;
+        const ey = muzzleY + Math.sin(angle) * len;
+
+        this.muzzleFlash.moveTo(sx, sy);
+        this.muzzleFlash.lineTo(ex, ey);
+      }
+    }
 
     this.muzzleFlash.visible = true;
   }
@@ -215,6 +318,7 @@ export class RaycastWeaponView extends Container {
   public update(delta: number, isMoving: boolean, moveIntensity: number = 1): void {
     if (!this.weaponSprite.visible) {
       this.muzzleFlash.visible = false;
+      if (this.flashSprite) this.flashSprite.visible = false;
       return;
     }
 
@@ -252,6 +356,7 @@ export class RaycastWeaponView extends Container {
       this.flashTimer -= delta;
       if (this.flashTimer <= 0) {
         this.muzzleFlash.visible = false;
+        if (this.flashSprite) this.flashSprite.visible = false;
       } else {
         this.drawMuzzleFlash();
       }

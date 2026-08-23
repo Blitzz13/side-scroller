@@ -25,6 +25,23 @@ export const e11Config: IRaycastWeaponConfig = {
     loop: false,
     volume: 1,
   },
+  muzzleFlash: {
+    enabled: true,
+    offsetX: -50,
+    offsetY: -184,
+    followRotation: true,
+    duration: 5,
+    scale: 1.0,
+    outerColor: 0xff3300,
+    outerRadius: 32,
+    outerAlpha: 0.4,
+    innerColor: 0xff8800,
+    innerRadius: 18,
+    innerAlpha: 0.85,
+    coreColor: 0xffffff,
+    coreRadius: 8,
+    coreAlpha: 0.95,
+  },
 };
 
 /**

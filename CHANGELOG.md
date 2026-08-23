@@ -4,6 +4,48 @@ This document logs recent development changes and enhancements made to the Rayca
 
 ---
 
+## [2026-08-23] - Mobile High-DPI Text Sharpness & Configurable Muzzle Flash System
+
+### 1. High-DPI (Retina) Resolution & Mobile Text Sharpness
+- **Canvas Backing Store & Auto-Density** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Configured `autoDensity: true`, `antialias: true`, and `resolution: Math.max(1, Math.min(window.devicePixelRatio || 1, 3))` on the PixiJS `Application`.
+  - Fixes blurry rendering on mobile phones and Retina screens by matching the canvas backing store to the device's physical pixel grid 1:1 instead of upscaling a low-resolution buffer.
+- **High-Density Vector Text in HUD** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Replaced downscaled `BitmapText` with high-density vector `Text` for Health (`100 HP`), Weapon name (`UNARMED` / weapon title), Ammo counter (`--` / `XX AMMO`), and Toast notifications.
+  - Set explicit `resolution` matching device pixel density with bold typography, crisp letter spacing, and clean drop shadows.
+- **Sharp Mobile Virtual Buttons** ([`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts)):
+  - Upgraded on-screen touch control labels (`FIRE`, `E`, `<`, `>`, `FS`) to high-resolution vector `Text`.
+- **High-Density BitmapFont Atlas** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Updated `registerFonts()` to bake the bitmap font texture atlas at `resolution: dpr` on a `1024x1024` sheet, ensuring crispness for any legacy bitmap text across all menus and scoreboards.
+- **CSS & Mobile Viewport Enhancements** ([`src/style.css`](file:///D:/Projects/side-scroller/src/style.css), [`webpack.config.ts`](file:///D:/Projects/side-scroller/webpack.config.ts)):
+  - Added `-webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;` to `html, body`.
+  - Configured `HtmlWebpackPlugin` with mobile viewport meta tag (`viewport-fit=cover`, `user-scalable=no`).
+
+---
+
+### 2. Per-Weapon Configurable Muzzle Flash System
+- **Muzzle Flash Interface & Config Options** ([`src/configs/interfaces/IRaycastWeaponConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastWeaponConfig.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Added `IMuzzleFlashConfig`, `IMuzzleFlashLayer`, and `IMuzzleFlashSparks` interfaces and attached `muzzleFlash?: IMuzzleFlashConfig` to `IRaycastWeaponConfig`.
+  - Supported parameters:
+    - `enabled`: Toggle flash per weapon.
+    - `offsetX`, `offsetY`: Position offsets relative to weapon sprite.
+    - `followRotation`: Whether flash offset rotates with weapon recoil and tilt (defaults to `true`).
+    - `duration`: Visible duration in frames / ticks.
+    - `scale`: Overall scale multiplier.
+    - `outerColor`, `outerRadius`, `outerAlpha`: Outer plasma glow properties.
+    - `innerColor`, `innerRadius`, `innerAlpha`: Mid-layer blaster flash properties.
+    - `coreColor`, `coreRadius`, `coreAlpha`: Core spark properties.
+    - `layers`: Optional array of custom multi-layer circles (`IMuzzleFlashLayer[]`) for complete visual flexibility.
+    - `sparks`: Optional spark / burst ray configuration (`IMuzzleFlashSparks`).
+    - `texture`: Optional sprite texture for image-based muzzle flashes.
+- **Weapon Configuration Registry** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Configured explicit `muzzleFlash` offsets and color layers for the E-11 Blaster Rifle.
+- **Dynamic View Rendering** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Replaced hardcoded constants and manual math in `drawMuzzleFlash()` with dynamic reads from the equipped weapon's `muzzleFlash` config.
+  - Added `flashSprite` support for sprite-based muzzle flash assets.
+
+---
+
 ## [2026-08-18] - 2.5D Billboard Objects & Items System
 
 ### 1. `Objects` Layer Parsing
@@ -213,14 +255,21 @@ When facing away from close walls and looking into open rooms/corridors, multipl
 
 | File | Changes Made |
 | :--- | :--- |
+| [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts) | Added `autoDensity`, `antialias`, and `resolution: devicePixelRatio` to Pixi `Application`. |
+| [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) | Added high-density texture atlas resolution settings to `registerFonts()`. |
+| [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts) | Migrated HUD labels to high-resolution vector `Text` with device pixel density and crisp styling. |
+| [`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts) | Migrated touch button labels to high-resolution vector `Text`. |
+| [`src/style.css`](file:///D:/Projects/side-scroller/src/style.css) | Added font-smoothing rules and full-viewport touch styling. |
+| [`webpack.config.ts`](file:///D:/Projects/side-scroller/webpack.config.ts) | Added viewport metadata to `HtmlWebpackPlugin`. |
+| [`src/configs/interfaces/IRaycastWeaponConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastWeaponConfig.ts) | Added `IMuzzleFlashConfig`, `IMuzzleFlashLayer`, and `IMuzzleFlashSparks` interfaces. |
+| [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts) | Added explicit `muzzleFlash` configuration to `e11Config`. |
+| [`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts) | Made muzzle flash offsets, colors, layers, durations, and sprite textures dynamic from weapon config. |
+| [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts) | Exported muzzle flash interfaces. |
 | [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts) | Added dedicated `[FS]` button for reliable mobile fullscreen triggering. |
 | [`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts) | Implemented cross-browser `toggleFullscreen()` utility. |
-| [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts) | Updated fullscreen activation handlers for Chrome / Brave mobile compatibility. |
 | [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) | Disabled pointer lock requests on touch devices to avoid gesture interference. |
 | [`src/ui/VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts) | Created touch virtual thumbstick component with clamped knob motion. |
-| [`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts) | Created touch button component with active press states and tap events. |
 | [`src/ui/TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts) | Created right-side touch look swipe area for camera rotation. |
-| [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) | Added `ceiling_1.jpg`, `ceiling_2.jpg`, and `ceiling_3.jpg` to the environment bundle. |
 | [`assets/level2.json`](file:///D:/Projects/side-scroller/assets/level2.json) | Configured `Floor` and `Ceiling` tile layers with indoor and outdoor surfaces. |
 | [`RAYCAST_ENGINE.md`](file:///D:/Projects/side-scroller/RAYCAST_ENGINE.md) | Comprehensive system and architecture documentation. |
 | [`CHANGELOG.md`](file:///D:/Projects/side-scroller/CHANGELOG.md) | Log of all recent changes and implementation details. |

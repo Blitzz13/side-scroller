@@ -1,6 +1,11 @@
 import { RaycastPickupType } from "../../enums/RaycastPickupType";
 import { RaycastWeaponType } from "../../enums/RaycastWeaponType";
-import { IRaycastWeaponConfig } from "../../configs/interfaces/IRaycastWeaponConfig";
+import {
+  IRaycastWeaponConfig,
+  IMuzzleFlashConfig,
+  IMuzzleFlashLayer,
+  IMuzzleFlashSparks,
+} from "../../configs/interfaces/IRaycastWeaponConfig";
 import { IRaycastPickupConfig } from "../../configs/interfaces/IRaycastPickupConfig";
 import {
   raycastWeaponConfigs,
@@ -12,7 +17,13 @@ import {
 } from "../../configs/RaycastPickupConfigs";
 
 export { RaycastPickupType, RaycastWeaponType };
-export { IRaycastWeaponConfig, IRaycastPickupConfig };
+export {
+  IRaycastWeaponConfig,
+  IMuzzleFlashConfig,
+  IMuzzleFlashLayer,
+  IMuzzleFlashSparks,
+  IRaycastPickupConfig,
+};
 export {
   raycastWeaponConfigs,
   getRaycastWeaponConfig,
