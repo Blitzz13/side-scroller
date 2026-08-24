@@ -107,6 +107,9 @@ export interface TileMeta {
   weaponType?: string;
   tileClass?: string;
   image?: string;
+  slide?: string;
+  doorSlide?: string;
+  slideMode?: string;
 }
 
 export interface RaycastBreakable {

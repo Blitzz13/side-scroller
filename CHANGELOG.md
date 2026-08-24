@@ -55,6 +55,12 @@ This document logs recent development changes and enhancements made to the Rayca
 - **Configurable Pickup Radius** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
   - Added `pickupRadius` support to `IRaycastPickupConfig`, item instances, and Tiled custom properties.
   - Increased default keycard pickup radius to `0.9` (up from `0.55`), allowing effortless card collection while standing near furniture or across tables.
+- **Centered Recessed Doors & Configurable Slide Modes (`slide_up` vs `slide_sideways`)** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Re-engineered DDA door raycasting to place doors at $0.5$ tile depth (in the exact middle of the wall depth), with realistic interior doorframe jamb geometry.
+  - Added configurable slide animation modes:
+    - `"slide_up"`: Sci-fi blast door lifts up vertically into the ceiling recess, with multi-hit raycasting allowing full visual transparency to the room behind/underneath the rising panel.
+    - `"slide_sideways"`: Classic sliding door retracts horizontally into the adjacent doorframe.
+  - Configurable globally via `defaultDoorSlide`, in Tiled tileset/tile custom property (`"slide": "up" | "sideways"`), or programmatically via `setDoorSlideMode(x, y, mode)`.
 
 ---
 

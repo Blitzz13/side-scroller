@@ -29,6 +29,9 @@ interface RayHit {
   rayDirX: number;
   rayDirY: number;
   orientation?: "vertical" | "horizontal";
+  isDoor?: boolean;
+  doorSlide?: "up" | "sideways";
+  doorOpen?: number;
 }
 
 interface RawTextureData {
@@ -85,7 +88,7 @@ export class RaycastScene extends BaseScene {
   }> = [];
   private spritePool: Sprite[][] = [];
   private hitPool: RayHit[][] = [];
-  private readonly MAX_HITS_PER_COLUMN: number = 3;
+  private readonly MAX_HITS_PER_COLUMN: number = 6;
   private readonly MAX_RENDER_DISTANCE: number = 30;
   private tileTypes: Record<number, string> = {};
   private tileMeta: Record<number, TileMeta> = {};
@@ -97,6 +100,12 @@ export class RaycastScene extends BaseScene {
   private ceilingMapFlat!: Int32Array;
   // Numeric door states keyed by flat index (y * mapWidth + x) instead of string keys
   private doorStatesFlat!: Float64Array;
+  // Door geometry & slide configuration
+  private doorOrientationsFlat!: Uint8Array; // 0 = NS (plane at x + 0.5), 1 = EW (plane at y + 0.5)
+  private doorSlideModesFlat!: Uint8Array; // 0 = sideways, 1 = up
+  private doorSlideModes: Record<string, "slide_up" | "slide_sideways"> = {};
+  public defaultDoorSlide: "slide_up" | "slide_sideways" = "slide_sideways";
+
   // Numeric tile type flags (0=empty, 1=thickWall, 2=door, 3=thinWall)
   private static readonly TILE_EMPTY = 0;
   private static readonly TILE_WALL = 1;
@@ -660,6 +669,8 @@ export class RaycastScene extends BaseScene {
     this.ceilingMapFlat = new Int32Array(totalCells);
     this.doorStatesFlat = new Float64Array(totalCells);
     this.tileTypeFlags = new Uint8Array(totalCells);
+    this.doorOrientationsFlat = new Uint8Array(totalCells);
+    this.doorSlideModesFlat = new Uint8Array(totalCells);
 
     let maxTileId = 0;
     for (let y = 0; y < this.mapHeight; y++) {
@@ -695,6 +706,69 @@ export class RaycastScene extends BaseScene {
       }
     }
 
+    // Determine door orientations (NS vs EW) and slide modes
+    for (let y = 0; y < this.mapHeight; y++) {
+      for (let x = 0; x < this.mapWidth; x++) {
+        const idx = y * this.mapWidth + x;
+        if (this.tileTypeFlags[idx] === RaycastScene.TILE_DOOR) {
+          const leftIsWall =
+            x > 0 &&
+            this.tileTypeFlags[y * this.mapWidth + (x - 1)] !==
+              RaycastScene.TILE_EMPTY;
+          const rightIsWall =
+            x < this.mapWidth - 1 &&
+            this.tileTypeFlags[y * this.mapWidth + (x + 1)] !==
+              RaycastScene.TILE_EMPTY;
+          const topIsWall =
+            y > 0 &&
+            this.tileTypeFlags[(y - 1) * this.mapWidth + x] !==
+              RaycastScene.TILE_EMPTY;
+          const botIsWall =
+            y < this.mapHeight - 1 &&
+            this.tileTypeFlags[(y + 1) * this.mapWidth + x] !==
+              RaycastScene.TILE_EMPTY;
+
+          let isNS = false;
+          let isEW = false;
+
+          if (topIsWall && botIsWall && !leftIsWall && !rightIsWall) {
+            isNS = true; // Door flanked vertically -> door plane is at x + 0.5
+          } else if (leftIsWall && rightIsWall && !topIsWall && !botIsWall) {
+            isEW = true; // Door flanked horizontally -> door plane is at y + 0.5
+          } else if (topIsWall || botIsWall) {
+            isNS = true;
+          } else {
+            isEW = true;
+          }
+
+          this.doorOrientationsFlat[idx] = isNS ? 0 : 1;
+
+          // Determine slide mode: "slide_up" (1) or "slide_sideways" (0)
+          const doorKey = `${x},${y}`;
+          const tile = this.mapFlat[idx];
+          const meta = this.tileMeta[tile - 1] || {};
+          const explicitMode = this.doorSlideModes[doorKey];
+          const slideProp = (
+            meta.slide ||
+            meta.doorSlide ||
+            meta.slideMode ||
+            ""
+          ).toLowerCase();
+
+          let isSlideUp = this.defaultDoorSlide === "slide_up";
+          if (explicitMode) {
+            isSlideUp = explicitMode === "slide_up";
+          } else if (slideProp.includes("up") || slideProp.includes("vert")) {
+            isSlideUp = true;
+          } else if (slideProp.includes("side") || slideProp.includes("horiz")) {
+            isSlideUp = false;
+          }
+
+          this.doorSlideModesFlat[idx] = isSlideUp ? 1 : 0;
+        }
+      }
+    }
+
     for (const obj of this.mapObjects) {
       if (obj.texture > maxTileId) maxTileId = obj.texture;
     }
@@ -703,6 +777,18 @@ export class RaycastScene extends BaseScene {
     this.rawTexArray = new Array(maxTileId + 1);
     for (let i = 0; i <= maxTileId; i++) {
       this.rawTexArray[i] = this.rawTextureData[i];
+    }
+  }
+
+  public setDoorSlideMode(
+    x: number,
+    y: number,
+    mode: "slide_up" | "slide_sideways"
+  ): void {
+    const key = `${x},${y}`;
+    this.doorSlideModes[key] = mode;
+    if (this.doorSlideModesFlat && x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+      this.doorSlideModesFlat[y * this.mapWidth + x] = mode === "slide_up" ? 1 : 0;
     }
   }
 
@@ -986,7 +1072,7 @@ export class RaycastScene extends BaseScene {
     const doorKey = `${targetX},${targetY}`;
     const tileType = this.tileTypes[tile];
     const isDoorOpen =
-      tileType === "door" && (this.doorStates[doorKey] ?? 0) > 0;
+      tileType === "door" && Math.abs(this.doorStates[doorKey] ?? 0) >= 0.7;
 
     for (const wall of this.thinWalls) {
       const minX = Math.min(wall.x1, wall.x2);
@@ -1038,20 +1124,29 @@ export class RaycastScene extends BaseScene {
   private tryOpenDoor() {
     const px = Math.floor(this.player.x);
     const py = Math.floor(this.player.y);
+    const lookX = Math.floor(this.player.x + this.player.dirX * 0.85);
+    const lookY = Math.floor(this.player.y + this.player.dirY * 0.85);
 
     const nearbyOffsets = [
+      [lookX - px, lookY - py],
+      [0, 0],
       [1, 0],
       [-1, 0],
       [0, 1],
       [0, -1],
     ];
 
+    const tested = new Set<string>();
+
     for (const [dx, dy] of nearbyOffsets) {
       const x = px + dx;
       const y = py + dy;
+      const key = `${x},${y}`;
+      if (tested.has(key)) continue;
+      tested.add(key);
+
       const tile = this.map[y]?.[x];
       if (tile && this.tileTypes[tile] === "door") {
-        const key = `${x},${y}`;
         const currentState = this.doorStates[key];
 
         // Check if door requires a keycard to unlock
@@ -1071,9 +1166,11 @@ export class RaycastScene extends BaseScene {
         if (currentState === 0) {
           this.doorStates[key] = 0.01;
           this.doorStatesFlat[y * this.mapWidth + x] = 0.01;
+          break; // Action triggered
         } else if (currentState === 1) {
           this.doorStates[key] = -1;
           this.doorStatesFlat[y * this.mapWidth + x] = -1;
+          break;
         }
       }
     }
@@ -1182,23 +1279,153 @@ export class RaycastScene extends BaseScene {
         const adjustedTileId = tile - 1;
 
         if (tileFlag === RaycastScene.TILE_DOOR) {
-          const open = this.doorStatesFlat[flatIdx];
-          if (Math.abs(open) < 1) {
-            const offset = 1 - Math.abs(open);
-            const wallEdge = side === 0 ? mapX + offset : mapY + offset;
-            const hitPos = side === 0 ? mapX + hitX : mapY + hitX;
-            if (hitPos < wallEdge && hitCount < pool.length) {
-              hitX = Math.min(1, hitX + Math.abs(open));
-              const h = pool[hitCount++];
-              h.wallType = adjustedTileId;
-              h.distance = dist;
-              h.hitX = hitX;
-              h.side = side;
-              h.mapX = mapX;
-              h.mapY = mapY;
-              h.rayDirX = rayDirX;
-              h.rayDirY = rayDirY;
-              solidWallDist = dist;
+          const orientation = this.doorOrientationsFlat[flatIdx]; // 0 = NS (plane at x + 0.5), 1 = EW (plane at y + 0.5)
+          const open = Math.abs(this.doorStatesFlat[flatIdx]); // 0.0 to 1.0
+          const isSlideUp = this.doorSlideModesFlat[flatIdx] === 1;
+
+          if (orientation === 0) {
+            // North-South door: plane is in the center at x = mapX + 0.5
+            if (side === 0) {
+              // Crossed X boundary. Distance to center plane x = mapX + 0.5:
+              const doorDist = (sideDistX - deltaDistX) + 0.5 * deltaDistX;
+              const hitY = this.player.y + doorDist * rayDirY;
+              const offset = hitY - mapY;
+
+              if (offset >= 0 && offset <= 1) {
+                if (!isSlideUp) {
+                  // Sliding sideways along Y axis
+                  if (offset >= open) {
+                    if (hitCount < pool.length) {
+                      const h = pool[hitCount++];
+                      h.wallType = adjustedTileId;
+                      h.distance = doorDist;
+                      const texX = offset - open;
+                      h.hitX = stepX > 0 ? texX : 1.0 - texX;
+                      h.side = 0;
+                      h.mapX = mapX;
+                      h.mapY = mapY;
+                      h.rayDirX = rayDirX;
+                      h.rayDirY = rayDirY;
+                      h.isDoor = true;
+                      h.doorSlide = "sideways";
+                      h.doorOpen = open;
+                      solidWallDist = doorDist;
+                    }
+                    break;
+                  }
+                  // Else offset < open: passes through open gap! Continue DDA.
+                } else {
+                  // Slide up into ceiling
+                  if (open < 0.99) {
+                    if (hitCount < pool.length) {
+                      const h = pool[hitCount++];
+                      h.wallType = adjustedTileId;
+                      h.distance = doorDist;
+                      h.hitX = stepX > 0 ? offset : 1.0 - offset;
+                      h.side = 0;
+                      h.mapX = mapX;
+                      h.mapY = mapY;
+                      h.rayDirX = rayDirX;
+                      h.rayDirY = rayDirY;
+                      h.isDoor = true;
+                      h.doorSlide = "up";
+                      h.doorOpen = open;
+
+                      if (open <= 0.01) {
+                        solidWallDist = doorDist;
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+            } else {
+              // Entered from Y boundary -> hits side jamb
+              if (hitCount < pool.length) {
+                const h = pool[hitCount++];
+                h.wallType = adjustedTileId;
+                h.distance = dist;
+                h.hitX = hitX;
+                h.side = 1;
+                h.mapX = mapX;
+                h.mapY = mapY;
+                h.rayDirX = rayDirX;
+                h.rayDirY = rayDirY;
+                h.isDoor = false;
+                solidWallDist = dist;
+              }
+              break;
+            }
+          } else {
+            // East-West door: plane is in the center at y = mapY + 0.5
+            if (side === 1) {
+              // Crossed Y boundary. Distance to center plane y = mapY + 0.5:
+              const doorDist = (sideDistY - deltaDistY) + 0.5 * deltaDistY;
+              const hitXCoord = this.player.x + doorDist * rayDirX;
+              const offset = hitXCoord - mapX;
+
+              if (offset >= 0 && offset <= 1) {
+                if (!isSlideUp) {
+                  // Sliding sideways along X axis
+                  if (offset >= open) {
+                    if (hitCount < pool.length) {
+                      const h = pool[hitCount++];
+                      h.wallType = adjustedTileId;
+                      h.distance = doorDist;
+                      const texX = offset - open;
+                      h.hitX = stepY > 0 ? 1.0 - texX : texX;
+                      h.side = 1;
+                      h.mapX = mapX;
+                      h.mapY = mapY;
+                      h.rayDirX = rayDirX;
+                      h.rayDirY = rayDirY;
+                      h.isDoor = true;
+                      h.doorSlide = "sideways";
+                      h.doorOpen = open;
+                      solidWallDist = doorDist;
+                    }
+                    break;
+                  }
+                } else {
+                  // Slide up into ceiling
+                  if (open < 0.99) {
+                    if (hitCount < pool.length) {
+                      const h = pool[hitCount++];
+                      h.wallType = adjustedTileId;
+                      h.distance = doorDist;
+                      h.hitX = stepY > 0 ? 1.0 - offset : offset;
+                      h.side = 1;
+                      h.mapX = mapX;
+                      h.mapY = mapY;
+                      h.rayDirX = rayDirX;
+                      h.rayDirY = rayDirY;
+                      h.isDoor = true;
+                      h.doorSlide = "up";
+                      h.doorOpen = open;
+
+                      if (open <= 0.01) {
+                        solidWallDist = doorDist;
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+            } else {
+              // Entered from X boundary -> hits side jamb
+              if (hitCount < pool.length) {
+                const h = pool[hitCount++];
+                h.wallType = adjustedTileId;
+                h.distance = dist;
+                h.hitX = hitX;
+                h.side = 0;
+                h.mapX = mapX;
+                h.mapY = mapY;
+                h.rayDirX = rayDirX;
+                h.rayDirY = rayDirY;
+                h.isDoor = false;
+                solidWallDist = dist;
+              }
               break;
             }
           }
@@ -1212,6 +1439,7 @@ export class RaycastScene extends BaseScene {
           h.mapY = mapY;
           h.rayDirX = rayDirX;
           h.rayDirY = rayDirY;
+          h.isDoor = false;
           solidWallDist = dist;
           break;
         }
@@ -1521,13 +1749,19 @@ export class RaycastScene extends BaseScene {
         const tileFlag = this.tileTypeFlags[flatIdx];
 
         if (tileFlag === RaycastScene.TILE_DOOR) {
-          const open = this.doorStatesFlat[flatIdx];
-          if (Math.abs(open) < 0.05) {
+          const open = Math.abs(this.doorStatesFlat[flatIdx]);
+          const isSlideUp = this.doorSlideModesFlat[flatIdx] === 1;
+
+          if (open < 0.05) {
             const lineHeight = screenH / ray.distance;
             const drawStart = -lineHeight / 2 + screenH / 2;
             const drawEnd = lineHeight / 2 + screenH / 2;
             minDrawStart = Math.min(minDrawStart, drawStart);
             maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
+          } else if (isSlideUp && open < 0.95) {
+            const lineHeight = screenH / ray.distance;
+            const drawStart = -lineHeight / 2 + screenH / 2;
+            minDrawStart = Math.min(minDrawStart, drawStart);
           }
         } else if (tileFlag !== RaycastScene.TILE_THIN) {
           const lineHeight = screenH / ray.distance;
@@ -1555,7 +1789,7 @@ export class RaycastScene extends BaseScene {
     // 3. Render floor and ceiling with wall occlusion culling at crisp native 1:1 resolution
     this.renderFloorAndCeiling();
 
-    // 4. Render wall column sprites with viewport culling
+    // 4. Render wall column sprites with viewport culling (back to front order)
     for (let i = 0; i < screenW; i++) {
       const hitCount = this.hitCounts[i];
       const pool = this.hitPool[i];
@@ -1564,14 +1798,21 @@ export class RaycastScene extends BaseScene {
         sprite.visible = false;
       }
 
-      for (let j = 0; j < hitCount; j++) {
+      for (let j = hitCount - 1; j >= 0; j--) {
         const ray = pool[j];
         const lineHeight = screenH / ray.distance;
-        const drawStart = -lineHeight / 2 + screenH / 2;
-        const drawEnd = lineHeight / 2 + screenH / 2;
+        let drawStart = -lineHeight / 2 + screenH / 2;
+        let drawEnd = lineHeight / 2 + screenH / 2;
+
+        if (ray.isDoor && ray.doorSlide === "up" && ray.doorOpen !== undefined && ray.doorOpen > 0) {
+          const ceilingY = drawStart;
+          const floorY = drawEnd;
+          const doorBottom = floorY - ray.doorOpen * lineHeight;
+          drawEnd = Math.max(ceilingY, doorBottom);
+        }
 
         // Viewport culling: skip drawing if wall slice is outside the screen bounds
-        if (drawEnd <= 0 || drawStart >= screenH) continue;
+        if (drawEnd <= 0 || drawStart >= screenH || drawEnd <= drawStart) continue;
 
         const sprite = this.spritePool[i][j];
         const tileType = this.tileTypes[ray.wallType + 1];
