@@ -100,4 +100,25 @@ export interface TileMeta {
   amount?: number;
   weaponType?: string;
   tileClass?: string;
+  image?: string;
+}
+
+export interface RaycastBreakable {
+  id: number;
+  x: number;
+  y: number;
+  type: "chair" | "table" | string;
+  name: string;
+  health: number;
+  maxHealth: number;
+  isBroken: boolean;
+  intactTextureId: number;
+  scale?: number;
+  scaleX?: number;
+  scaleY?: number;
+  vOffset?: number;
+  z?: number;
+  anchor?: string;
+  hitRadius: number;
+  blocksMovement: boolean;
 }

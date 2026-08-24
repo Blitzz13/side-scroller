@@ -205,6 +205,22 @@ export const manifest: AssetsManifest = {
             src: "./assets/E_11-equiped.png",
           },
           {
+            name: "chair",
+            src: "./assets/chair.png",
+          },
+          {
+            name: "chair_broken",
+            src: "./assets/chair_broken.png",
+          },
+          {
+            name: "table",
+            src: "./assets/table.png",
+          },
+          {
+            name: "table_broken",
+            src: "./assets/table_broken.png",
+          },
+          {
             name: "explosion",
             src: "./assets/explosion.json"
           }

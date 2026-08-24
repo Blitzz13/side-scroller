@@ -1,5 +1,5 @@
 import "./style.css";
-import { Application, Ticker } from "pixi.js";
+import { Application, BaseTexture, SCALE_MODES, Ticker } from "pixi.js";
 import { MainMenu } from "./scenes/MainMenu";
 import { gameConfig, manifest, registerFonts } from "./configs/GameConfig";
 import { BaseScene } from "./scenes/BaseScene";
@@ -11,6 +11,9 @@ import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
 import { RaycastScene } from "./scenes/RaycastScene";
 import { Stats } from "pixi-stats";
+
+// Set global nearest-neighbor pixel sampling for all loaded textures and spritesheets
+BaseTexture.defaultOptions.scaleMode = SCALE_MODES.NEAREST;
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,

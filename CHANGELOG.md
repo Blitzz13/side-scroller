@@ -2,6 +2,30 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-08-24] - Breakable Furniture System (Chairs & Tables)
+
+### 1. Dynamic Breakable Furniture & Destruction Physics
+- **Manager & Types** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Implemented `RaycastBreakableManager` to detect, render, collide with, and break interactive furniture objects (`chair` and `table`).
+  - Added `RaycastBreakable` interface tracking `health`, `maxHealth`, `isBroken`, `hitRadius`, `blocksMovement`, and intact/broken textures.
+- **Broken State Textures & 1px Column Slicing** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Pre-loads and slices `assets/chair_broken.png` and `assets/table_broken.png` with `SCALE_MODES.NEAREST` into 1px vertical column textures.
+  - Seamlessly swaps the sprite's texture and column slices to broken rubble upon destruction, maintaining floor anchoring.
+- **Raycast Shooting & Ballistics Integration** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Crosshair hit testing now performs ray-cylinder intersection against unbroken furniture in front of walls.
+  - If a bullet hits a chair or table before an enemy or wall, it deals damage, destroys the furniture with an impact sound effect (`explosion_sound`), and notifies the player with a HUD toast (`[!] Smashed Chair/Table`).
+  - Once broken, bullets pass straight through the rubble to hit enemies and walls behind them.
+- **Player Movement Collision & Obstacle Clearing** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Unbroken tables and chairs block player movement (`checkCollision`).
+  - Destroying furniture removes its movement collision, allowing the player to walk freely over the broken debris.
+
+---
+
+### 2. Global Nearest-Neighbor Texture Sampling (`SCALE_MODES.NEAREST`)
+- **Global Application Settings** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Configured `BaseTexture.defaultOptions.scaleMode = SCALE_MODES.NEAREST`.
+  - Ensures every texture, sprite, spritesheet, wall slice, pickup, furniture prop, and UI asset throughout the application defaults to crisp nearest-neighbor point sampling.
+
 ---
 
 ## [2026-08-23] - Configurable Enemy AI, 8-Directional Sprites, Combat System & Weapon Drops

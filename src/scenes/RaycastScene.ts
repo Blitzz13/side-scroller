@@ -13,6 +13,7 @@ import { gameConfig } from "../configs/GameConfig";
 import { MobileControls } from "../ui/MobileControls";
 import { MapObject, TileMeta } from "./raycast/types";
 import { RaycastPickupManager } from "./raycast/RaycastPickupManager";
+import { RaycastBreakableManager } from "./raycast/RaycastBreakableManager";
 import { RaycastWeaponView } from "./raycast/RaycastWeaponView";
 import { RaycastHUD } from "./raycast/RaycastHUD";
 import { RaycastPlayerController } from "./raycast/RaycastPlayerController";
@@ -131,6 +132,7 @@ export class RaycastScene extends BaseScene {
   private hud!: RaycastHUD;
   private playerController!: RaycastPlayerController;
   private pickupManager!: RaycastPickupManager;
+  private breakableManager!: RaycastBreakableManager;
   private enemyContainer!: Container;
   private enemyManager!: RaycastEnemyManager;
 
@@ -231,6 +233,7 @@ export class RaycastScene extends BaseScene {
 
     this.playerController = new RaycastPlayerController(this.weaponView, this.hud);
     this.pickupManager = new RaycastPickupManager();
+    this.breakableManager = new RaycastBreakableManager();
 
     // Overlay mobile on-screen controls (only on mobile devices)
     if (this.isMobileDevice()) {
@@ -354,6 +357,14 @@ export class RaycastScene extends BaseScene {
     }
 
     this.parseTiledMap(mapData);
+    await this.breakableManager.initTextures();
+    const firstgid = mapData.tilesets?.[0]?.firstgid ?? 1;
+    this.breakableManager.parseMapBreakables(
+      mapData,
+      this.tileMeta,
+      this.tileTypes,
+      firstgid
+    );
     await this.enemyManager.initSpritesheets();
     this.enemyManager.parseMapEnemies(mapData);
 
@@ -447,6 +458,8 @@ export class RaycastScene extends BaseScene {
               meta.imageHeight = tile.imageheight;
               meta.imageWidth = tile.imagewidth;
             }
+            const imgPath = tile.image || "";
+            meta.image = imgPath.split(/[\\/]/).pop() || "";
             this.tileMeta[tile.id] = meta;
           });
         }
@@ -677,6 +690,9 @@ export class RaycastScene extends BaseScene {
     if (this.pickupManager) {
       this.pickupManager.dispose();
     }
+    if (this.breakableManager) {
+      this.breakableManager.dispose();
+    }
     if (this.enemyManager) {
       this.enemyManager.dispose();
     }
@@ -757,17 +773,39 @@ export class RaycastScene extends BaseScene {
     const didShoot = this.playerController.tryShoot();
     if (didShoot) {
       const damage = this.playerController.weaponConfig?.damage ?? 25;
-      this.enemyManager.handlePlayerShot(
+      const centerCol = Math.floor(gameConfig.width / 2);
+      const wallDistance = this.zBuffer[centerCol] || this.MAX_RENDER_DISTANCE;
+
+      // Find closest breakable furniture hit along aiming vector
+      const breakableHit = this.breakableManager.findClosestHit(
+        this.player.x,
+        this.player.y,
+        this.player.dirX,
+        this.player.dirY,
+        wallDistance
+      );
+
+      const maxEnemyDist = breakableHit ? breakableHit.distance : wallDistance;
+
+      // Shoot enemy up to the nearest obstacle (breakable or wall)
+      const hitEnemy = this.enemyManager.handlePlayerShot(
         this.player.x,
         this.player.y,
         this.player.dirX,
         this.player.dirY,
         damage,
-        this.MAX_RENDER_DISTANCE,
+        maxEnemyDist,
         (enemy) => {
           this.hud.showToast(`[!] Neutralized ${enemy.config.name} (+E-11)`, 0x00ff88);
         }
       );
+
+      // If no enemy was in front of the breakable, damage the breakable
+      if (!hitEnemy && breakableHit) {
+        this.breakableManager.damageBreakable(breakableHit.breakable, damage, (broken) => {
+          this.hud.showToast(`[!] Smashed ${broken.name}`, 0xffaa00);
+        });
+      }
     }
   }
 
@@ -928,6 +966,10 @@ export class RaycastScene extends BaseScene {
       ) {
         return false;
       }
+    }
+
+    if (this.breakableManager && this.breakableManager.checkCollision(newX, newY)) {
+      return false;
     }
 
     return tile === 0 || isDoorOpen;
@@ -1511,8 +1553,10 @@ export class RaycastScene extends BaseScene {
       }
     }
 
-    // 5. Render billboard pickups with Z-buffer occlusion
-    this.mapObjects = this.pickupManager.getVisibleMapObjects();
+    // 5. Render billboard pickups & breakables with Z-buffer occlusion
+    const pickupObjects = this.pickupManager.getVisibleMapObjects();
+    const breakableObjects = this.breakableManager ? this.breakableManager.getVisibleMapObjects() : [];
+    this.mapObjects = pickupObjects.concat(breakableObjects);
     this.renderObjects();
 
     // 6. Render animated enemy sprites with hardware rotation & Z-buffer occlusion

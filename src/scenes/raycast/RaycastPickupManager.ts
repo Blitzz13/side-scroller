@@ -145,17 +145,25 @@ export class RaycastPickupManager {
                 config: pConfig,
               });
             } else {
-              this.staticObjects.push({
-                x,
-                y,
-                texture: adjustedTileId,
-                scale,
-                scaleX,
-                scaleY,
-                vOffset,
-                z,
-                anchor,
-              });
+              const isBreakable =
+                (meta.image || "").toLowerCase().includes("chair") ||
+                (meta.image || "").toLowerCase().includes("table") ||
+                typeStr.includes("chair") ||
+                typeStr.includes("table");
+
+              if (!isBreakable) {
+                this.staticObjects.push({
+                  x,
+                  y,
+                  texture: adjustedTileId,
+                  scale,
+                  scaleX,
+                  scaleY,
+                  vOffset,
+                  z,
+                  anchor,
+                });
+              }
             }
           }
         });
@@ -271,17 +279,27 @@ export class RaycastPickupManager {
                 config: pConfig,
               });
             } else {
-              this.staticObjects.push({
-                x,
-                y,
-                texture: adjustedTileId,
-                scale: objScale,
-                scaleX: objScaleX,
-                scaleY: objScaleY,
-                vOffset: objVOffset,
-                z: objZ,
-                anchor: objAnchor,
-              });
+              const isBreakable =
+                (meta.image || "").toLowerCase().includes("chair") ||
+                (meta.image || "").toLowerCase().includes("table") ||
+                (obj.name || "").toLowerCase().includes("chair") ||
+                (obj.name || "").toLowerCase().includes("table") ||
+                normalizedType.includes("chair") ||
+                normalizedType.includes("table");
+
+              if (!isBreakable) {
+                this.staticObjects.push({
+                  x,
+                  y,
+                  texture: adjustedTileId,
+                  scale: objScale,
+                  scaleX: objScaleX,
+                  scaleY: objScaleY,
+                  vOffset: objVOffset,
+                  z: objZ,
+                  anchor: objAnchor,
+                });
+              }
             }
           }
         });
