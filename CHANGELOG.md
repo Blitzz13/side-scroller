@@ -28,6 +28,36 @@ This document logs recent development changes and enhancements made to the Rayca
 
 ---
 
+### 3. Object Layer Positioning, Animated Keycards & Locked Doors System
+- **Sub-Tile Object Positioning** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Extended map parser to extract fractional $(x, y)$ world coordinates from Tiled object layers (`PositionedObjects`, `Pickups`) using `(obj.x + obj.width/2)/tileW` and `(obj.y - obj.height/2)/tileH`.
+  - Enables placing items directly on tables, precise chair alignments, and custom `scale`, `vOffset`, `z`, and `anchor` overrides.
+- **Native `AnimatedSprite` Keycards (`keycards.json`)** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`assets/keycards.json`](file:///D:/Projects/side-scroller/assets/keycards.json)):
+  - Implemented PixiJS native `AnimatedSprite` for keycards, correctly handling FreeTexPacker `"rotated": true` atlas UV transformations and frame orientations.
+  - Features smooth 6-frame spinning animation, per-column `Graphics` stencil masking for partial wall occlusion, distance shading, and dynamic depth sorting.
+- **Keycard Inventory & HUD Display** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts)):
+  - Player inventory tracks collected keycards (`blue`, `green`, `red`).
+  - Upon pickup, the static first frame (`key_card_<color>_1.png`) is added to the top-left HUD `KEYS` badge with a sleek border and audio-visual feedback.
+- **Locked Doors & Security Access** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Parses the `Keys` tile layer to associate doors with specific required keycards.
+  - Interacting (`E` / Action button) with a locked door verifies the player's inventory:
+    - **Keycard present**: Unlocks and opens the door with an `[!] Access Granted` notification.
+    - **Keycard missing**: Blocks door opening with an `[X] Access Denied! Requires <Color> Keycard` notification and red alert flash.
+- **Table Surface Attachment & Zero-Parallax Drift Fix** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Implemented `bindBreakables()` to attach items placed on furniture directly to their host object's world $(X, Y)$ coordinate and table top surface height.
+  - Guarantees 1:1 identical raycast camera projection between the keycard and the table, completely eliminating perspective parallax drift when the player walks or strafes sideways.
+  - Automatically drops resting items to floor debris level if the supporting table is smashed.
+- **Extended Pickup Enum** ([`src/enums/RaycastPickupType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastPickupType.ts), [`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts)):
+  - Added `BLUE_KEYCARD`, `GREEN_KEYCARD`, `RED_KEYCARD`, and `KEYCARD` to `RaycastPickupType`.
+- **Enemy Loot Drop Texture & Ammo Fix** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Fixed argument ordering in `spawnPickup()` and added overload guards so dropped weapons correctly award ammo (+20) and equip the E-11 blaster.
+  - Pre-loads and pre-slices standard pickup textures (`assets/E-11-item.png`, `assets/health.png`, `assets/ammo.png`) in `initTextures()`, ensuring dynamically spawned weapon drops render visibly on the floor.
+- **Configurable Pickup Radius** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Added `pickupRadius` support to `IRaycastPickupConfig`, item instances, and Tiled custom properties.
+  - Increased default keycard pickup radius to `0.9` (up from `0.55`), allowing effortless card collection while standing near furniture or across tables.
+
+---
+
 ## [2026-08-23] - Configurable Enemy AI, 8-Directional Sprites, Combat System & Weapon Drops
 
 ### 1. Extensible Enemy Configuration System

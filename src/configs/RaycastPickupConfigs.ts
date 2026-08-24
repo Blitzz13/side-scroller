@@ -45,6 +45,57 @@ export const raycastAmmoPickupConfig: IRaycastPickupConfig = {
   anchor: "floor",
 };
 
+export const raycastBlueKeycardConfig: IRaycastPickupConfig = {
+  type: RaycastPickupType.BLUE_KEYCARD,
+  name: "Blue Keycard",
+  amount: 1,
+  texture: "keycard/key_card_blue_1.png",
+  keyColor: "blue",
+  spritesheet: "assets/keycards.json",
+  pickUpSound: {
+    src: "reload_sound",
+    loop: false,
+    volume: 1,
+  },
+  scale: 0.22,
+  anchor: "center",
+  pickupRadius: 0.9,
+};
+
+export const raycastGreenKeycardConfig: IRaycastPickupConfig = {
+  type: RaycastPickupType.GREEN_KEYCARD,
+  name: "Green Keycard",
+  amount: 1,
+  texture: "keycard/key_card_green_1.png",
+  keyColor: "green",
+  spritesheet: "assets/keycards.json",
+  pickUpSound: {
+    src: "reload_sound",
+    loop: false,
+    volume: 1,
+  },
+  scale: 0.22,
+  anchor: "center",
+  pickupRadius: 0.9,
+};
+
+export const raycastRedKeycardConfig: IRaycastPickupConfig = {
+  type: RaycastPickupType.RED_KEYCARD,
+  name: "Red Keycard",
+  amount: 1,
+  texture: "keycard/key_card_red_1.png",
+  keyColor: "red",
+  spritesheet: "assets/keycards.json",
+  pickUpSound: {
+    src: "reload_sound",
+    loop: false,
+    volume: 1,
+  },
+  scale: 0.22,
+  anchor: "center",
+  pickupRadius: 0.9,
+};
+
 /**
  * Global registry of Raycast pickup items indexed by numeric RaycastPickupType enum.
  */
@@ -52,10 +103,14 @@ export const raycastPickupConfigs: Record<RaycastPickupType, IRaycastPickupConfi
   [RaycastPickupType.HEALTH]: raycastHealthPickupConfig,
   [RaycastPickupType.WEAPON]: raycastE11PickupConfig,
   [RaycastPickupType.AMMO]: raycastAmmoPickupConfig,
+  [RaycastPickupType.BLUE_KEYCARD]: raycastBlueKeycardConfig,
+  [RaycastPickupType.GREEN_KEYCARD]: raycastGreenKeycardConfig,
+  [RaycastPickupType.RED_KEYCARD]: raycastRedKeycardConfig,
+  [RaycastPickupType.KEYCARD]: raycastBlueKeycardConfig,
 };
 
 /**
- * Retrieves a pickup config by enum type, numeric ID, or string alias ("health", "weapon", "ammo").
+ * Retrieves a pickup config by enum type, numeric ID, or string alias ("health", "weapon", "ammo", "blue_keycard").
  */
 export function getRaycastPickupConfig(
   type: RaycastPickupType | string | number
@@ -65,6 +120,20 @@ export function getRaycastPickupConfig(
   }
 
   const normalized = String(type).toLowerCase().replace(/[-_ ]/g, "");
+
+  if (normalized.includes("green") && (normalized.includes("key") || normalized.includes("card"))) {
+    return raycastGreenKeycardConfig;
+  }
+  if (normalized.includes("red") && (normalized.includes("key") || normalized.includes("card"))) {
+    return raycastRedKeycardConfig;
+  }
+  if (
+    (normalized.includes("blue") && (normalized.includes("key") || normalized.includes("card"))) ||
+    normalized.includes("keycard") ||
+    normalized.includes("key_card")
+  ) {
+    return raycastBlueKeycardConfig;
+  }
 
   if (normalized.includes("health") || normalized.includes("heal") || normalized.includes("med")) {
     return raycastHealthPickupConfig;

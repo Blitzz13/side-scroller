@@ -1,3 +1,13 @@
+import {
+  AnimatedSprite,
+  Assets,
+  Container,
+  Graphics,
+  Rectangle,
+  SCALE_MODES,
+  Spritesheet,
+  Texture,
+} from "pixi.js";
 import { sound } from "@pixi/sound";
 import {
   MapObject,
@@ -8,11 +18,148 @@ import {
   getRaycastPickupConfig,
   getRaycastWeaponConfig,
 } from "./types";
+import { gameConfig } from "../../configs/GameConfig";
 
 export class RaycastPickupManager {
+  private container: Container | null = null;
   private pickups: RaycastPickupItem[] = [];
   private staticObjects: MapObject[] = [];
   private nextId: number = 1;
+  private keycardSpritesheet: Spritesheet | null = null;
+  private keycardAnimationFrames: Record<string, Texture[]> = {};
+  private pickupTextures: Record<string, Texture> = {};
+  private pickupSlices: Record<string, Texture[]> = {};
+
+  constructor(container?: Container) {
+    if (container) {
+      this.container = container;
+    }
+  }
+
+  public setContainer(container: Container): void {
+    this.container = container;
+    // Bind any existing keycard pickups that were parsed before container was assigned
+    for (const pickup of this.pickups) {
+      if (pickup.keyColor && !pickup.animatedSprite) {
+        this.spawnKeycardSprite(pickup);
+      }
+    }
+  }
+
+  public async initTextures(): Promise<void> {
+    await this.initKeycardTextures();
+
+    const standardPickups = [
+      { key: "weapon", path: "assets/E-11-item.png" },
+      { key: "health", path: "assets/health.png" },
+      { key: "ammo", path: "assets/ammo.png" },
+    ];
+
+    for (const p of standardPickups) {
+      try {
+        const tex = await Assets.load(p.path);
+        if (tex) {
+          if (tex.baseTexture) {
+            tex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+          }
+          this.pickupTextures[p.key] = tex;
+          this.pickupSlices[p.key] = this.sliceTexture(tex);
+        }
+      } catch (err) {
+        console.warn(`Failed to load pickup texture ${p.path}:`, err);
+      }
+    }
+  }
+
+  private sliceTexture(texture: Texture): Texture[] {
+    const slices: Texture[] = [];
+    const texW = texture.width || 64;
+    const texH = texture.height || 64;
+    for (let x = 0; x < texW; x++) {
+      slices.push(
+        new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH))
+      );
+    }
+    return slices;
+  }
+
+  public async initKeycardTextures(): Promise<void> {
+    try {
+      const sheet = await Assets.load("assets/keycards.json");
+      if (sheet) {
+        if (sheet.baseTexture) {
+          sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+        }
+        this.keycardSpritesheet = sheet;
+
+        const colors = ["blue", "green", "red"];
+        for (const color of colors) {
+          this.keycardAnimationFrames[color] = [];
+          for (let i = 1; i <= 6; i++) {
+            const frameName = `keycard/key_card_${color}_${i}.png`;
+            const tex = sheet.textures[frameName];
+            if (tex) {
+              if (tex.baseTexture) {
+                tex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+              }
+              this.keycardAnimationFrames[color].push(tex);
+            }
+          }
+        }
+
+        // Attach AnimatedSprite to any pickups waiting for spritesheet
+        for (const pickup of this.pickups) {
+          if (pickup.keyColor && !pickup.animatedSprite) {
+            this.spawnKeycardSprite(pickup);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load keycards spritesheet:", err);
+    }
+  }
+
+  public update(delta: number): void {
+    // AnimatedSprites are automatically ticked by Pixi's Shared Ticker
+  }
+
+  public bindBreakables(breakables: any[]): void {
+    for (const pickup of this.pickups) {
+      // Find if pickup is placed on top of any table/chair
+      const table = breakables.find((b) => {
+        const dx = b.x - pickup.x;
+        const dy = b.y - pickup.y;
+        return Math.sqrt(dx * dx + dy * dy) < 0.6;
+      });
+      if (table) {
+        pickup.x = table.x;
+        pickup.y = table.y;
+        pickup.parentBreakable = table;
+      }
+    }
+  }
+
+  private spawnKeycardSprite(pickup: RaycastPickupItem): void {
+    if (!this.container || !pickup.keyColor) return;
+    const frames = this.keycardAnimationFrames[pickup.keyColor];
+    if (!frames || frames.length === 0) return;
+
+    const animSprite = new AnimatedSprite(frames);
+    animSprite.animationSpeed = 0.14;
+    animSprite.play();
+    animSprite.roundPixels = true;
+    animSprite.anchor.set(0.5, 0.5);
+    animSprite.visible = false;
+
+    const mask = new Graphics();
+    animSprite.mask = mask;
+
+    this.container.addChild(mask);
+    this.container.addChild(animSprite);
+
+    pickup.animatedSprite = animSprite;
+    pickup.occlusionMask = mask;
+  }
 
   public parseMapPickups(
     mapData: any,
@@ -20,6 +167,7 @@ export class RaycastPickupManager {
     tileTypes: Record<number, string>,
     firstgid: number
   ): void {
+    this.dispose();
     this.pickups = [];
     this.staticObjects = [];
     this.nextId = 1;
@@ -97,8 +245,16 @@ export class RaycastPickupManager {
             const adjustedTileId = tileGid - firstgid;
             const meta = tileMeta[adjustedTileId] || {};
             const typeStr = (meta.type || tileTypes[tileGid] || "").toLowerCase();
+            const imgStr = (meta.image || "").toLowerCase();
+
+            const isKeycard =
+              typeStr.includes("keycard") ||
+              typeStr.includes("card") ||
+              imgStr.includes("key_card") ||
+              imgStr.includes("keycard");
 
             const isPickup =
+              isKeycard ||
               meta.tileClass === "PickupItem" ||
               typeStr === "weapon" ||
               typeStr === "health" ||
@@ -109,32 +265,50 @@ export class RaycastPickupManager {
             const scaleY = layerScaleY ?? meta.scaleY ?? scale;
             const vOffset = layerVOffset ?? meta.vOffset;
             const z = layerZ ?? meta.z;
-            const anchor = layerAnchor ?? meta.anchor ?? "floor";
+            const anchor = layerAnchor ?? meta.anchor ?? (isKeycard ? "center" : "floor");
 
             if (isPickup) {
-              const pConfig = getRaycastPickupConfig(typeStr);
-              const pickupType: RaycastPickupType =
-                pConfig?.type ??
-                (typeStr.includes("weapon")
-                  ? RaycastPickupType.WEAPON
-                  : typeStr.includes("ammo")
-                  ? RaycastPickupType.AMMO
-                  : RaycastPickupType.HEALTH);
+              let keyColor: string | undefined;
+              let pickupType: RaycastPickupType;
 
+              if (isKeycard) {
+                if (typeStr.includes("green") || imgStr.includes("green")) {
+                  keyColor = "green";
+                  pickupType = RaycastPickupType.GREEN_KEYCARD;
+                } else if (typeStr.includes("red") || imgStr.includes("red")) {
+                  keyColor = "red";
+                  pickupType = RaycastPickupType.RED_KEYCARD;
+                } else {
+                  keyColor = "blue";
+                  pickupType = RaycastPickupType.BLUE_KEYCARD;
+                }
+              } else {
+                const pConfig = getRaycastPickupConfig(typeStr);
+                pickupType =
+                  pConfig?.type ??
+                  (typeStr.includes("weapon")
+                    ? RaycastPickupType.WEAPON
+                    : typeStr.includes("ammo")
+                    ? RaycastPickupType.AMMO
+                    : RaycastPickupType.HEALTH);
+              }
+
+              const pConfig = getRaycastPickupConfig(typeStr) || getRaycastPickupConfig(pickupType);
               const weaponConfig = getRaycastWeaponConfig(meta.weaponType || "e_11");
               const weaponEnum: RaycastWeaponType | undefined =
                 pickupType === RaycastPickupType.WEAPON
                   ? weaponConfig?.type ?? RaycastWeaponType.E11
                   : undefined;
 
-              this.pickups.push({
+              const item: RaycastPickupItem = {
                 id: this.nextId++,
                 x,
                 y,
                 texture: adjustedTileId,
                 type: pickupType,
                 weaponType: weaponEnum,
-                amount: meta.amount ?? pConfig?.amount ?? 20,
+                keyColor,
+                amount: meta.amount ?? pConfig?.amount ?? 1,
                 collected: false,
                 scale,
                 scaleX,
@@ -142,12 +316,18 @@ export class RaycastPickupManager {
                 vOffset,
                 z,
                 anchor,
+                pickupRadius: pConfig?.pickupRadius ?? (keyColor ? 0.9 : undefined),
                 config: pConfig,
-              });
+              };
+
+              this.pickups.push(item);
+              if (keyColor) {
+                this.spawnKeycardSprite(item);
+              }
             } else {
               const isBreakable =
-                (meta.image || "").toLowerCase().includes("chair") ||
-                (meta.image || "").toLowerCase().includes("table") ||
+                imgStr.includes("chair") ||
+                imgStr.includes("table") ||
                 typeStr.includes("chair") ||
                 typeStr.includes("table");
 
@@ -183,10 +363,11 @@ export class RaycastPickupManager {
             let objScaleY = layerScaleY ?? meta.scaleY ?? objScale;
             let objVOffset = layerVOffset ?? meta.vOffset;
             let objZ = layerZ ?? meta.z;
-            let objAnchor = layerAnchor ?? meta.anchor ?? "floor";
+            let objAnchor = layerAnchor ?? meta.anchor;
             let objType = meta.type || tileTypes[gid] || "";
             let objWeaponType = meta.weaponType;
             let objAmount = meta.amount ?? 20;
+            let objPickupRadius: number | undefined;
 
             if (obj.properties) {
               obj.properties.forEach((prop: any) => {
@@ -219,56 +400,90 @@ export class RaycastPickupManager {
                 ) {
                   objAnchor = String(pVal).toLowerCase();
                 }
+                if (pName === "pickupradius" || pName === "radius" || pName === "hitradius") {
+                  objPickupRadius = parseFloat(pVal);
+                }
                 if (pName === "type") objType = String(pVal);
                 if (pName === "weapontype") objWeaponType = String(pVal);
                 if (pName === "amount") objAmount = parseInt(pVal, 10);
                 if (pName === "object" && typeof pVal === "object" && pVal !== null) {
                   if (pVal.scale !== undefined) objScale = parseFloat(pVal.scale);
                   if (pVal.anchor !== undefined) objAnchor = String(pVal.anchor).toLowerCase();
+                  if (pVal.pickupRadius !== undefined || pVal.radius !== undefined) {
+                    objPickupRadius = parseFloat(pVal.pickupRadius ?? pVal.radius);
+                  }
                 }
               });
             }
 
-            if (obj.width && obj.height && objScale === undefined && objScaleY === undefined) {
-              objScaleY = obj.height / tileH;
-              objScaleX = obj.width / tileW;
-            }
+            const objW = obj.width || tileW;
+            const objH = obj.height || tileH;
+            const x = (obj.x + objW / 2) / tileW;
+            const y = (obj.y - objH / 2) / tileH;
+            const normalizedType = (objType || meta.type || "").toLowerCase();
+            const imgStr = (meta.image || "").toLowerCase();
 
-            const x = (obj.x + (obj.width || tileW) / 2) / tileW;
-            const y = (obj.y - (obj.height || tileH) / 2) / tileH;
-            const normalizedType = objType.toLowerCase();
+            const isKeycard =
+              normalizedType.includes("keycard") ||
+              normalizedType.includes("card") ||
+              imgStr.includes("key_card") ||
+              imgStr.includes("keycard") ||
+              (obj.name && obj.name.toLowerCase().includes("keycard"));
 
             const isPickup =
+              isKeycard ||
               obj.type === "PickupItem" ||
               meta.tileClass === "PickupItem" ||
               normalizedType === "weapon" ||
               normalizedType === "health" ||
               normalizedType === "ammo";
 
-            if (isPickup) {
-              const pConfig = getRaycastPickupConfig(normalizedType);
-              const pickupType: RaycastPickupType =
-                pConfig?.type ??
-                (normalizedType.includes("weapon")
-                  ? RaycastPickupType.WEAPON
-                  : normalizedType.includes("ammo")
-                  ? RaycastPickupType.AMMO
-                  : RaycastPickupType.HEALTH);
+            if (!objAnchor) {
+              objAnchor = isKeycard ? "center" : "floor";
+            }
 
+            if (isPickup) {
+              let keyColor: string | undefined;
+              let pickupType: RaycastPickupType;
+
+              if (isKeycard) {
+                if (normalizedType.includes("green") || imgStr.includes("green")) {
+                  keyColor = "green";
+                  pickupType = RaycastPickupType.GREEN_KEYCARD;
+                } else if (normalizedType.includes("red") || imgStr.includes("red")) {
+                  keyColor = "red";
+                  pickupType = RaycastPickupType.RED_KEYCARD;
+                } else {
+                  keyColor = "blue";
+                  pickupType = RaycastPickupType.BLUE_KEYCARD;
+                }
+              } else {
+                const pConfig = getRaycastPickupConfig(normalizedType);
+                pickupType =
+                  pConfig?.type ??
+                  (normalizedType.includes("weapon")
+                    ? RaycastPickupType.WEAPON
+                    : normalizedType.includes("ammo")
+                    ? RaycastPickupType.AMMO
+                    : RaycastPickupType.HEALTH);
+              }
+
+              const pConfig = getRaycastPickupConfig(normalizedType) || getRaycastPickupConfig(pickupType);
               const weaponConfig = getRaycastWeaponConfig(objWeaponType || "e_11");
               const weaponEnum: RaycastWeaponType | undefined =
                 pickupType === RaycastPickupType.WEAPON
                   ? weaponConfig?.type ?? RaycastWeaponType.E11
                   : undefined;
 
-              this.pickups.push({
+              const item: RaycastPickupItem = {
                 id: this.nextId++,
                 x,
                 y,
                 texture: adjustedTileId,
                 type: pickupType,
                 weaponType: weaponEnum,
-                amount: objAmount || pConfig?.amount || 20,
+                keyColor,
+                amount: objAmount || pConfig?.amount || 1,
                 collected: false,
                 scale: objScale,
                 scaleX: objScaleX,
@@ -276,12 +491,18 @@ export class RaycastPickupManager {
                 vOffset: objVOffset,
                 z: objZ,
                 anchor: objAnchor,
+                pickupRadius: objPickupRadius ?? pConfig?.pickupRadius ?? (keyColor ? 0.9 : undefined),
                 config: pConfig,
-              });
+              };
+
+              this.pickups.push(item);
+              if (keyColor) {
+                this.spawnKeycardSprite(item);
+              }
             } else {
               const isBreakable =
-                (meta.image || "").toLowerCase().includes("chair") ||
-                (meta.image || "").toLowerCase().includes("table") ||
+                imgStr.includes("chair") ||
+                imgStr.includes("table") ||
                 (obj.name || "").toLowerCase().includes("chair") ||
                 (obj.name || "").toLowerCase().includes("table") ||
                 normalizedType.includes("chair") ||
@@ -310,19 +531,31 @@ export class RaycastPickupManager {
   public getVisibleMapObjects(): MapObject[] {
     const list: MapObject[] = [];
 
-    // Add uncollected pickups
+    // Add uncollected non-animated pickups (keycards with AnimatedSprite are rendered via render())
     for (const pickup of this.pickups) {
-      if (!pickup.collected) {
+      if (!pickup.collected && !pickup.animatedSprite) {
+        const pTypeKey =
+          pickup.type === RaycastPickupType.WEAPON
+            ? "weapon"
+            : pickup.type === RaycastPickupType.AMMO
+            ? "ammo"
+            : "health";
+
+        const customTex = this.pickupTextures[pTypeKey];
+        const customSlices = this.pickupSlices[pTypeKey];
+
         list.push({
           x: pickup.x,
           y: pickup.y,
           texture: pickup.texture,
+          customTexture: customTex,
+          customSlices: customSlices,
           scale: pickup.scale,
           scaleX: pickup.scaleX,
           scaleY: pickup.scaleY,
           vOffset: pickup.vOffset,
           z: pickup.z,
-          anchor: pickup.anchor,
+          anchor: pickup.anchor ?? "floor",
           pickupRef: pickup,
         });
       }
@@ -336,75 +569,263 @@ export class RaycastPickupManager {
     return list;
   }
 
+  public render(
+    playerX: number,
+    playerY: number,
+    dirX: number,
+    dirY: number,
+    planeX: number,
+    planeY: number,
+    zBuffer: Float64Array,
+    maxRenderDistance: number
+  ): void {
+    const screenW = gameConfig.width;
+    const screenH = gameConfig.height;
+    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+
+    for (const pickup of this.pickups) {
+      const sprite = pickup.animatedSprite;
+      if (!sprite) continue;
+
+      if (pickup.collected) {
+        sprite.visible = false;
+        if (pickup.occlusionMask) pickup.occlusionMask.clear();
+        continue;
+      }
+
+      // If attached to a breakable table/chair, follow its position and state
+      let posX = pickup.x;
+      let posY = pickup.y;
+      let onBrokenTable = false;
+
+      if (pickup.parentBreakable) {
+        posX = pickup.parentBreakable.x;
+        posY = pickup.parentBreakable.y;
+        if (pickup.parentBreakable.isBroken) {
+          onBrokenTable = true;
+        }
+      }
+
+      const dx = posX - playerX;
+      const dy = posY - playerY;
+
+      // Transform into camera space
+      const transformX = invDet * (dirY * dx - dirX * dy);
+      const transformY = invDet * (-planeY * dx + planeX * dy);
+
+      if (transformY <= 0.1 || transformY > maxRenderDistance) {
+        sprite.visible = false;
+        if (pickup.occlusionMask) pickup.occlusionMask.clear();
+        continue;
+      }
+
+      const spriteScreenX = Math.floor(
+        (screenW / 2) * (1 + transformX / transformY)
+      );
+      const baseHeight = Math.abs(Math.floor(screenH / transformY));
+      const scale = pickup.scale ?? 0.20;
+      const refHeight = 30; // Native source frame height of keycard
+
+      const baseScale = (baseHeight * scale) / refHeight;
+      sprite.scale.set(baseScale, baseScale);
+
+      const curTex = sprite.texture;
+      const texW = curTex ? (curTex.orig?.width || curTex.width || 25) : 25;
+      const texH = curTex ? (curTex.orig?.height || curTex.height || 30) : 30;
+
+      const spriteWidth = Math.max(
+        1,
+        Math.floor(baseHeight * scale * (texW / refHeight))
+      );
+      const spriteHeight = Math.max(
+        1,
+        Math.floor(baseHeight * scale * (texH / refHeight))
+      );
+
+      const halfW = spriteWidth / 2;
+      const drawStartX = Math.max(0, Math.floor(spriteScreenX - halfW));
+      const drawEndX = Math.min(screenW - 1, Math.floor(spriteScreenX + halfW));
+
+      // Calculate screen Y based on anchor & elevation
+      let screenY: number;
+      if (pickup.parentBreakable) {
+        if (onBrokenTable) {
+          // Table broken - keycard rests on floor rubble
+          sprite.anchor.set(0.5, 1.0);
+          screenY = Math.floor(screenH / 2 + baseHeight / 2);
+        } else {
+          // Table intact - bottom of card rests directly on table surface (table height is 0.38)
+          sprite.anchor.set(0.5, 1.0);
+          screenY = Math.floor(screenH / 2 + (0.5 - 0.38) * baseHeight);
+        }
+      } else if (pickup.anchor === "floor") {
+        sprite.anchor.set(0.5, 1.0);
+        screenY = Math.floor(screenH / 2 + baseHeight / 2);
+      } else if (pickup.anchor === "ceiling") {
+        sprite.anchor.set(0.5, 0.0);
+        screenY = Math.floor(screenH / 2 - baseHeight / 2);
+      } else {
+        // "center" anchor
+        sprite.anchor.set(0.5, 0.5);
+        const vOff = pickup.vOffset !== undefined ? pickup.vOffset : (pickup.z !== undefined ? -pickup.z : 0);
+        screenY = Math.floor(screenH / 2 + vOff * baseHeight);
+      }
+
+      // Per-column occlusion mask with Graphics stencil
+      const mask = pickup.occlusionMask;
+      if (mask) {
+        mask.clear();
+        let runStart = -1;
+        let anyVisible = false;
+
+        for (let col = drawStartX; col <= drawEndX; col++) {
+          if (transformY < zBuffer[col]) {
+            if (runStart < 0) runStart = col;
+            anyVisible = true;
+          } else {
+            if (runStart >= 0) {
+              mask.beginFill(0xffffff);
+              mask.drawRect(runStart, 0, col - runStart, screenH);
+              mask.endFill();
+              runStart = -1;
+            }
+          }
+        }
+        if (runStart >= 0) {
+          mask.beginFill(0xffffff);
+          mask.drawRect(runStart, 0, drawEndX - runStart + 1, screenH);
+          mask.endFill();
+        }
+
+        if (!anyVisible && drawStartX <= drawEndX) {
+          sprite.visible = false;
+          continue;
+        }
+      }
+
+      sprite.visible = true;
+      sprite.x = spriteScreenX;
+      sprite.y = screenY;
+      sprite.width = spriteWidth;
+      sprite.height = spriteHeight;
+
+      // Distance shading
+      const shade = Math.max(
+        0.2,
+        Math.min(1.0, 1.0 - (transformY / maxRenderDistance) * 0.75)
+      );
+      const shadeInt = (shade * 255) | 0;
+      sprite.tint = (shadeInt << 16) | (shadeInt << 8) | shadeInt;
+
+      // Depth sorting
+      sprite.zIndex = 1000 - Math.floor(transformY * 10);
+    }
+  }
+
   public checkPlayerPickups(
     playerX: number,
     playerY: number,
     pickupRadius: number = 0.55
   ): RaycastPickupItem[] {
-    const collected: RaycastPickupItem[] = [];
+    const collectedList: RaycastPickupItem[] = [];
 
-    for (const pickup of this.pickups) {
-      if (pickup.collected) continue;
+    for (const item of this.pickups) {
+      if (!item.collected) {
+        const posX = item.parentBreakable ? item.parentBreakable.x : item.x;
+        const posY = item.parentBreakable ? item.parentBreakable.y : item.y;
+        const dx = posX - playerX;
+        const dy = posY - playerY;
+        const distSq = dx * dx + dy * dy;
 
-      const dx = pickup.x - playerX;
-      const dy = pickup.y - playerY;
-      const distSq = dx * dx + dy * dy;
+        const effectiveRadius =
+          item.pickupRadius ??
+          item.config?.pickupRadius ??
+          (item.keyColor ? 0.9 : pickupRadius);
 
-      if (distSq <= pickupRadius * pickupRadius) {
-        pickup.collected = true;
-        collected.push(pickup);
+        if (distSq <= effectiveRadius * effectiveRadius) {
+          item.collected = true;
+          if (item.animatedSprite) {
+            item.animatedSprite.visible = false;
+          }
+          if (item.occlusionMask) {
+            item.occlusionMask.clear();
+          }
+          collectedList.push(item);
 
-        // Play appropriate pickup sound from config or default fallback
-        try {
-          const snd =
-            pickup.config?.pickUpSound ??
-            (pickup.type === RaycastPickupType.HEALTH
-              ? { src: "repair_sound", volume: 1, loop: false }
-              : { src: "reload_sound", volume: 1, loop: false });
-
-          sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
-        } catch (e) {
-          console.warn("Could not play pickup sound:", e);
+          if (item.config?.pickUpSound?.src) {
+            try {
+              sound.play(item.config.pickUpSound.src, {
+                volume: item.config.pickUpSound.volume,
+                loop: item.config.pickUpSound.loop,
+              });
+            } catch (e) {
+              console.warn("Failed to play pickup sound:", e);
+            }
+          }
         }
       }
     }
 
-    return collected;
+    return collectedList;
   }
 
   public spawnPickup(
     type: RaycastPickupType,
     x: number,
     y: number,
-    weaponType: RaycastWeaponType = RaycastWeaponType.E11,
-    amount: number = 20,
-    tileId: number = 9
+    amount: number | RaycastWeaponType = 20,
+    weaponType: RaycastWeaponType = RaycastWeaponType.E11
   ): RaycastPickupItem {
-    const config = getRaycastPickupConfig(type === RaycastPickupType.WEAPON ? "e_11" : "ammo");
+    const pConfig = getRaycastPickupConfig(type);
+    let finalAmount = typeof amount === "number" ? amount : 20;
+    let finalWeapon: RaycastWeaponType = weaponType;
+
+    // Handle (type, x, y, dropWeapon, dropAmmo) order gracefully
+    if (
+      typeof (amount as any) === "string" ||
+      (typeof amount === "number" && typeof (weaponType as any) === "number" && amount < 10 && weaponType >= 10)
+    ) {
+      finalWeapon = amount as unknown as RaycastWeaponType;
+      finalAmount = typeof weaponType === "number" ? weaponType : 20;
+    }
+
+    let keyColor: string | undefined;
+    if (type === RaycastPickupType.BLUE_KEYCARD) keyColor = "blue";
+    else if (type === RaycastPickupType.GREEN_KEYCARD) keyColor = "green";
+    else if (type === RaycastPickupType.RED_KEYCARD) keyColor = "red";
+
     const item: RaycastPickupItem = {
       id: this.nextId++,
       x,
       y,
-      texture: tileId,
+      texture: -1,
       type,
-      weaponType,
-      amount,
+      weaponType: finalWeapon,
+      keyColor,
+      amount: finalAmount,
       collected: false,
-      scale: config?.scale ?? 0.22,
-      scaleX: config?.scaleX ?? 0.22,
-      scaleY: config?.scaleY ?? 0.22,
-      anchor: "floor",
-      config,
+      scale: pConfig?.scale ?? 0.25,
+      anchor: pConfig?.anchor ?? (keyColor ? "center" : "floor"),
+      pickupRadius: pConfig?.pickupRadius ?? (keyColor ? 0.9 : undefined),
+      config: pConfig,
     };
+
     this.pickups.push(item);
+    if (keyColor) {
+      this.spawnKeycardSprite(item);
+    }
     return item;
   }
 
-  public get activePickupsCount(): number {
-    return this.pickups.filter((p) => !p.collected).length;
-  }
-
   public dispose(): void {
+    for (const pickup of this.pickups) {
+      if (pickup.animatedSprite) {
+        pickup.animatedSprite.destroy();
+      }
+      if (pickup.occlusionMask) {
+        pickup.occlusionMask.destroy();
+      }
+    }
     this.pickups = [];
     this.staticObjects = [];
   }

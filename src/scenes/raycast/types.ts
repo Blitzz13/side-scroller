@@ -1,4 +1,4 @@
-import { Texture } from "pixi.js";
+import { AnimatedSprite, Graphics, Texture } from "pixi.js";
 import { RaycastPickupType } from "../../enums/RaycastPickupType";
 import { RaycastWeaponType } from "../../enums/RaycastWeaponType";
 import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
@@ -48,6 +48,7 @@ export interface RaycastPickupItem {
   texture: number; // tile ID
   type: RaycastPickupType;
   weaponType?: RaycastWeaponType;
+  keyColor?: "blue" | "green" | "red" | string;
   amount: number;
   collected: boolean;
   scale?: number;
@@ -57,6 +58,10 @@ export interface RaycastPickupItem {
   z?: number;
   anchor?: string;
   config?: IRaycastPickupConfig;
+  pickupRadius?: number;
+  animatedSprite?: AnimatedSprite;
+  occlusionMask?: Graphics;
+  parentBreakable?: any;
 }
 
 export interface RaycastPlayerState {
@@ -66,6 +71,7 @@ export interface RaycastPlayerState {
   weaponConfig: IRaycastWeaponConfig | null;
   ammo: number;
   maxAmmo: number;
+  keycards: Set<string>;
 }
 
 export interface MapObject {

@@ -221,6 +221,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/table_broken.png",
           },
           {
+            name: "keycards",
+            src: "./assets/keycards.json",
+          },
+          {
             name: "explosion",
             src: "./assets/explosion.json"
           }

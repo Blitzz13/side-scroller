@@ -154,6 +154,9 @@ export class RaycastBreakableManager {
         });
       } else if (layer.objects) {
         // Object Layer
+        const tileW = mapData.tilewidth || 64;
+        const tileH = mapData.tileheight || 64;
+
         layer.objects.forEach((obj: any) => {
           const gid = obj.gid ?? 0;
           if (gid !== 0) {
@@ -164,8 +167,10 @@ export class RaycastBreakableManager {
               (objName.includes("chair") ? "chair" : objName.includes("table") ? "table" : undefined);
 
             if (breakableType) {
-              const x = obj.x / 64;
-              const y = obj.y / 64;
+              const objW = obj.width || tileW;
+              const objH = obj.height || tileH;
+              const x = (obj.x + objW / 2) / tileW;
+              const y = (obj.y - objH / 2) / tileH;
               const meta = tileMeta[adjustedTileId] || {};
               this.spawnBreakable(
                 breakableType,
@@ -265,6 +270,10 @@ export class RaycastBreakableManager {
       }
     }
     return list;
+  }
+
+  public getBreakables(): RaycastBreakable[] {
+    return this.breakables;
   }
 
   public checkCollision(newX: number, newY: number, playerRadius: number = 0.25): boolean {

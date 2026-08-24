@@ -26,6 +26,7 @@ export class RaycastPlayerController {
       weaponConfig: null,
       ammo: 0,
       maxAmmo: 99,
+      keycards: new Set<string>(),
     };
 
     this.hud.setHealth(this.state.health, this.state.maxHealth);
@@ -38,6 +39,28 @@ export class RaycastPlayerController {
 
   public get ammo(): number {
     return this.state.ammo;
+  }
+
+  public get keycards(): Set<string> {
+    return this.state.keycards;
+  }
+
+  public hasKeycard(color: string): boolean {
+    const norm = color.toLowerCase().replace(/[-_ ]/g, "").replace("keycard", "").replace("card", "").replace("key", "");
+    for (const k of this.state.keycards) {
+      if (k.toLowerCase().includes(norm) || norm.includes(k.toLowerCase())) return true;
+    }
+    return false;
+  }
+
+  public addKeycard(color: string): void {
+    const norm = color.toLowerCase().replace(/[-_ ]/g, "").replace("keycard", "").replace("card", "").replace("key", "");
+    this.state.keycards.add(norm);
+    this.hud.addKeycard(norm);
+    const displayName = norm.charAt(0).toUpperCase() + norm.slice(1) + " Keycard";
+    const toastColor = norm === "blue" ? 0x00d5ff : norm === "green" ? 0x00ff88 : 0xff4444;
+    this.hud.showToast(`[+] Collected ${displayName}`, toastColor);
+    this.hud.flashScreen(toastColor, 0.25);
   }
 
   public get isWeaponEquipped(): boolean {
@@ -60,6 +83,21 @@ export class RaycastPlayerController {
         this.equipWeapon(item.weaponType ?? RaycastWeaponType.E11, item.amount);
       } else if (item.type === RaycastPickupType.AMMO) {
         this.addAmmo(item.amount);
+      } else if (
+        item.type === RaycastPickupType.BLUE_KEYCARD ||
+        item.type === RaycastPickupType.GREEN_KEYCARD ||
+        item.type === RaycastPickupType.RED_KEYCARD ||
+        item.type === RaycastPickupType.KEYCARD ||
+        item.keyColor
+      ) {
+        const color =
+          item.keyColor ||
+          (item.type === RaycastPickupType.GREEN_KEYCARD
+            ? "green"
+            : item.type === RaycastPickupType.RED_KEYCARD
+            ? "red"
+            : "blue");
+        this.addKeycard(color);
       }
     }
   }

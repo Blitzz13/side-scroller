@@ -133,8 +133,10 @@ export class RaycastScene extends BaseScene {
   private playerController!: RaycastPlayerController;
   private pickupManager!: RaycastPickupManager;
   private breakableManager!: RaycastBreakableManager;
+  private animatedPickupContainer!: Container;
   private enemyContainer!: Container;
   private enemyManager!: RaycastEnemyManager;
+  private lockedDoors: Record<string, string> = {};
 
   constructor(stage: Container, scale: number, level: string = "level2") {
     super(stage, scale);
@@ -216,6 +218,11 @@ export class RaycastScene extends BaseScene {
       this.objectSpritePool.push(sprite);
     }
 
+    // Container for animated world props (keycards, rotating pickups) with hardware rotation & Z-ordering
+    this.animatedPickupContainer = new Container();
+    this.animatedPickupContainer.sortableChildren = true;
+    this.addChild(this.animatedPickupContainer);
+
     // Container for animated enemy sprites with hardware rotation & Z-ordering (in 3D world)
     this.enemyContainer = new Container();
     this.enemyContainer.sortableChildren = true;
@@ -232,7 +239,7 @@ export class RaycastScene extends BaseScene {
     this.addChild(this.hud);
 
     this.playerController = new RaycastPlayerController(this.weaponView, this.hud);
-    this.pickupManager = new RaycastPickupManager();
+    this.pickupManager = new RaycastPickupManager(this.animatedPickupContainer);
     this.breakableManager = new RaycastBreakableManager();
 
     // Overlay mobile on-screen controls (only on mobile devices)
@@ -357,6 +364,7 @@ export class RaycastScene extends BaseScene {
     }
 
     this.parseTiledMap(mapData);
+    await this.pickupManager.initTextures();
     await this.breakableManager.initTextures();
     const firstgid = mapData.tilesets?.[0]?.firstgid ?? 1;
     this.breakableManager.parseMapBreakables(
@@ -365,6 +373,7 @@ export class RaycastScene extends BaseScene {
       this.tileTypes,
       firstgid
     );
+    this.pickupManager.bindBreakables(this.breakableManager.getBreakables());
     await this.enemyManager.initSpritesheets();
     this.enemyManager.parseMapEnemies(mapData);
 
@@ -610,6 +619,31 @@ export class RaycastScene extends BaseScene {
       });
     }
 
+    // Door keys layer parsing (identifies doors requiring keycards)
+    this.lockedDoors = {};
+    const keysLayer = mapData.layers.find(
+      (layer: any) => layer.name && layer.name.toLowerCase().includes("key")
+    );
+    if (keysLayer && keysLayer.data) {
+      keysLayer.data.forEach((tileGid: number, index: number) => {
+        if (tileGid !== 0) {
+          const x = index % keysLayer.width;
+          const y = Math.floor(index / keysLayer.width);
+          const adjustedTileId = tileGid - firstgid;
+          const meta = this.tileMeta[adjustedTileId] || {};
+          const typeStr = (meta.type || this.tileTypes[tileGid] || "").toLowerCase();
+          const imgStr = (meta.image || "").toLowerCase();
+
+          let reqKey = "blue";
+          if (typeStr.includes("green") || imgStr.includes("green")) reqKey = "green";
+          else if (typeStr.includes("red") || imgStr.includes("red")) reqKey = "red";
+          else if (typeStr.includes("blue") || imgStr.includes("blue")) reqKey = "blue";
+
+          this.lockedDoors[`${x},${y}`] = reqKey;
+        }
+      });
+    }
+
     // Objects and pickups layer parsing (handled via RaycastPickupManager)
     this.pickupManager.parseMapPickups(
       mapData,
@@ -847,6 +881,7 @@ export class RaycastScene extends BaseScene {
   private tick(delta: number) {
     this.updatePlayer(delta);
     this.updateDoors(delta);
+    this.pickupManager.update(delta);
 
     // Update enemy AI, navigation, line of sight, and shooting
     this.enemyManager.update(
@@ -1018,6 +1053,20 @@ export class RaycastScene extends BaseScene {
       if (tile && this.tileTypes[tile] === "door") {
         const key = `${x},${y}`;
         const currentState = this.doorStates[key];
+
+        // Check if door requires a keycard to unlock
+        const reqKey = this.lockedDoors[key];
+        if (reqKey && currentState === 0) {
+          if (!this.playerController.hasKeycard(reqKey)) {
+            const keyName = reqKey.charAt(0).toUpperCase() + reqKey.slice(1) + " Keycard";
+            this.hud.showToast(`[X] Access Denied! Requires ${keyName}`, 0xff3333);
+            this.hud.flashScreen(0xff0000, 0.2);
+            continue;
+          } else {
+            const keyName = reqKey.charAt(0).toUpperCase() + reqKey.slice(1) + " Keycard";
+            this.hud.showToast(`[!] Access Granted (${keyName})`, 0x00e5ff);
+          }
+        }
 
         if (currentState === 0) {
           this.doorStates[key] = 0.01;
@@ -1559,7 +1608,19 @@ export class RaycastScene extends BaseScene {
     this.mapObjects = pickupObjects.concat(breakableObjects);
     this.renderObjects();
 
-    // 6. Render animated enemy sprites with hardware rotation & Z-buffer occlusion
+    // 6. Render animated pickups (keycards) with AnimatedSprite & Z-buffer occlusion
+    this.pickupManager.render(
+      this.player.x,
+      this.player.y,
+      this.player.dirX,
+      this.player.dirY,
+      this.player.planeX,
+      this.player.planeY,
+      this.zBuffer,
+      this.MAX_RENDER_DISTANCE
+    );
+
+    // 7. Render animated enemy sprites with hardware rotation & Z-buffer occlusion
     this.enemyManager.render(
       this.player.x,
       this.player.y,

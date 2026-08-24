@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
+import { Container, Graphics, Sprite, Text, TextStyle, Texture } from "pixi.js";
 import { gameConfig } from "../../configs/GameConfig";
 
 export class RaycastHUD extends Container {
@@ -25,6 +25,11 @@ export class RaycastHUD extends Container {
   private flashOverlay: Graphics;
   private flashAlpha: number = 0;
   private flashColor: number = 0x000000;
+
+  // Keycards inventory display
+  private keycardContainer: Container;
+  private keycardBg: Graphics;
+  private keycardIcons: Map<string, Sprite> = new Map();
 
   constructor() {
     super();
@@ -146,6 +151,80 @@ export class RaycastHUD extends Container {
     this.toastContainer.addChild(this.toastText);
 
     this.addChild(this.toastContainer);
+
+    // 5. Keycards HUD (Top-Left)
+    this.keycardContainer = new Container();
+    this.keycardContainer.position.set(24, 24);
+    this.keycardContainer.visible = false;
+
+    this.keycardBg = new Graphics();
+    this.keycardContainer.addChild(this.keycardBg);
+
+    const keycardLabel = new Text("KEYS", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 11,
+      fontWeight: "bold",
+      fill: 0x00e5ff,
+      letterSpacing: 1,
+    });
+    keycardLabel.resolution = dpr;
+    keycardLabel.position.set(8, 6);
+    this.keycardContainer.addChild(keycardLabel);
+
+    this.addChild(this.keycardContainer);
+  }
+
+  public addKeycard(color: string, customTexture?: Texture): void {
+    const key = color.toLowerCase();
+    if (this.keycardIcons.has(key)) return;
+
+    let texture: Texture;
+    if (customTexture) {
+      texture = customTexture;
+    } else {
+      try {
+        texture = Texture.from(`keycard/key_card_${key}_1.png`);
+      } catch {
+        texture = Texture.WHITE;
+      }
+    }
+
+    const sprite = new Sprite(texture);
+    sprite.scale.set(0.6);
+    sprite.roundPixels = true;
+
+    this.keycardIcons.set(key, sprite);
+    this.keycardContainer.addChild(sprite);
+    this.keycardContainer.visible = true;
+
+    this.layoutKeycards();
+  }
+
+  public hasKeycard(color: string): boolean {
+    return this.keycardIcons.has(color.toLowerCase());
+  }
+
+  public clearKeycards(): void {
+    for (const [_, sprite] of this.keycardIcons) {
+      sprite.destroy();
+    }
+    this.keycardIcons.clear();
+    this.keycardContainer.visible = false;
+  }
+
+  private layoutKeycards(): void {
+    let currentX = 48;
+    for (const [_, sprite] of this.keycardIcons) {
+      sprite.position.set(currentX, 4);
+      currentX += 20;
+    }
+
+    const totalWidth = Math.max(70, currentX + 6);
+    this.keycardBg.clear();
+    this.keycardBg.beginFill(0x0a1018, 0.75);
+    this.keycardBg.lineStyle(1.5, 0x00e5ff, 0.5);
+    this.keycardBg.drawRoundedRect(0, 0, totalWidth, 26, 6);
+    this.keycardBg.endFill();
   }
 
   public setHealth(currentHealth: number, maxHealth: number = 100): void {

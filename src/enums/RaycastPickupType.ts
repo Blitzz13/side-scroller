@@ -2,4 +2,8 @@ export enum RaycastPickupType {
   HEALTH = 0,
   WEAPON = 1,
   AMMO = 2,
+  BLUE_KEYCARD = 3,
+  GREEN_KEYCARD = 4,
+  RED_KEYCARD = 5,
+  KEYCARD = 6,
 }

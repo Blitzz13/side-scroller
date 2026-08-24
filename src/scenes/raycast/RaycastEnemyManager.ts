@@ -4,6 +4,7 @@ import {
   IRaycastEnemyConfig,
   RaycastEnemyType,
   RaycastPickupType,
+  RaycastWeaponType,
   getRaycastEnemyConfig,
 } from "./types";
 import { RaycastPickupManager } from "./RaycastPickupManager";
@@ -306,12 +307,14 @@ export class RaycastEnemyManager {
 
         if (shouldDrop) {
           enemy.hasDroppedLoot = true;
+          const dropAmmo = enemy.config.dropAmmo ?? 20;
+          const dropWeapon = enemy.config.dropWeapon ?? RaycastWeaponType.E11;
           pickupManager.spawnPickup(
             RaycastPickupType.WEAPON,
             enemy.x,
             enemy.y,
-            enemy.config.dropWeapon,
-            enemy.config.dropAmmo ?? 20
+            dropAmmo,
+            dropWeapon
           );
         }
       }
