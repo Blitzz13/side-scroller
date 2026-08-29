@@ -8,6 +8,7 @@ import {
   Assets,
   TilingSprite,
 } from "pixi.js";
+import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
 import { gameConfig } from "../configs/GameConfig";
 import { MobileControls } from "../ui/MobileControls";
@@ -18,6 +19,8 @@ import { RaycastWeaponView } from "./raycast/RaycastWeaponView";
 import { RaycastHUD } from "./raycast/RaycastHUD";
 import { RaycastPlayerController } from "./raycast/RaycastPlayerController";
 import { RaycastEnemyManager } from "./raycast/RaycastEnemyManager";
+import { DestructableWallManager } from "./raycast/DestructableWallManager";
+
 
 interface RayHit {
   wallType: number;
@@ -145,6 +148,7 @@ export class RaycastScene extends BaseScene {
   private animatedPickupContainer!: Container;
   private enemyContainer!: Container;
   private enemyManager!: RaycastEnemyManager;
+  private destructableWallManager!: DestructableWallManager;
   private lockedDoors: Record<string, string> = {};
 
   constructor(stage: Container, scale: number, level: string = "level2") {
@@ -250,6 +254,7 @@ export class RaycastScene extends BaseScene {
     this.playerController = new RaycastPlayerController(this.weaponView, this.hud);
     this.pickupManager = new RaycastPickupManager(this.animatedPickupContainer);
     this.breakableManager = new RaycastBreakableManager();
+    this.destructableWallManager = new DestructableWallManager();
 
     // Overlay mobile on-screen controls (only on mobile devices)
     if (this.isMobileDevice()) {
@@ -383,6 +388,19 @@ export class RaycastScene extends BaseScene {
       firstgid
     );
     this.pickupManager.bindBreakables(this.breakableManager.getBreakables());
+    this.destructableWallManager.parseMapDoorProtectors(mapData, firstgid);
+    this.destructableWallManager.bindBreakables(
+      this.breakableManager.getBreakables(),
+      firstgid
+    );
+    this.destructableWallManager.onWallDeactivated = (wall) => {
+      this.hud.showToast(`[!] Security Barrier Deactivated!`, 0x00ffcc);
+      try {
+        sound.play("door_1", { volume: 0.4 });
+      } catch (e) {
+        console.warn("Failed to play barrier deactivated sound:", e);
+      }
+    };
     await this.enemyManager.initSpritesheets();
     this.enemyManager.parseMapEnemies(mapData);
 
@@ -813,6 +831,9 @@ export class RaycastScene extends BaseScene {
     if (this.breakableManager) {
       this.breakableManager.dispose();
     }
+    if (this.destructableWallManager) {
+      this.destructableWallManager.dispose();
+    }
     if (this.enemyManager) {
       this.enemyManager.dispose();
     }
@@ -924,6 +945,9 @@ export class RaycastScene extends BaseScene {
       if (!hitEnemy && breakableHit) {
         this.breakableManager.damageBreakable(breakableHit.breakable, damage, (broken) => {
           this.hud.showToast(`[!] Smashed ${broken.name}`, 0xffaa00);
+          if (this.destructableWallManager) {
+            this.destructableWallManager.onBreakableDestroyed(broken);
+          }
         });
       }
     }
@@ -969,6 +993,10 @@ export class RaycastScene extends BaseScene {
     this.updateDoors(delta);
     this.pickupManager.update(delta);
 
+    const allThinWalls = this.thinWalls.concat(
+      this.destructableWallManager ? this.destructableWallManager.getThinWalls() : []
+    );
+
     // Update enemy AI, navigation, line of sight, and shooting
     this.enemyManager.update(
       delta,
@@ -978,7 +1006,7 @@ export class RaycastScene extends BaseScene {
       this.mapWidth,
       this.mapHeight,
       this.doorStatesFlat,
-      this.thinWalls,
+      allThinWalls,
       this.playerController,
       this.pickupManager
     );
@@ -1089,6 +1117,10 @@ export class RaycastScene extends BaseScene {
       }
     }
 
+    if (this.destructableWallManager && this.destructableWallManager.checkCollision(newX, newY)) {
+      return false;
+    }
+
     if (this.breakableManager && this.breakableManager.checkCollision(newX, newY)) {
       return false;
     }
@@ -1183,7 +1215,11 @@ export class RaycastScene extends BaseScene {
       (this.player.planeX * this.player.dirY -
         this.player.dirX * this.player.planeY);
 
-    for (const wall of this.thinWalls) {
+    const allThinWalls = this.thinWalls.concat(
+      this.destructableWallManager ? this.destructableWallManager.getThinWalls() : []
+    );
+
+    for (const wall of allThinWalls) {
       // Transform wall endpoints into player camera space
       const dx1 = wall.x1 - this.player.x;
       const dy1 = wall.y1 - this.player.y;

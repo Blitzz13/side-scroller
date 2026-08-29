@@ -12,6 +12,7 @@ export class RaycastBreakableManager {
     const assetsToLoad = [
       { key: "chair", path: "assets/chair_broken.png" },
       { key: "table", path: "assets/table_broken.png" },
+      { key: "power_cell", path: "assets/power_cell_broken.PNG" },
     ];
 
     await Promise.all(
@@ -53,8 +54,8 @@ export class RaycastBreakableManager {
     this.breakables = [];
     this.nextId = 1;
 
-    // Identify which tile IDs map to chair and table
-    const breakableTileMap: Record<number, "chair" | "table"> = {};
+    // Identify which tile IDs map to chair, table, or power_cell
+    const breakableTileMap: Record<number, "chair" | "table" | "power_cell"> = {};
 
     if (mapData.tilesets) {
       mapData.tilesets.forEach((tileset: any) => {
@@ -67,6 +68,13 @@ export class RaycastBreakableManager {
               breakableTileMap[tile.id] = "chair";
             } else if (imgPath.includes("table") || typeStr.includes("table")) {
               breakableTileMap[tile.id] = "table";
+            } else if (
+              imgPath.includes("power_cell") ||
+              imgPath.includes("powercell") ||
+              typeStr.includes("power_cell") ||
+              typeStr.includes("powercell")
+            ) {
+              breakableTileMap[tile.id] = "power_cell";
             }
           });
         }
@@ -75,13 +83,16 @@ export class RaycastBreakableManager {
 
     const objectLayers = (mapData.layers || []).filter(
       (layer: any) =>
-        layer.type === "objectgroup" ||
-        (layer.name &&
-          (layer.name.toLowerCase().includes("object") ||
-            layer.name.toLowerCase().includes("prop") ||
-            layer.name.toLowerCase().includes("decor") ||
-            layer.name.toLowerCase().includes("furniture") ||
-            layer.name.toLowerCase().includes("item")))
+        (layer.type === "objectgroup" ||
+          (layer.name &&
+            (layer.name.toLowerCase().includes("object") ||
+              layer.name.toLowerCase().includes("prop") ||
+              layer.name.toLowerCase().includes("decor") ||
+              layer.name.toLowerCase().includes("furniture") ||
+              layer.name.toLowerCase().includes("item")))) &&
+        !(layer.name &&
+          (layer.name.toLowerCase().includes("doorprotector") ||
+            layer.name.toLowerCase().includes("destructablewall")))
     );
 
     for (const layer of objectLayers) {
@@ -147,7 +158,9 @@ export class RaycastBreakableManager {
                 layerScaleY,
                 layerVOffset,
                 layerZ,
-                layerAnchor
+                layerAnchor,
+                undefined,
+                undefined
               );
             }
           }
@@ -158,32 +171,100 @@ export class RaycastBreakableManager {
         const tileH = mapData.tileheight || 64;
 
         layer.objects.forEach((obj: any) => {
+          if (
+            obj.type === "DestructableWall" ||
+            (obj.type || "").toLowerCase().includes("destructablewall")
+          ) {
+            return; // Handled by DestructableWallManager
+          }
+
           const gid = obj.gid ?? 0;
           if (gid !== 0) {
             const adjustedTileId = gid - firstgid;
             const objName = (obj.name || "").toLowerCase();
-            const breakableType =
-              breakableTileMap[adjustedTileId] ||
-              (objName.includes("chair") ? "chair" : objName.includes("table") ? "table" : undefined);
+            const objType = (obj.type || "").toLowerCase();
+            const meta = tileMeta[adjustedTileId] || {};
+            const imgStr = (meta.image || "").toLowerCase();
+
+            let breakableType: "chair" | "table" | "power_cell" | undefined =
+              breakableTileMap[adjustedTileId];
+
+            if (!breakableType) {
+              if (
+                objName.includes("chair") ||
+                objType === "chair" ||
+                imgStr.includes("chair")
+              ) {
+                breakableType = "chair";
+              } else if (
+                (objName.includes("table") ||
+                  objType === "table" ||
+                  imgStr.includes("table")) &&
+                !objType.includes("destructable")
+              ) {
+                breakableType = "table";
+              } else if (
+                objName.includes("power_cell") ||
+                objName.includes("powercell") ||
+                objType.includes("power_cell") ||
+                objType.includes("powercell") ||
+                imgStr.includes("power_cell") ||
+                imgStr.includes("powercell")
+              ) {
+                breakableType = "power_cell";
+              }
+            }
 
             if (breakableType) {
+              let objScale = layerScale ?? meta.scale;
+              let objScaleX = layerScaleX ?? meta.scaleX;
+              let objScaleY = layerScaleY ?? meta.scaleY;
+              let objVOffset = layerVOffset ?? meta.vOffset;
+              let objZ = layerZ ?? meta.z;
+              let objAnchor = layerAnchor ?? meta.anchor;
+              let linkId: string | undefined;
+
+              if (obj.properties) {
+                obj.properties.forEach((prop: any) => {
+                  const pName = prop.name.toLowerCase();
+                  const pVal = prop.value;
+                  if (pName === "scale" || pName === "size") objScale = parseFloat(pVal);
+                  if (pName === "scalex" || pName === "sizex") objScaleX = parseFloat(pVal);
+                  if (pName === "scaley" || pName === "sizey") objScaleY = parseFloat(pVal);
+                  if (pName === "voffset" || pName === "yoffset" || pName === "offset") {
+                    objVOffset = parseFloat(pVal);
+                  }
+                  if (pName === "z" || pName === "elevation" || pName === "height") {
+                    objZ = parseFloat(pVal);
+                  }
+                  if (pName === "anchor" || pName === "align") {
+                    objAnchor = String(pVal).toLowerCase();
+                  }
+                  if (pName === "linkid" || pName === "link" || pName === "id") {
+                    linkId = String(pVal);
+                  }
+                });
+              }
+
               const objW = obj.width || tileW;
               const objH = obj.height || tileH;
               const x = (obj.x + objW / 2) / tileW;
               const y = (obj.y - objH / 2) / tileH;
-              const meta = tileMeta[adjustedTileId] || {};
+
               this.spawnBreakable(
                 breakableType,
                 x,
                 y,
                 adjustedTileId,
                 meta,
-                layerScale,
-                layerScaleX,
-                layerScaleY,
-                layerVOffset,
-                layerZ,
-                layerAnchor
+                objScale,
+                objScaleX,
+                objScaleY,
+                objVOffset,
+                objZ,
+                objAnchor,
+                obj.id,
+                linkId
               );
             }
           }
@@ -193,7 +274,7 @@ export class RaycastBreakableManager {
   }
 
   public spawnBreakable(
-    type: "chair" | "table",
+    type: "chair" | "table" | "power_cell" | string,
     x: number,
     y: number,
     intactTextureId: number,
@@ -203,22 +284,33 @@ export class RaycastBreakableManager {
     layerScaleY?: number,
     layerVOffset?: number,
     layerZ?: number,
-    layerAnchor?: string
+    layerAnchor?: string,
+    objId?: number,
+    linkId?: string
   ): RaycastBreakable {
     const isTable = type === "table";
-    const scale = layerScale ?? meta.scale ?? (isTable ? 0.38 : 0.30);
+    const isPowerCell = type === "power_cell" || type.includes("power_cell") || type.includes("powercell");
+
+    const defaultScale = isTable ? 0.38 : isPowerCell ? 0.38 : 0.30;
+    const scale = layerScale ?? meta.scale ?? defaultScale;
     const scaleX = layerScaleX ?? meta.scaleX ?? scale;
     const scaleY = layerScaleY ?? meta.scaleY ?? scale;
     const vOffset = layerVOffset ?? meta.vOffset;
     const z = layerZ ?? meta.z;
     const anchor = layerAnchor ?? meta.anchor ?? "floor";
 
+    const name = isPowerCell ? "Power Cell" : isTable ? "Table" : "Chair";
+    const hitRadius = isTable ? 0.5 : isPowerCell ? 0.45 : 0.35;
+
     const breakable: RaycastBreakable = {
       id: this.nextId++,
+      objId,
+      tileId: intactTextureId,
+      linkId,
       x,
       y,
       type,
-      name: isTable ? "Table" : "Chair",
+      name,
       health: 1,
       maxHealth: 1,
       isBroken: false,
@@ -229,7 +321,7 @@ export class RaycastBreakableManager {
       vOffset,
       z,
       anchor,
-      hitRadius: isTable ? 0.5 : 0.35,
+      hitRadius,
       blocksMovement: true,
     };
     this.breakables.push(breakable);
@@ -284,7 +376,7 @@ export class RaycastBreakableManager {
         const distSq = dx * dx + dy * dy;
         const minDist = b.hitRadius * 0.7 + playerRadius;
         if (distSq < minDist * minDist) {
-          return true; // Collision with solid unbroken furniture
+          return true; // Collision with solid unbroken furniture / power cells
         }
       }
     }

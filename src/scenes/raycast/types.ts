@@ -114,9 +114,12 @@ export interface TileMeta {
 
 export interface RaycastBreakable {
   id: number;
+  objId?: number;
+  tileId?: number;
+  linkId?: string;
   x: number;
   y: number;
-  type: "chair" | "table" | string;
+  type: "chair" | "table" | "power_cell" | string;
   name: string;
   health: number;
   maxHealth: number;
@@ -131,3 +134,26 @@ export interface RaycastBreakable {
   hitRadius: number;
   blocksMovement: boolean;
 }
+
+export interface ThinWallDescriptor {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  texture: number;
+  orientation: "vertical" | "horizontal";
+  isDestructableWall?: boolean;
+}
+
+export interface DestructableWallConfig {
+  id: number;
+  name?: string;
+  gridX: number;
+  gridY: number;
+  texture: number;
+  rotation?: "vertical" | "horizontal" | string;
+  align?: "center" | "left" | "right" | "top" | "bottom" | string;
+  offset?: number;
+  linkIds?: string[] | string | number;
+}
+

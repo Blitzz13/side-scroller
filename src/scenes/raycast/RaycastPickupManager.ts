@@ -328,8 +328,13 @@ export class RaycastPickupManager {
               const isBreakable =
                 imgStr.includes("chair") ||
                 imgStr.includes("table") ||
+                imgStr.includes("power_cell") ||
+                imgStr.includes("powercell") ||
                 typeStr.includes("chair") ||
-                typeStr.includes("table");
+                typeStr.includes("table") ||
+                typeStr.includes("power_cell") ||
+                typeStr.includes("powercell") ||
+                meta.tileClass === "DestructableWall";
 
               if (!isBreakable) {
                 this.staticObjects.push({
@@ -503,10 +508,19 @@ export class RaycastPickupManager {
               const isBreakable =
                 imgStr.includes("chair") ||
                 imgStr.includes("table") ||
+                imgStr.includes("power_cell") ||
+                imgStr.includes("powercell") ||
                 (obj.name || "").toLowerCase().includes("chair") ||
                 (obj.name || "").toLowerCase().includes("table") ||
+                (obj.name || "").toLowerCase().includes("power_cell") ||
+                (obj.name || "").toLowerCase().includes("powercell") ||
                 normalizedType.includes("chair") ||
-                normalizedType.includes("table");
+                normalizedType.includes("table") ||
+                normalizedType.includes("power_cell") ||
+                normalizedType.includes("powercell") ||
+                obj.type === "DestructableWall" ||
+                normalizedType.includes("destructablewall") ||
+                (layer.name && layer.name.toLowerCase().includes("doorprotector"));
 
               if (!isBreakable) {
                 this.staticObjects.push({
