@@ -198,11 +198,11 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "e_11_item",
-            src: "./assets/E-11-item.png",
+            src: "./assets/raycast/pickups/e_11_item.png",
           },
           {
             name: "e_11_equiped",
-            src: "./assets/E_11-equiped.png",
+            src: "./assets/raycast/weapons/e_11_equiped.png",
           },
           {
             name: "chair",

@@ -17,8 +17,8 @@ export const e11Config: IRaycastWeaponConfig = {
   maxAmmo: 99,
   defaultAmmo: 20,
   rateOfFire: 200,
-  equippedTexture: "assets/E_11-equiped.png",
-  itemTexture: "assets/E-11-item.png",
+  equippedTexture: "assets/raycast/weapons/e_11_equiped.png",
+  itemTexture: "assets/raycast/pickups/e_11_item.png",
   shootSounds: e11ShootSounds,
   reloadSound: {
     src: "reload_sound",

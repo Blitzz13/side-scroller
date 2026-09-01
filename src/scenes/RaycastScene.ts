@@ -428,8 +428,8 @@ export class RaycastScene extends BaseScene {
           .catch((err) => console.error(`Failed to load ${fileName}:`, err))
     );
     texturePromises.push(
-      Assets.load("assets/E_11-equiped.png").catch((err) =>
-        console.error("Failed to load E_11-equiped.png:", err)
+      Assets.load("assets/e_11_equiped.png").catch((err) =>
+        console.error("Failed to load e_11_equiped.png:", err)
       )
     );
     await Promise.all(texturePromises);

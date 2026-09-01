@@ -50,7 +50,7 @@ export class RaycastPickupManager {
     await this.initKeycardTextures();
 
     const standardPickups = [
-      { key: "weapon", path: "assets/E-11-item.png" },
+      { key: "weapon", path: "assets/raycast/pickups/e_11_item.png" },
       { key: "health", path: "assets/health.png" },
       { key: "ammo", path: "assets/ammo.png" },
       { key: "thermal_detonator_belt", path: "assets/raycast/pickups/thermal_detonator_belt.png" },

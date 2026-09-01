@@ -127,7 +127,7 @@ This document logs recent development changes and enhancements made to the Rayca
   - Added `BLUE_KEYCARD`, `GREEN_KEYCARD`, `RED_KEYCARD`, and `KEYCARD` to `RaycastPickupType`.
 - **Enemy Loot Drop Texture & Ammo Fix** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
   - Fixed argument ordering in `spawnPickup()` and added overload guards so dropped weapons correctly award ammo (+20) and equip the E-11 blaster.
-  - Pre-loads and pre-slices standard pickup textures (`assets/E-11-item.png`, `assets/health.png`, `assets/ammo.png`) in `initTextures()`, ensuring dynamically spawned weapon drops render visibly on the floor.
+  - Pre-loads and pre-slices standard pickup textures (`assets/raycast/pickups/e_11_item.png`, `assets/health.png`, `assets/ammo.png`) in `initTextures()`, ensuring dynamically spawned weapon drops render visibly on the floor.
 - **Configurable Pickup Radius** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
   - Added `pickupRadius` support to `IRaycastPickupConfig`, item instances, and Tiled custom properties.
   - Increased default keycard pickup radius to `0.9` (up from `0.55`), allowing effortless card collection while standing near furniture or across tables.

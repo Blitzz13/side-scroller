@@ -102,7 +102,7 @@ To create or customize rooms in `assets/level2.json` (or via the Tiled editor):
 3. **Ceiling Layer**: Paint ceiling tiles on the `Ceiling` layer (e.g. Tile `7`, `8`, `9` for interior ceilings, or `0` for sky).
 4. **Walls & Doors**: Paint walls on the `Walls` layer and doors on the `Doors` layer.
 5. **Objects & Items Layer (`Objects`)**:
-   - Place item/prop tiles on the `Objects` layer (e.g. `E-11-item.png`).
+   - Place item/prop tiles on the `Objects` layer (e.g. `e_11_item.png`).
    - **Custom Properties in Tiled**:
      | Property Name | Type | Description | Example |
      | :--- | :--- | :--- | :--- |

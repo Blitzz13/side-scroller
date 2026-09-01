@@ -20,7 +20,7 @@ export const raycastE11PickupConfig: IRaycastPickupConfig = {
   type: RaycastPickupType.WEAPON,
   name: "E-11 Blaster",
   amount: 20,
-  texture: "assets/E-11-item.png",
+  texture: "assets/raycast/pickups/e_11_item.png",
   weaponType: RaycastWeaponType.E11,
   pickUpSound: {
     src: "reload_sound",
