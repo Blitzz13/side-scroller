@@ -1,0 +1,471 @@
+{
+  "frames": {
+    "viper_droid_death_1.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 91,
+        "h": 80
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 91,
+        "h": 80
+      },
+      "sourceSize": {
+        "w": 91,
+        "h": 80
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_death_5.png": {
+      "frame": {
+        "x": 91,
+        "y": 0,
+        "w": 84,
+        "h": 27
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 84,
+        "h": 27
+      },
+      "sourceSize": {
+        "w": 84,
+        "h": 27
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_death_2.png": {
+      "frame": {
+        "x": 175,
+        "y": 0,
+        "w": 79,
+        "h": 80
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 79,
+        "h": 80
+      },
+      "sourceSize": {
+        "w": 79,
+        "h": 80
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_death_4.png": {
+      "frame": {
+        "x": 91,
+        "y": 27,
+        "w": 80,
+        "h": 38
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 80,
+        "h": 38
+      },
+      "sourceSize": {
+        "w": 80,
+        "h": 38
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_10.png": {
+      "frame": {
+        "x": 91,
+        "y": 65,
+        "w": 54,
+        "h": 69
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 54,
+        "h": 69
+      },
+      "sourceSize": {
+        "w": 54,
+        "h": 69
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_11.png": {
+      "frame": {
+        "x": 0,
+        "y": 80,
+        "w": 53,
+        "h": 69
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 53,
+        "h": 69
+      },
+      "sourceSize": {
+        "w": 53,
+        "h": 69
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_12.png": {
+      "frame": {
+        "x": 255,
+        "y": 0,
+        "w": 53,
+        "h": 69
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 53,
+        "h": 69
+      },
+      "sourceSize": {
+        "w": 53,
+        "h": 69
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_shoot_2.png": {
+      "frame": {
+        "x": 324,
+        "y": 0,
+        "w": 53,
+        "h": 69
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 53,
+        "h": 69
+      },
+      "sourceSize": {
+        "w": 53,
+        "h": 69
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_9.png": {
+      "frame": {
+        "x": 393,
+        "y": 0,
+        "w": 51,
+        "h": 69
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 51,
+        "h": 69
+      },
+      "sourceSize": {
+        "w": 51,
+        "h": 69
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_8.png": {
+      "frame": {
+        "x": 462,
+        "y": 0,
+        "w": 49,
+        "h": 69
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 49,
+        "h": 69
+      },
+      "sourceSize": {
+        "w": 49,
+        "h": 69
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_7.png": {
+      "frame": {
+        "x": 531,
+        "y": 0,
+        "w": 47,
+        "h": 68
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 47,
+        "h": 68
+      },
+      "sourceSize": {
+        "w": 47,
+        "h": 68
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_6.png": {
+      "frame": {
+        "x": 599,
+        "y": 0,
+        "w": 45,
+        "h": 68
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 45,
+        "h": 68
+      },
+      "sourceSize": {
+        "w": 45,
+        "h": 68
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_death_3.png": {
+      "frame": {
+        "x": 667,
+        "y": 0,
+        "w": 67,
+        "h": 47
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 67,
+        "h": 47
+      },
+      "sourceSize": {
+        "w": 67,
+        "h": 47
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_5.png": {
+      "frame": {
+        "x": 599,
+        "y": 45,
+        "w": 41,
+        "h": 67
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 41,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 41,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_shoot_1.png": {
+      "frame": {
+        "x": 531,
+        "y": 47,
+        "w": 57,
+        "h": 65
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 57,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 57,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_4.png": {
+      "frame": {
+        "x": 462,
+        "y": 49,
+        "w": 40,
+        "h": 65
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 40,
+        "h": 65
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_3.png": {
+      "frame": {
+        "x": 393,
+        "y": 51,
+        "w": 43,
+        "h": 64
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 43,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 43,
+        "h": 64
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_1.png": {
+      "frame": {
+        "x": 457,
+        "y": 89,
+        "w": 51,
+        "h": 63
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 51,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 51,
+        "h": 63
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "viper_droid_default_2.png": {
+      "frame": {
+        "x": 255,
+        "y": 53,
+        "w": 47,
+        "h": 63
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 47,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 47,
+        "h": 63
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "viper_droid.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 734,
+      "h": 140
+    },
+    "scale": 1
+  }
+}

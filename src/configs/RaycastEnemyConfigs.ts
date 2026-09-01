@@ -21,7 +21,7 @@ const stormtrooperDeathSounds: ISoundConfig[] = [
 
 const stormtrooperAttackSounds: ISoundConfig[] = [
   {
-    src: "w_e_11_blaster_rifle",
+    src: "e_11_blaster",
     loop: false,
     volume: 0.25,
   },

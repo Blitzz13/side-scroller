@@ -4,7 +4,7 @@ import { ISoundConfig } from "./interfaces/ISoundConfig";
 
 const e11ShootSounds: ISoundConfig[] = [
   {
-    src: "w_e_11_blaster_rifle",
+    src: "e_11_blaster",
     loop: false,
     volume: 0.2,
   },

@@ -78,8 +78,8 @@ export const manifest: AssetsManifest = {
             src: "./assets/sounds/blaster_4.mp3"
           },
           {
-            alias: "w_e_11_blaster_rifle",
-            src: "./assets/sounds/w-e-11-blaster-rifle.mp3"
+            alias: "e_11_blaster",
+            src: "./assets/sounds/e_11_blaster.mp3"
           },
           {
             alias: "stormtrooper_pain_1",
@@ -173,7 +173,7 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "storm_trooper",
-            src: "./assets/storm_trooper.json",
+            src: "./assets/raycast/enemies/storm_trooper.json",
           }
         ],
       },
