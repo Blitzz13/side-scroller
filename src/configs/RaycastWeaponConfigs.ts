@@ -25,6 +25,8 @@ export const e11Config: IRaycastWeaponConfig = {
     loop: false,
     volume: 1,
   },
+  viewPosX: 800,
+  viewPosY: 700,
   muzzleFlash: {
     enabled: true,
     offsetX: -50,
@@ -70,8 +72,8 @@ export const thermalDetonatorConfig: IRaycastWeaponConfig = {
   explosionRadius: 3.5, // Blast radius in world units
   throwSpeed: 8.5, // Initial throw velocity in world units/sec
   bounciness: 0.28, // Floor bounce elasticity (0.0 = dead thud/no bounce, 0.28 = low realistic hop, 1.0 = rubber ball)
-  wallBounciness: 0.30, // Wall bounce elasticity (0.0 = stops dead on walls, 0.30 = slight deflection)
-  friction: 0.80, // Floor roll drag (lower = stops rolling sooner, e.g. 0.70 = quick stop, 0.95 = ice)
+  wallBounciness: 0.3, // Wall bounce elasticity (0.0 = stops dead on walls, 0.30 = slight deflection)
+  friction: 0.8, // Floor roll drag (lower = stops rolling sooner, e.g. 0.70 = quick stop, 0.95 = ice)
   maxBounces: 2, // Maximum bounces before settling flat on the ground
   muzzleFlash: {
     enabled: false,
@@ -82,7 +84,10 @@ export const thermalDetonatorConfig: IRaycastWeaponConfig = {
  * Global registry of Raycast weapons indexed by numeric RaycastWeaponType enum.
  * To add a new weapon, add its enum value and config entry here.
  */
-export const raycastWeaponConfigs: Record<RaycastWeaponType, IRaycastWeaponConfig> = {
+export const raycastWeaponConfigs: Record<
+  RaycastWeaponType,
+  IRaycastWeaponConfig
+> = {
   [RaycastWeaponType.E11]: e11Config,
   [RaycastWeaponType.THERMAL_DETONATOR]: thermalDetonatorConfig,
 };
@@ -91,9 +96,12 @@ export const raycastWeaponConfigs: Record<RaycastWeaponType, IRaycastWeaponConfi
  * Retrieves a weapon config by enum ID, numeric ID, or string alias (e.g. "e_11", "e11", "E11", "0").
  */
 export function getRaycastWeaponConfig(
-  identifier: RaycastWeaponType | string | number
+  identifier: RaycastWeaponType | string | number,
 ): IRaycastWeaponConfig | undefined {
-  if (typeof identifier === "number" && raycastWeaponConfigs[identifier as RaycastWeaponType]) {
+  if (
+    typeof identifier === "number" &&
+    raycastWeaponConfigs[identifier as RaycastWeaponType]
+  ) {
     return raycastWeaponConfigs[identifier as RaycastWeaponType];
   }
 
