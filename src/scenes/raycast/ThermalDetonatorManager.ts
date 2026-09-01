@@ -67,7 +67,22 @@ export class ThermalDetonatorManager {
   public async initTextures(): Promise<void> {
     // 1. Load detonator pickup texture for 3D in-flight/on-ground billboard
     try {
-      const tex = await Assets.load("assets/raycast/pickups/thermal_detonator_pickup.png");
+      let tex: Texture | null = null;
+      const texKeys = [
+        "thermal_detonator_pickup",
+        "./assets/raycast/pickups/thermal_detonator_pickup.png",
+        "assets/raycast/pickups/thermal_detonator_pickup.png",
+      ];
+      for (const k of texKeys) {
+        if (Assets.cache.has(k)) {
+          tex = Assets.get(k);
+          break;
+        }
+      }
+      if (!tex) {
+        tex = await Assets.load("./assets/raycast/pickups/thermal_detonator_pickup.png");
+      }
+
       if (tex) {
         if (tex.baseTexture) {
           tex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
@@ -81,7 +96,22 @@ export class ThermalDetonatorManager {
 
     // 2. Load explosion spritesheet for 3D explosion effect
     try {
-      const sheet: Spritesheet = await Assets.load("assets/explosion.json");
+      let sheet: Spritesheet | null = null;
+      const sheetKeys = [
+        "explosion",
+        "./assets/explosion.json",
+        "assets/explosion.json",
+      ];
+      for (const k of sheetKeys) {
+        if (Assets.cache.has(k)) {
+          sheet = Assets.get(k);
+          break;
+        }
+      }
+      if (!sheet) {
+        sheet = await Assets.load("./assets/explosion.json");
+      }
+
       if (sheet) {
         this.explosionFrames = [];
         for (let i = 0; i <= 16; i++) {

@@ -87,7 +87,17 @@ export class RaycastPickupManager {
 
   public async initKeycardTextures(): Promise<void> {
     try {
-      const sheet = await Assets.load("assets/keycards.json");
+      let sheet: any = null;
+      if (Assets.cache.has("keycards")) {
+        sheet = Assets.get("keycards");
+      } else if (Assets.cache.has("./assets/keycards.json")) {
+        sheet = Assets.get("./assets/keycards.json");
+      } else if (Assets.cache.has("assets/keycards.json")) {
+        sheet = Assets.get("assets/keycards.json");
+      } else {
+        sheet = await Assets.load("./assets/keycards.json");
+      }
+
       if (sheet) {
         if (sheet.baseTexture) {
           sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;

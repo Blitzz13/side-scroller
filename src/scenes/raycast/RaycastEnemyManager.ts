@@ -22,37 +22,44 @@ export class RaycastEnemyManager {
   }
 
   public async initSpritesheets(): Promise<void> {
-    const candidatePaths = [
-      "assets/raycast/enemies/storm_trooper.json",
-      "assets/storm_trooper.json",
+    const candidateKeys = [
       "storm_trooper",
+      "./assets/raycast/enemies/storm_trooper.json",
+      "assets/raycast/enemies/storm_trooper.json",
     ];
 
-    for (const p of candidatePaths) {
-      try {
-        let sheet = this.spritesheets[p];
-        if (!sheet) {
-          try {
-            sheet = Assets.get(p) || Assets.get("storm_trooper");
-          } catch {}
-          if (!sheet) {
-            sheet = await Assets.load(p);
-          }
-        }
-        if (sheet) {
-          if (sheet.baseTexture) {
-            sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-          }
-          this.spritesheets[p] = sheet;
-          this.spritesheets["assets/raycast/enemies/storm_trooper.json"] = sheet;
-          this.spritesheets["assets/storm_trooper.json"] = sheet;
-          this.spritesheets["storm_trooper"] = sheet;
-          console.log("[RaycastEnemyManager] Successfully loaded storm_trooper spritesheet via", p);
-          break;
-        }
-      } catch (err) {
-        // try next candidate
+    let sheet: any = null;
+    for (const k of candidateKeys) {
+      if (this.spritesheets[k]) {
+        sheet = this.spritesheets[k];
+        break;
       }
+      if (Assets.cache.has(k)) {
+        sheet = Assets.get(k);
+        break;
+      }
+    }
+
+    if (!sheet) {
+      try {
+        sheet = await Assets.load("./assets/raycast/enemies/storm_trooper.json");
+      } catch (err) {
+        try {
+          sheet = await Assets.load("assets/raycast/enemies/storm_trooper.json");
+        } catch (e) {
+          console.warn("Failed to load storm_trooper spritesheet:", e);
+        }
+      }
+    }
+
+    if (sheet) {
+      if (sheet.baseTexture) {
+        sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      }
+      this.spritesheets["storm_trooper"] = sheet;
+      this.spritesheets["./assets/raycast/enemies/storm_trooper.json"] = sheet;
+      this.spritesheets["assets/raycast/enemies/storm_trooper.json"] = sheet;
+      this.spritesheets["assets/storm_trooper.json"] = sheet;
     }
   }
 
