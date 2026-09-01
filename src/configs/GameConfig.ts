@@ -227,6 +227,18 @@ export const manifest: AssetsManifest = {
           {
             name: "explosion",
             src: "./assets/explosion.json"
+          },
+          {
+            name: "thermal_detonator",
+            src: "./assets/raycast/weapons/thermal_detonator.png"
+          },
+          {
+            name: "thermal_detonator_belt",
+            src: "./assets/raycast/pickups/thermal_detonator_belt.png"
+          },
+          {
+            name: "thermal_detonator_pickup",
+            src: "./assets/raycast/pickups/thermal_detonator_pickup.png"
           }
         ],
       },

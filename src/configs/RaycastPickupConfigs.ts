@@ -96,6 +96,36 @@ export const raycastRedKeycardConfig: IRaycastPickupConfig = {
   pickupRadius: 0.9,
 };
 
+export const raycastThermalDetonatorPickupConfig: IRaycastPickupConfig = {
+  type: RaycastPickupType.THERMAL_DETONATOR_SINGLE,
+  name: "Thermal Detonator",
+  amount: 1,
+  texture: "assets/raycast/pickups/thermal_detonator_pickup.png",
+  weaponType: RaycastWeaponType.THERMAL_DETONATOR,
+  pickUpSound: {
+    src: "reload_sound",
+    loop: false,
+    volume: 1,
+  },
+  scale: 0.2,
+  anchor: "floor",
+};
+
+export const raycastThermalDetonatorBeltConfig: IRaycastPickupConfig = {
+  type: RaycastPickupType.THERMAL_DETONATOR_BELT,
+  name: "Thermal Detonator Belt",
+  amount: 5,
+  texture: "assets/raycast/pickups/thermal_detonator_belt.png",
+  weaponType: RaycastWeaponType.THERMAL_DETONATOR,
+  pickUpSound: {
+    src: "reload_sound",
+    loop: false,
+    volume: 1,
+  },
+  scale: 0.22,
+  anchor: "floor",
+};
+
 /**
  * Global registry of Raycast pickup items indexed by numeric RaycastPickupType enum.
  */
@@ -107,6 +137,8 @@ export const raycastPickupConfigs: Record<RaycastPickupType, IRaycastPickupConfi
   [RaycastPickupType.GREEN_KEYCARD]: raycastGreenKeycardConfig,
   [RaycastPickupType.RED_KEYCARD]: raycastRedKeycardConfig,
   [RaycastPickupType.KEYCARD]: raycastBlueKeycardConfig,
+  [RaycastPickupType.THERMAL_DETONATOR_SINGLE]: raycastThermalDetonatorPickupConfig,
+  [RaycastPickupType.THERMAL_DETONATOR_BELT]: raycastThermalDetonatorBeltConfig,
 };
 
 /**
@@ -120,6 +152,13 @@ export function getRaycastPickupConfig(
   }
 
   const normalized = String(type).toLowerCase().replace(/[-_ ]/g, "");
+
+  if (normalized.includes("belt") || normalized.includes("detonatorbelt")) {
+    return raycastThermalDetonatorBeltConfig;
+  }
+  if (normalized.includes("detonator") || normalized.includes("grenade") || normalized.includes("bomb")) {
+    return raycastThermalDetonatorPickupConfig;
+  }
 
   if (normalized.includes("green") && (normalized.includes("key") || normalized.includes("card"))) {
     return raycastGreenKeycardConfig;

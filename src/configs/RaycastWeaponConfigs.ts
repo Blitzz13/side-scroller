@@ -40,7 +40,41 @@ export const e11Config: IRaycastWeaponConfig = {
     innerAlpha: 0.85,
     coreColor: 0xffffff,
     coreRadius: 8,
-    coreAlpha: 0.95,
+  },
+};
+
+export const thermalDetonatorConfig: IRaycastWeaponConfig = {
+  type: RaycastWeaponType.THERMAL_DETONATOR,
+  name: "Thermal Detonator",
+  damage: 150,
+  maxAmmo: 99,
+  defaultAmmo: 1,
+  rateOfFire: 800,
+  equippedTexture: "assets/raycast/weapons/thermal_detonator.png",
+  itemTexture: "assets/raycast/pickups/thermal_detonator_pickup.png",
+  shootSounds: [],
+  reloadSound: {
+    src: "reload_sound",
+    loop: false,
+    volume: 1,
+  },
+  // Configurable first-person view positioning and scale
+  viewPosX: 990,
+  viewPosY: 870,
+  viewScale: 0.85,
+  anchorX: 0.5,
+  anchorY: 0.8,
+  // Configurable throwable & explosion properties
+  isThrowable: true,
+  fuseTime: 2.0, // Configurable timer to explode in seconds
+  explosionRadius: 3.5, // Blast radius in world units
+  throwSpeed: 8.5, // Initial throw velocity in world units/sec
+  bounciness: 0.28, // Floor bounce elasticity (0.0 = dead thud/no bounce, 0.28 = low realistic hop, 1.0 = rubber ball)
+  wallBounciness: 0.30, // Wall bounce elasticity (0.0 = stops dead on walls, 0.30 = slight deflection)
+  friction: 0.80, // Floor roll drag (lower = stops rolling sooner, e.g. 0.70 = quick stop, 0.95 = ice)
+  maxBounces: 2, // Maximum bounces before settling flat on the ground
+  muzzleFlash: {
+    enabled: false,
   },
 };
 
@@ -50,6 +84,7 @@ export const e11Config: IRaycastWeaponConfig = {
  */
 export const raycastWeaponConfigs: Record<RaycastWeaponType, IRaycastWeaponConfig> = {
   [RaycastWeaponType.E11]: e11Config,
+  [RaycastWeaponType.THERMAL_DETONATOR]: thermalDetonatorConfig,
 };
 
 /**

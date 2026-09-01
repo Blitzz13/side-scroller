@@ -22,16 +22,37 @@ export class RaycastEnemyManager {
   }
 
   public async initSpritesheets(): Promise<void> {
-    try {
-      const sheet = await Assets.load("assets/storm_trooper.json");
-      if (sheet) {
-        if (sheet.baseTexture) {
-          sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+    const candidatePaths = [
+      "assets/raycast/enemies/storm_trooper.json",
+      "assets/storm_trooper.json",
+      "storm_trooper",
+    ];
+
+    for (const p of candidatePaths) {
+      try {
+        let sheet = this.spritesheets[p];
+        if (!sheet) {
+          try {
+            sheet = Assets.get(p) || Assets.get("storm_trooper");
+          } catch {}
+          if (!sheet) {
+            sheet = await Assets.load(p);
+          }
         }
-        this.spritesheets["assets/storm_trooper.json"] = sheet;
+        if (sheet) {
+          if (sheet.baseTexture) {
+            sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+          }
+          this.spritesheets[p] = sheet;
+          this.spritesheets["assets/raycast/enemies/storm_trooper.json"] = sheet;
+          this.spritesheets["assets/storm_trooper.json"] = sheet;
+          this.spritesheets["storm_trooper"] = sheet;
+          console.log("[RaycastEnemyManager] Successfully loaded storm_trooper spritesheet via", p);
+          break;
+        }
+      } catch (err) {
+        // try next candidate
       }
-    } catch (err) {
-      console.warn("Failed to load storm_trooper spritesheet:", err);
     }
   }
 
@@ -44,10 +65,28 @@ export class RaycastEnemyManager {
     this.enemies = [];
     this.nextEnemyId = 1;
 
-    const sheet = this.spritesheets["assets/storm_trooper.json"];
+    const sheet =
+      this.spritesheets["assets/raycast/enemies/storm_trooper.json"] ||
+      this.spritesheets["storm_trooper"] ||
+      this.spritesheets["assets/storm_trooper.json"];
+
+    // Flatten any layer groups recursively (e.g. Elevation groups)
+    const collectLayers = (layers: any[]): any[] => {
+      let flat: any[] = [];
+      for (const l of layers) {
+        if (l.layers && Array.isArray(l.layers)) {
+          flat = flat.concat(collectLayers(l.layers));
+        } else {
+          flat.push(l);
+        }
+      }
+      return flat;
+    };
+
+    const allLayers = collectLayers(mapData.layers || []);
 
     // Check for "Enemies" tile layers or object layers
-    const enemyLayers = (mapData.layers || []).filter(
+    const enemyLayers = allLayers.filter(
       (layer: any) =>
         layer.name &&
         (layer.name.toLowerCase().includes("enem") ||
@@ -81,11 +120,16 @@ export class RaycastEnemyManager {
       }
     }
 
-    // Fallback: spawn at least one Stormtrooper for immediate testing if layer empty
-    if (this.enemies.length === 0) {
-      const config = getRaycastEnemyConfig(RaycastEnemyType.STORMTROOPER)!;
-      this.spawnEnemy(config, 10.5, 10.5, sheet);
-    }
+    // // Ensure at least one Stormtrooper is spawned in the starting area / corridor
+    // // so the player can immediately encounter enemies without having to search the entire map
+    // const hasNearbyEnemy = this.enemies.some(
+    //   (e) => Math.sqrt((e.x - 2) ** 2 + (e.y - 5) ** 2) < 8
+    // );
+    // if (!hasNearbyEnemy) {
+    //   const config = getRaycastEnemyConfig(RaycastEnemyType.STORMTROOPER)!;
+    //   // Position at (5.5, 5.0) in clear line of sight of the player's room
+    //   this.spawnEnemy(config, 5.5, 5.0, sheet);
+    // }
   }
 
   public spawnEnemy(
@@ -94,7 +138,12 @@ export class RaycastEnemyManager {
     y: number,
     spritesheet?: Spritesheet
   ): RaycastEnemy {
-    const sheet = spritesheet || this.spritesheets[config.spritesheet] || this.spritesheets["assets/storm_trooper.json"];
+    const sheet =
+      spritesheet ||
+      this.spritesheets[config.spritesheet] ||
+      this.spritesheets["assets/raycast/enemies/storm_trooper.json"] ||
+      this.spritesheets["storm_trooper"] ||
+      this.spritesheets["assets/storm_trooper.json"];
     const enemy = new RaycastEnemy(this.nextEnemyId++, config, x, y, sheet);
 
     if (enemy.animatedSprite) {
@@ -381,12 +430,18 @@ export class RaycastEnemyManager {
       const drawStartX = Math.max(0, Math.floor(spriteScreenX - halfW));
       const drawEndX = Math.min(screenW - 1, Math.floor(spriteScreenX + halfW));
 
+      if (drawStartX > drawEndX) {
+        sprite.visible = false;
+        continue;
+      }
+
       // Per-column occlusion mask: draw only columns where enemy is in front of wall
       const mask = enemy.occlusionMask;
       if (mask) {
         mask.clear();
 
         let runStart = -1;
+        let hasDrawnAnyRun = false;
         for (let col = drawStartX; col <= drawEndX; col++) {
           if (transformY < zBuffer[col]) {
             // This column is visible
@@ -397,6 +452,7 @@ export class RaycastEnemyManager {
               mask.beginFill(0xffffff);
               mask.drawRect(runStart, 0, col - runStart, screenH);
               mask.endFill();
+              hasDrawnAnyRun = true;
               runStart = -1;
             }
           }
@@ -406,6 +462,7 @@ export class RaycastEnemyManager {
           mask.beginFill(0xffffff);
           mask.drawRect(runStart, 0, drawEndX - runStart + 1, screenH);
           mask.endFill();
+          hasDrawnAnyRun = true;
         }
 
         // If mask is completely empty, sprite is fully occluded
@@ -498,6 +555,32 @@ export class RaycastEnemyManager {
 
   public get activeEnemies(): RaycastEnemy[] {
     return this.enemies.filter((e) => !e.isDead);
+  }
+
+  public applyAreaDamage(
+    centerX: number,
+    centerY: number,
+    radius: number,
+    maxDamage: number,
+    onEnemyKilled?: (enemy: RaycastEnemy) => void
+  ): RaycastEnemy[] {
+    const hitEnemies: RaycastEnemy[] = [];
+    for (const enemy of this.enemies) {
+      if (enemy.isDead) continue;
+      const dx = enemy.x - centerX;
+      const dy = enemy.y - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= radius) {
+        const falloff = 1 - dist / radius;
+        const damage = Math.max(15, Math.round(maxDamage * falloff));
+        const killed = enemy.takeDamage(damage, onEnemyKilled);
+        if (killed && onEnemyKilled) {
+          onEnemyKilled(enemy);
+        }
+        hitEnemies.push(enemy);
+      }
+    }
+    return hitEnemies;
   }
 
   private disposeEnemies(): void {

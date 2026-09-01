@@ -18,10 +18,16 @@ export class RaycastWeaponView extends Container {
 
   private flashSprite: Sprite;
 
-  // Base positioning (centered/right-aligned bottom first-person view)
-  private readonly baseScale: number = 1.05;
-  private readonly basePosX: number = gameConfig.width * 0.58;
-  private readonly basePosY: number = gameConfig.height + 25;
+  // Base positioning (configurable per weapon)
+  private baseScale: number = 1.05;
+  private basePosX: number = gameConfig.width * 0.58;
+  private basePosY: number = gameConfig.height + 25;
+
+  // Throw animation states
+  private isThrowing: boolean = false;
+  private throwProgress: number = 0;
+  private onThrowRelease?: () => void;
+  private onThrowComplete?: () => void;
 
   constructor() {
     super();
@@ -42,7 +48,6 @@ export class RaycastWeaponView extends Container {
     this.addChild(this.flashSprite);
 
     // 3. Weapon sprite (drawn on top of 3D world, below HUD)
-    // Anchor set at 85% down the weapon (near rear grip/stock)
     this.weaponSprite = new Sprite();
     this.weaponSprite.anchor.set(0.5, 0.85);
     this.weaponSprite.scale.set(this.baseScale);
@@ -132,6 +137,17 @@ export class RaycastWeaponView extends Container {
 
     this.currentWeapon = def;
 
+    // Apply configurable screen position, scale, and anchor
+    this.basePosX = def.viewPosX ?? gameConfig.width * 0.58;
+    this.basePosY = def.viewPosY ?? gameConfig.height + 25;
+    this.baseScale = def.viewScale ?? 1.05;
+    const ancX = def.anchorX ?? 0.5;
+    const ancY = def.anchorY ?? 0.85;
+
+    this.weaponSprite.anchor.set(ancX, ancY);
+    this.weaponSprite.scale.set(this.baseScale);
+    this.weaponSprite.position.set(this.basePosX, this.basePosY);
+
     if (customTexture) {
       this.weaponSprite.texture = customTexture;
     } else {
@@ -141,6 +157,22 @@ export class RaycastWeaponView extends Container {
     this.weaponSprite.visible = true;
     this.recoilOffset = 0;
     this.recoilRotation = 0;
+    this.isThrowing = false;
+    this.throwProgress = 0;
+  }
+
+  public playThrowAnimation(
+    onRelease?: () => void,
+    onComplete?: () => void
+  ): boolean {
+    if (this.isThrowing || !this.currentWeapon || !this.weaponSprite.visible) {
+      return false;
+    }
+    this.isThrowing = true;
+    this.throwProgress = 0;
+    this.onThrowRelease = onRelease;
+    this.onThrowComplete = onComplete;
+    return true;
   }
 
   public unequip(): void {
@@ -148,6 +180,8 @@ export class RaycastWeaponView extends Container {
     this.weaponSprite.visible = false;
     this.muzzleFlash.visible = false;
     if (this.flashSprite) this.flashSprite.visible = false;
+    this.isThrowing = false;
+    this.throwProgress = 0;
   }
 
   public get isEquipped(): boolean {
@@ -319,6 +353,64 @@ export class RaycastWeaponView extends Container {
     if (!this.weaponSprite.visible) {
       this.muzzleFlash.visible = false;
       if (this.flashSprite) this.flashSprite.visible = false;
+      return;
+    }
+
+    // 0. Handle throw animation for throwables (e.g. Thermal Detonator)
+    if (this.isThrowing) {
+      this.muzzleFlash.visible = false;
+      if (this.flashSprite) this.flashSprite.visible = false;
+
+      const prevProgress = this.throwProgress;
+      this.throwProgress += 0.05 * delta;
+
+      // Phase 1 (0 -> 0.25): Windup (hand pulls back and up slightly)
+      if (this.throwProgress < 0.25) {
+        const p = this.throwProgress / 0.25;
+        this.weaponSprite.x = this.basePosX - 20 * p;
+        this.weaponSprite.y = this.basePosY - 35 * p;
+        this.weaponSprite.rotation = -0.25 * p;
+        this.weaponSprite.visible = true;
+      }
+      // Phase 2 (0.25 -> 0.55): Toss forward and sweep down offscreen
+      else if (this.throwProgress < 0.55) {
+        const p = (this.throwProgress - 0.25) / 0.30;
+        this.weaponSprite.x = this.basePosX - 20 + 50 * p;
+        this.weaponSprite.y = this.basePosY - 35 + 300 * p;
+        this.weaponSprite.rotation = -0.25 + 0.65 * p;
+        this.weaponSprite.visible = true;
+
+        // Trigger projectile release at peak toss (~0.45)
+        if (prevProgress < 0.45 && this.throwProgress >= 0.45) {
+          if (this.onThrowRelease) {
+            this.onThrowRelease();
+            this.onThrowRelease = undefined;
+          }
+        }
+      }
+      // Phase 3 (0.55 -> 0.75): Offscreen brief pause
+      else if (this.throwProgress < 0.75) {
+        this.weaponSprite.visible = false;
+      }
+      // Phase 4 (0.75 -> 1.0): Draw next detonator upwards from bottom of screen
+      else if (this.throwProgress < 1.0) {
+        const p = (this.throwProgress - 0.75) / 0.25;
+        this.weaponSprite.visible = true;
+        this.weaponSprite.x = this.basePosX;
+        this.weaponSprite.y = this.basePosY + 160 * (1 - p);
+        this.weaponSprite.rotation = 0.15 * (1 - p);
+      } else {
+        // Finished throw animation
+        this.isThrowing = false;
+        this.weaponSprite.x = this.basePosX;
+        this.weaponSprite.y = this.basePosY;
+        this.weaponSprite.rotation = 0;
+        if (this.onThrowComplete) {
+          const cb = this.onThrowComplete;
+          this.onThrowComplete = undefined;
+          cb();
+        }
+      }
       return;
     }
 

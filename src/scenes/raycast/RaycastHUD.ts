@@ -83,9 +83,13 @@ export class RaycastHUD extends Container {
     this.addChild(this.healthContainer);
     this.drawHealthBar(100, 100);
 
-    // 3. Weapon / Ammo HUD (Bottom-Right)
     this.weaponContainer = new Container();
     this.weaponContainer.position.set(screenW - 264, screenH - 85);
+    this.weaponContainer.eventMode = "static";
+    this.weaponContainer.cursor = "pointer";
+    this.weaponContainer.on("pointerdown", () => {
+      this.emit("switchWeapon");
+    });
 
     const weaponBg = new Graphics();
     weaponBg.beginFill(0x0a1018, 0.75);
@@ -125,6 +129,18 @@ export class RaycastHUD extends Container {
     this.ammoText.resolution = dpr;
     this.ammoText.position.set(55, 28);
     this.weaponContainer.addChild(this.ammoText);
+
+    // Small weapon switch hotkey / tap indicator
+    const switchHint = new Text("[1/2 / TAP]", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 10,
+      fontWeight: "bold",
+      fill: 0x88bbdd,
+      letterSpacing: 0.5,
+    });
+    switchHint.resolution = dpr;
+    switchHint.position.set(170, 36);
+    this.weaponContainer.addChild(switchHint);
 
     this.addChild(this.weaponContainer);
 
@@ -254,7 +270,11 @@ export class RaycastHUD extends Container {
   public setWeapon(weaponName: string | null, ammo: number): void {
     if (weaponName) {
       this.weaponNameText.text = weaponName.toUpperCase();
-      this.ammoText.text = `${ammo} AMMO`;
+      if (weaponName.toLowerCase().includes("detonator")) {
+        this.ammoText.text = `${ammo} REMAINING`;
+      } else {
+        this.ammoText.text = `${ammo} AMMO`;
+      }
     } else {
       this.weaponNameText.text = "UNARMED";
       this.ammoText.text = "--";

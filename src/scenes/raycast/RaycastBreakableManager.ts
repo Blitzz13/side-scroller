@@ -442,6 +442,31 @@ export class RaycastBreakableManager {
     return false;
   }
 
+  public applyAreaDamage(
+    centerX: number,
+    centerY: number,
+    radius: number,
+    maxDamage: number,
+    onBroken?: (b: RaycastBreakable) => void
+  ): RaycastBreakable[] {
+    const brokenList: RaycastBreakable[] = [];
+    for (const b of this.breakables) {
+      if (b.isBroken) continue;
+      const dx = b.x - centerX;
+      const dy = b.y - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= radius) {
+        const falloff = 1 - dist / radius;
+        const damage = Math.max(20, Math.round(maxDamage * falloff));
+        const broke = this.damageBreakable(b, damage, onBroken);
+        if (broke) {
+          brokenList.push(b);
+        }
+      }
+    }
+    return brokenList;
+  }
+
   public dispose(): void {
     this.breakables = [];
     for (const slices of Object.values(this.brokenColumnTextures)) {

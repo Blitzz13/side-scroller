@@ -20,6 +20,9 @@ import { RaycastHUD } from "./raycast/RaycastHUD";
 import { RaycastPlayerController } from "./raycast/RaycastPlayerController";
 import { RaycastEnemyManager } from "./raycast/RaycastEnemyManager";
 import { DestructableWallManager } from "./raycast/DestructableWallManager";
+import { ThermalDetonatorManager } from "./raycast/ThermalDetonatorManager";
+import { RaycastWeaponType } from "../enums/RaycastWeaponType";
+import { RaycastPickupType } from "../enums/RaycastPickupType";
 
 
 interface RayHit {
@@ -149,9 +152,13 @@ export class RaycastScene extends BaseScene {
   private enemyContainer!: Container;
   private enemyManager!: RaycastEnemyManager;
   private destructableWallManager!: DestructableWallManager;
+  private detonatorContainer!: Container;
+  private detonatorManager!: ThermalDetonatorManager;
+  private shakeIntensity: number = 0;
+  private shakeDuration: number = 0;
   private lockedDoors: Record<string, string> = {};
 
-  constructor(stage: Container, scale: number, level: string = "level2") {
+  constructor(stage: Container, scale: number, level: string = "test_level") {
     super(stage, scale);
 
     this.map = [];
@@ -256,6 +263,16 @@ export class RaycastScene extends BaseScene {
     this.breakableManager = new RaycastBreakableManager();
     this.destructableWallManager = new DestructableWallManager();
 
+    // 3D Detonator projectile & explosion container
+    this.detonatorContainer = new Container();
+    this.detonatorContainer.sortableChildren = true;
+    this.addChild(this.detonatorContainer);
+
+    this.detonatorManager = new ThermalDetonatorManager(this.detonatorContainer);
+    this.detonatorManager.onDetonate = (x, y, z, radius, damage) => {
+      this.handleExplosionDetonation(x, y, z, radius, damage);
+    };
+
     // Overlay mobile on-screen controls (only on mobile devices)
     if (this.isMobileDevice()) {
       this.mobileControls = new MobileControls();
@@ -329,8 +346,64 @@ export class RaycastScene extends BaseScene {
     };
   }
 
+  private handleExplosionDetonation(
+    x: number,
+    y: number,
+    z: number,
+    radius: number,
+    damage: number
+  ): void {
+    // 1. Camera screen shake based on player proximity
+    const dx = this.player.x - x;
+    const dy = this.player.y - y;
+    const distToPlayer = Math.sqrt(dx * dx + dy * dy);
+
+    if (distToPlayer < 14) {
+      const intensity = Math.max(2, (1 - distToPlayer / 14) * 12);
+      this.triggerScreenShake(intensity, 0.35);
+    }
+
+    // 2. AOE damage to enemies in blast radius
+    this.enemyManager.applyAreaDamage(x, y, radius, damage, (enemy) => {
+      this.hud.showToast(`[!] Neutralized ${enemy.config.name} (Explosion)`, 0x00ff88);
+    });
+
+    // 3. AOE damage to breakable objects
+    if (this.breakableManager) {
+      this.breakableManager.applyAreaDamage(x, y, radius, damage, (broken) => {
+        this.hud.showToast(`[!] Smashed ${broken.name} (Explosion)`, 0xffaa00);
+        if (this.destructableWallManager) {
+          this.destructableWallManager.onBreakableDestroyed(broken);
+        }
+      });
+    }
+
+    // 4. Damage player if caught in the explosion
+    if (distToPlayer <= radius) {
+      const falloff = 1 - distToPlayer / radius;
+      const playerDmg = Math.max(10, Math.round(damage * 0.6 * falloff));
+      this.playerController.takeDamage(playerDmg);
+      this.hud.showToast(`[-] Caught in Thermal Blast! (-${playerDmg} HP)`, 0xff3333);
+      this.hud.flashScreen(0xff5500, 0.4);
+    }
+  }
+
+  public triggerScreenShake(intensity: number = 8, duration: number = 0.35): void {
+    this.shakeIntensity = intensity;
+    this.shakeDuration = duration;
+  }
+
   private async loadLevel(levelName: string) {
-    const mapData = await Assets.load(`assets/${levelName}.json`);
+    let mapData: any;
+    try {
+      mapData = await Assets.load(`assets/raycast/levels/${levelName}.json`);
+    } catch {
+      try {
+        mapData = await Assets.load(`assets/${levelName}.json`);
+      } catch {
+        mapData = await Assets.load(`assets/raycast/levels/test_level.json`);
+      }
+    }
 
     const textureMap: Record<number, string> = {};
     if (mapData.tilesets) {
@@ -403,6 +476,23 @@ export class RaycastScene extends BaseScene {
     };
     await this.enemyManager.initSpritesheets();
     this.enemyManager.parseMapEnemies(mapData);
+
+    // Initialize thermal detonator manager textures & frames
+    await this.detonatorManager.initTextures();
+
+    // Spawn initial thermal detonator pickups for quick player testing
+    this.pickupManager.spawnPickup(
+      RaycastPickupType.THERMAL_DETONATOR_BELT,
+      3.0,
+      5.2,
+      5
+    );
+    this.pickupManager.spawnPickup(
+      RaycastPickupType.THERMAL_DETONATOR_SINGLE,
+      3.8,
+      5.2,
+      1
+    );
 
     console.log("Parsed map:", this.map);
     console.log("Parsed floor map:", this.floorMap);
@@ -860,6 +950,10 @@ export class RaycastScene extends BaseScene {
     window.removeEventListener("keyup", this.keyUpHandler);
     window.removeEventListener("mousemove", this.mouseMoveHandler);
     window.removeEventListener("mousedown", this.mouseDownHandler);
+    window.removeEventListener("wheel", this.wheelHandler);
+    if (this.detonatorManager) {
+      this.detonatorManager.dispose();
+    }
     document.removeEventListener(
       "pointerlockchange",
       this.pointerLockChangeHandler
@@ -879,12 +973,25 @@ export class RaycastScene extends BaseScene {
     window.addEventListener("keyup", this.keyUpHandler);
     window.addEventListener("mousemove", this.mouseMoveHandler);
     window.addEventListener("mousedown", this.mouseDownHandler);
+    window.addEventListener("wheel", this.wheelHandler, { passive: true });
 
     document.addEventListener(
       "pointerlockchange",
       this.pointerLockChangeHandler
     );
+
+    this.hud.on("switchWeapon", () => {
+      this.playerController.cycleWeapon(1);
+    });
   }
+
+  private wheelHandler = (e: WheelEvent) => {
+    if (e.deltaY > 0) {
+      this.playerController.cycleWeapon(1);
+    } else if (e.deltaY < 0) {
+      this.playerController.cycleWeapon(-1);
+    }
+  };
 
   private mouseDownHandler = (e: MouseEvent) => {
     // Only handle primary left click
@@ -911,9 +1018,38 @@ export class RaycastScene extends BaseScene {
   };
 
   private tryShoot(): void {
+    const currentCfg = this.playerController.weaponConfig;
+    if (!currentCfg) return;
+
+    // 1. Throwable weapons (Thermal Detonator)
+    if (currentCfg.isThrowable) {
+      this.playerController.tryShoot(() => {
+        // Detonator projectile releases at peak toss of first-person throw animation
+        this.detonatorManager.throwDetonator(
+          this.player.x,
+          this.player.y,
+          0,
+          this.player.dirX,
+          this.player.dirY,
+          {
+            fuseTime: currentCfg.fuseTime ?? 2.0,
+            throwSpeed: currentCfg.throwSpeed ?? 8.5,
+            explosionRadius: currentCfg.explosionRadius ?? 3.5,
+            damage: currentCfg.damage ?? 150,
+            bounciness: currentCfg.bounciness ?? 0.28,
+            wallBounciness: currentCfg.wallBounciness ?? 0.30,
+            friction: currentCfg.friction ?? 0.80,
+            maxBounces: currentCfg.maxBounces ?? 2,
+          }
+        );
+      });
+      return;
+    }
+
+    // 2. Direct hitscan firearm (E-11 Blaster)
     const didShoot = this.playerController.tryShoot();
     if (didShoot) {
-      const damage = this.playerController.weaponConfig?.damage ?? 25;
+      const damage = currentCfg.damage ?? 25;
       const centerCol = Math.floor(gameConfig.width / 2);
       const wallDistance = this.zBuffer[centerCol] || this.MAX_RENDER_DISTANCE;
 
@@ -963,6 +1099,16 @@ export class RaycastScene extends BaseScene {
     if (e.code === "Space") {
       this.tryShoot();
     }
+    // Weapon switching shortcuts
+    if (e.key === "1" || e.code === "Digit1") {
+      this.playerController.switchWeapon(RaycastWeaponType.E11);
+    }
+    if (e.key === "2" || e.code === "Digit2") {
+      this.playerController.switchWeapon(RaycastWeaponType.THERMAL_DETONATOR);
+    }
+    if (e.key === "q" || e.key === "Q") {
+      this.playerController.cycleWeapon(-1);
+    }
   };
 
   private keyUpHandler = (e: KeyboardEvent) => {
@@ -989,6 +1135,17 @@ export class RaycastScene extends BaseScene {
   };
 
   private tick(delta: number) {
+    // Screen shake update
+    if (this.shakeDuration > 0) {
+      this.shakeDuration -= delta / 60;
+      const offsetX = (Math.random() * 2 - 1) * this.shakeIntensity;
+      const offsetY = (Math.random() * 2 - 1) * this.shakeIntensity;
+      this.position.set(offsetX, offsetY);
+      this.shakeIntensity = Math.max(0, this.shakeIntensity - 15 * (delta / 60));
+    } else {
+      this.position.set(0, 0);
+    }
+
     this.updatePlayer(delta);
     this.updateDoors(delta);
     this.pickupManager.update(delta);
@@ -996,6 +1153,18 @@ export class RaycastScene extends BaseScene {
     const allThinWalls = this.thinWalls.concat(
       this.destructableWallManager ? this.destructableWallManager.getThinWalls() : []
     );
+
+    // Update detonators in-flight physics, bouncing, timer, and active explosions
+    if (this.detonatorManager) {
+      this.detonatorManager.update(
+        delta,
+        this.mapFlat,
+        this.mapWidth,
+        this.mapHeight,
+        this.doorStatesFlat,
+        allThinWalls
+      );
+    }
 
     // Update enemy AI, navigation, line of sight, and shooting
     this.enemyManager.update(
@@ -1879,10 +2048,11 @@ export class RaycastScene extends BaseScene {
       }
     }
 
-    // 5. Render billboard pickups & breakables with Z-buffer occlusion
+    // 5. Render billboard pickups, breakables & detonators with Z-buffer occlusion
     const pickupObjects = this.pickupManager.getVisibleMapObjects();
     const breakableObjects = this.breakableManager ? this.breakableManager.getVisibleMapObjects() : [];
-    this.mapObjects = pickupObjects.concat(breakableObjects);
+    const detonatorObjects = this.detonatorManager ? this.detonatorManager.getVisibleMapObjects() : [];
+    this.mapObjects = pickupObjects.concat(breakableObjects).concat(detonatorObjects);
     this.renderObjects();
 
     // 6. Render animated pickups (keycards) with AnimatedSprite & Z-buffer occlusion
@@ -1908,6 +2078,21 @@ export class RaycastScene extends BaseScene {
       this.zBuffer,
       this.MAX_RENDER_DISTANCE
     );
+
+    // 8. Render animated 3D explosions with perspective & Z-buffer occlusion
+    if (this.detonatorManager) {
+      this.detonatorManager.renderExplosions(
+        this.player.x,
+        this.player.y,
+        0,
+        this.player.dirX,
+        this.player.dirY,
+        this.player.planeX,
+        this.player.planeY,
+        this.zBuffer,
+        this.MAX_RENDER_DISTANCE
+      );
+    }
   }
 
   private renderObjects(): void {

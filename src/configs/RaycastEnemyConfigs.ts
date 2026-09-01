@@ -40,7 +40,7 @@ export const stormtrooperConfig: IRaycastEnemyConfig = {
   accuracy: 0.65,
   scale: 0.7,
   referenceHeight: 67,
-  spritesheet: "assets/storm_trooper.json",
+  spritesheet: "assets/raycast/enemies/storm_trooper.json",
   dropWeapon: RaycastWeaponType.E11,
   dropAmmo: 20,
   dropChance: 1.0,

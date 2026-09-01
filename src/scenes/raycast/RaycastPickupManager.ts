@@ -53,6 +53,8 @@ export class RaycastPickupManager {
       { key: "weapon", path: "assets/E-11-item.png" },
       { key: "health", path: "assets/health.png" },
       { key: "ammo", path: "assets/ammo.png" },
+      { key: "thermal_detonator_belt", path: "assets/raycast/pickups/thermal_detonator_belt.png" },
+      { key: "thermal_detonator_pickup", path: "assets/raycast/pickups/thermal_detonator_pickup.png" },
     ];
 
     for (const p of standardPickups) {
@@ -253,8 +255,15 @@ export class RaycastPickupManager {
               imgStr.includes("key_card") ||
               imgStr.includes("keycard");
 
+            const isDetonator =
+              typeStr.includes("detonator") ||
+              typeStr.includes("thermal") ||
+              imgStr.includes("detonator") ||
+              imgStr.includes("thermal");
+
             const isPickup =
               isKeycard ||
+              isDetonator ||
               meta.tileClass === "PickupItem" ||
               typeStr === "weapon" ||
               typeStr === "health" ||
@@ -281,6 +290,12 @@ export class RaycastPickupManager {
                 } else {
                   keyColor = "blue";
                   pickupType = RaycastPickupType.BLUE_KEYCARD;
+                }
+              } else if (isDetonator) {
+                if (typeStr.includes("belt") || imgStr.includes("belt")) {
+                  pickupType = RaycastPickupType.THERMAL_DETONATOR_BELT;
+                } else {
+                  pickupType = RaycastPickupType.THERMAL_DETONATOR_SINGLE;
                 }
               } else {
                 const pConfig = getRaycastPickupConfig(typeStr);
@@ -435,8 +450,16 @@ export class RaycastPickupManager {
               imgStr.includes("keycard") ||
               (obj.name && obj.name.toLowerCase().includes("keycard"));
 
+            const isDetonator =
+              normalizedType.includes("detonator") ||
+              normalizedType.includes("thermal") ||
+              imgStr.includes("detonator") ||
+              imgStr.includes("thermal") ||
+              (obj.name && obj.name.toLowerCase().includes("detonator"));
+
             const isPickup =
               isKeycard ||
+              isDetonator ||
               obj.type === "PickupItem" ||
               meta.tileClass === "PickupItem" ||
               normalizedType === "weapon" ||
@@ -461,6 +484,12 @@ export class RaycastPickupManager {
                 } else {
                   keyColor = "blue";
                   pickupType = RaycastPickupType.BLUE_KEYCARD;
+                }
+              } else if (isDetonator) {
+                if (normalizedType.includes("belt") || imgStr.includes("belt") || (obj.name && obj.name.toLowerCase().includes("belt"))) {
+                  pickupType = RaycastPickupType.THERMAL_DETONATOR_BELT;
+                } else {
+                  pickupType = RaycastPickupType.THERMAL_DETONATOR_SINGLE;
                 }
               } else {
                 const pConfig = getRaycastPickupConfig(normalizedType);
@@ -553,6 +582,10 @@ export class RaycastPickupManager {
             ? "weapon"
             : pickup.type === RaycastPickupType.AMMO
             ? "ammo"
+            : pickup.type === RaycastPickupType.THERMAL_DETONATOR_BELT
+            ? "thermal_detonator_belt"
+            : pickup.type === RaycastPickupType.THERMAL_DETONATOR_SINGLE
+            ? "thermal_detonator_pickup"
             : "health";
 
         const customTex = this.pickupTextures[pTypeKey];
