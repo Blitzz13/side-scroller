@@ -427,11 +427,6 @@ export class RaycastScene extends BaseScene {
           })
           .catch((err) => console.error(`Failed to load ${fileName}:`, err))
     );
-    texturePromises.push(
-      Assets.load("assets/e_11_equiped.png").catch((err) =>
-        console.error("Failed to load e_11_equiped.png:", err)
-      )
-    );
     await Promise.all(texturePromises);
 
     // Extract raw pixel buffers and pre-slice 1px column textures for zero-allocation rendering
@@ -1073,7 +1068,7 @@ export class RaycastScene extends BaseScene {
         damage,
         maxEnemyDist,
         (enemy) => {
-          this.hud.showToast(`[!] Neutralized ${enemy.config.name} (+E-11)`, 0x00ff88);
+          this.hud.showToast(`[!] Neutralized ${enemy.config.name} (+${currentCfg.name})`, 0x00ff88);
         }
       );
 
@@ -1099,11 +1094,14 @@ export class RaycastScene extends BaseScene {
     if (e.code === "Space") {
       this.tryShoot();
     }
-    // Weapon switching shortcuts
+    // Weapon switching shortcuts (1: DH-17, 2: E-11, 3: Thermal Detonator)
     if (e.key === "1" || e.code === "Digit1") {
-      this.playerController.switchWeapon(RaycastWeaponType.E11);
+      this.playerController.switchWeapon(RaycastWeaponType.DH17);
     }
     if (e.key === "2" || e.code === "Digit2") {
+      this.playerController.switchWeapon(RaycastWeaponType.E11);
+    }
+    if (e.key === "3" || e.code === "Digit3") {
       this.playerController.switchWeapon(RaycastWeaponType.THERMAL_DETONATOR);
     }
     if (e.key === "q" || e.key === "Q") {

@@ -31,6 +31,21 @@ export const raycastE11PickupConfig: IRaycastPickupConfig = {
   anchor: "floor",
 };
 
+export const raycastDh17PickupConfig: IRaycastPickupConfig = {
+  type: RaycastPickupType.WEAPON,
+  name: "DH-17 Blaster",
+  amount: 30,
+  texture: "assets/raycast/weapons/dh_17.png",
+  weaponType: RaycastWeaponType.DH17,
+  pickUpSound: {
+    src: "reload_sound",
+    loop: false,
+    volume: 1,
+  },
+  scale: 0.2,
+  anchor: "floor",
+};
+
 export const raycastAmmoPickupConfig: IRaycastPickupConfig = {
   type: RaycastPickupType.AMMO,
   name: "Blaster Ammo",
@@ -176,6 +191,13 @@ export function getRaycastPickupConfig(
 
   if (normalized.includes("health") || normalized.includes("heal") || normalized.includes("med")) {
     return raycastHealthPickupConfig;
+  }
+  if (
+    normalized.includes("dh17") ||
+    normalized.includes("dh_17") ||
+    normalized.includes("pistol")
+  ) {
+    return raycastDh17PickupConfig;
   }
   if (
     normalized.includes("weapon") ||

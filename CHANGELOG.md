@@ -16,14 +16,19 @@ This document logs recent development changes and enhancements made to the Rayca
     - **Windup phase**: Weapon pulls back and slightly up.
     - **Toss phase**: Swings forward and down offscreen, releasing the 3D projectile into the world at peak toss (`progress = 0.45`).
     - **Recovery/Draw phase**: Draws the next detonator from below the screen (or switches back to primary weapon if ammo depleted).
+- **DH-17 Blaster Pistol as Default Starting Weapon** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added `RaycastWeaponType.DH17` enum and `dh17Config` using [`assets/raycast/weapons/dh_17.png`](file:///D:/Projects/side-scroller/assets/raycast/weapons/dh_17.png) and authentic firing sound [`assets/sounds/dh_17_blaster.mp3`](file:///D:/Projects/side-scroller/assets/sounds/dh_17_blaster.mp3).
+  - Player now begins the game equipped with the **DH-17 Blaster Pistol** with 30 starting ammo instead of the E-11.
+  - The E-11 Blaster Rifle can still be acquired as a weapon drop from defeated Stormtroopers or map pickups.
 - **Multi-Weapon Inventory & Switching Controls** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
-  - Player inventory now tracks separate ammo counters for all owned weapons (`E-11`, `Thermal Detonator`).
+  - Player inventory now tracks separate ammo counters for all owned weapons (`DH-17`, `E-11`, `Thermal Detonator`).
   - Added weapon switching support:
-    - Key `1`: Equip E-11 Blaster Rifle.
-    - Key `2`: Equip Thermal Detonator.
+    - Key `1`: Equip DH-17 Blaster Pistol.
+    - Key `2`: Equip E-11 Blaster Rifle.
+    - Key `3`: Equip Thermal Detonator.
     - Key `Q`: Cycle previous weapon.
     - Mouse Wheel: Cycle next/previous weapon.
-    - HUD Weapon Box Click/Tap: Interactive weapon switcher with `[1/2 / TAP]` switch hint.
+    - HUD Weapon Box Click/Tap: Interactive weapon switcher with `[1-3 / TAP]` switch hint.
 
 ---
 

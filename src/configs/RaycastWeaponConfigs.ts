@@ -80,6 +80,53 @@ export const thermalDetonatorConfig: IRaycastWeaponConfig = {
   },
 };
 
+const dh17ShootSounds: ISoundConfig[] = [
+  {
+    src: "dh_17_blaster",
+    loop: false,
+    volume: 0.25,
+  },
+];
+
+export const dh17Config: IRaycastWeaponConfig = {
+  type: RaycastWeaponType.DH17,
+  name: "DH-17 Blaster Pistol",
+  damage: 20,
+  maxAmmo: 99,
+  defaultAmmo: 30,
+  rateOfFire: 220,
+  equippedTexture: "assets/raycast/weapons/dh_17.png",
+  itemTexture: "assets/raycast/weapons/dh_17.png",
+  shootSounds: dh17ShootSounds,
+  reloadSound: {
+    src: "reload_sound",
+    loop: false,
+    volume: 1,
+  },
+  // Configurable first-person view positioning and scale
+  viewPosX: 960,
+  viewPosY: 720,
+  viewScale: 0.40,
+  anchorX: 0.5,
+  anchorY: 0.85,
+  muzzleFlash: {
+    enabled: true,
+    offsetX: 0,
+    offsetY: -220,
+    followRotation: true,
+    duration: 5,
+    scale: 0.9,
+    outerColor: 0xff3300,
+    outerRadius: 28,
+    outerAlpha: 0.4,
+    innerColor: 0xff8800,
+    innerRadius: 16,
+    innerAlpha: 0.85,
+    coreColor: 0xffffff,
+    coreRadius: 7,
+  },
+};
+
 /**
  * Global registry of Raycast weapons indexed by numeric RaycastWeaponType enum.
  * To add a new weapon, add its enum value and config entry here.
@@ -88,6 +135,7 @@ export const raycastWeaponConfigs: Record<
   RaycastWeaponType,
   IRaycastWeaponConfig
 > = {
+  [RaycastWeaponType.DH17]: dh17Config,
   [RaycastWeaponType.E11]: e11Config,
   [RaycastWeaponType.THERMAL_DETONATOR]: thermalDetonatorConfig,
 };
@@ -121,5 +169,9 @@ export function getRaycastWeaponConfig(
     }
   }
 
-  return raycastWeaponConfigs[RaycastWeaponType.E11];
+  if (normalized.includes("dh") || normalized.includes("pistol")) {
+    return raycastWeaponConfigs[RaycastWeaponType.DH17];
+  }
+
+  return raycastWeaponConfigs[RaycastWeaponType.DH17];
 }

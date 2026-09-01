@@ -131,7 +131,7 @@ export class RaycastHUD extends Container {
     this.weaponContainer.addChild(this.ammoText);
 
     // Small weapon switch hotkey / tap indicator
-    const switchHint = new Text("[1/2 / TAP]", {
+    const switchHint = new Text("[1-3 / TAP]", {
       fontFamily: "Arial, sans-serif",
       fontSize: 10,
       fontWeight: "bold",

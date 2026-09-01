@@ -82,6 +82,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/sounds/e_11_blaster.mp3"
           },
           {
+            alias: "dh_17_blaster",
+            src: "./assets/sounds/dh_17_blaster.mp3"
+          },
+          {
             alias: "stormtrooper_pain_1",
             src: "./assets/stormtrooper_pain_1.mp3"
           },
@@ -239,6 +243,10 @@ export const manifest: AssetsManifest = {
           {
             name: "thermal_detonator_pickup",
             src: "./assets/raycast/pickups/thermal_detonator_pickup.png"
+          },
+          {
+            name: "dh_17",
+            src: "./assets/raycast/weapons/dh_17.png"
           }
         ],
       },

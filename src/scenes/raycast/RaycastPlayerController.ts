@@ -30,10 +30,10 @@ export class RaycastPlayerController {
       keycards: new Set<string>(),
     };
 
-    // Initialize with default E-11 blaster
-    const e11Config = getRaycastWeaponConfig(RaycastWeaponType.E11)!;
-    this.inventory.set(RaycastWeaponType.E11, e11Config.defaultAmmo);
-    this.equipWeapon(e11Config, e11Config.defaultAmmo);
+    // Initialize with default DH-17 blaster pistol
+    const dh17Config = getRaycastWeaponConfig(RaycastWeaponType.DH17)!;
+    this.inventory.set(RaycastWeaponType.DH17, dh17Config.defaultAmmo);
+    this.equipWeapon(dh17Config, dh17Config.defaultAmmo);
 
     this.hud.setHealth(this.state.health, this.state.maxHealth);
   }
@@ -254,10 +254,12 @@ export class RaycastPlayerController {
           }
         },
         () => {
-          // If depleted after throw, auto-switch to E-11 or unequip
+          // If depleted after throw, auto-switch to DH-17, E-11, or unequip
           if (this.state.ammo <= 0) {
             this.inventory.delete(RaycastWeaponType.THERMAL_DETONATOR);
-            if (this.inventory.has(RaycastWeaponType.E11)) {
+            if (this.inventory.has(RaycastWeaponType.DH17)) {
+              this.switchWeapon(RaycastWeaponType.DH17);
+            } else if (this.inventory.has(RaycastWeaponType.E11)) {
               this.switchWeapon(RaycastWeaponType.E11);
             } else {
               this.weaponView.unequip();
