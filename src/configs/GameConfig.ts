@@ -140,7 +140,7 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "level2",
-            src: "./assets/level2.json",
+            src: "./assets/raycast/levels/test_level.json",
           },
         ],
       },
