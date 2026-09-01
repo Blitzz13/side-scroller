@@ -2,6 +2,82 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-01] - Thermal Detonator Weapon, Throwable 3D Physics, AOE Explosions & Enemy Fixes
+
+### 1. Thermal Detonator Throwable Weapon & Multi-Weapon Inventory
+- **Weapon Definition & Configuration** ([`src/enums/RaycastWeaponType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastWeaponType.ts), [`src/configs/interfaces/IRaycastWeaponConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastWeaponConfig.ts), [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Added `RaycastWeaponType.THERMAL_DETONATOR`.
+  - Configured `thermalDetonatorConfig` with high explosive damage (`damage: 150`), `isThrowable: true`, configurable fuse timer (`fuseTime: 2.0`), and blast radius (`explosionRadius: 3.5`).
+- **Configurable Screen Positioning & Scale** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Extended `IRaycastWeaponConfig` and `RaycastWeaponView` with per-weapon `viewPosX`, `viewPosY`, `viewScale`, `anchorX`, and `anchorY` settings.
+  - Allows full customization of where throwable and firearm weapons rest on the screen and their display scale.
+- **First-Person Throw Animation** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Implemented `playThrowAnimation(onRelease, onComplete)`:
+    - **Windup phase**: Weapon pulls back and slightly up.
+    - **Toss phase**: Swings forward and down offscreen, releasing the 3D projectile into the world at peak toss (`progress = 0.45`).
+    - **Recovery/Draw phase**: Draws the next detonator from below the screen (or switches back to primary weapon if ammo depleted).
+- **Multi-Weapon Inventory & Switching Controls** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Player inventory now tracks separate ammo counters for all owned weapons (`E-11`, `Thermal Detonator`).
+  - Added weapon switching support:
+    - Key `1`: Equip E-11 Blaster Rifle.
+    - Key `2`: Equip Thermal Detonator.
+    - Key `Q`: Cycle previous weapon.
+    - Mouse Wheel: Cycle next/previous weapon.
+    - HUD Weapon Box Click/Tap: Interactive weapon switcher with `[1/2 / TAP]` switch hint.
+
+---
+
+### 2. Pickups System (Thermal Detonator Belt & Single)
+- **Pickup Types & Amounts** ([`src/enums/RaycastPickupType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastPickupType.ts), [`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts)):
+  - Added `RaycastPickupType.THERMAL_DETONATOR_SINGLE` (awards 1 detonator) and `RaycastPickupType.THERMAL_DETONATOR_BELT` (awards 5 detonators).
+  - Preloaded textures in `GameConfig.ts` (`assets/raycast/pickups/thermal_detonator_pickup.png` and `assets/raycast/pickups/thermal_detonator_belt.png`).
+- **3D World Billboard Rendering & Map Parsing** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Slices pickup textures into 1px vertical column textures for zero-allocation billboard rendering with Z-buffer depth testing.
+  - Automatically parses tile layers and object layers with `type="thermal_detonator"`, `type="thermal_detonator_belt"`, or matching image filenames.
+
+---
+
+### 3. 3D Projectile Physics, Ground Landing & Configurable Bounciness
+- **Detonator Manager** ([`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - Created `ThermalDetonatorManager` handling 3D flight physics, bouncing, floor friction, wall collisions, fuse countdown, LED indicator blinking, and explosion animation.
+- **Configurable Bounciness & Physics Damping** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`src/configs/interfaces/IRaycastWeaponConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastWeaponConfig.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - `throwSpeed`: Initial horizontal throwing velocity (`8.5`).
+  - `bounciness`: Floor bounce restitution (`0.28`). Lower values produce a realistic, heavy grenade thud with 1–2 low hops rather than bouncing wildly.
+  - `wallBounciness`: Wall bounce restitution (`0.30`). Rebounds realistically off walls, doors, and security barriers.
+  - `friction`: Ground rolling friction (`0.80`). Rolls smoothly to a stop on the floor.
+  - `maxBounces`: Maximum bounce limit (`2`) before settling into ground rolling mode.
+- **Z-Buffer Occlusion**:
+  - Active detonator in-flight and on the ground is converted to 3D billboard objects and rendered column-by-column against the camera Z-buffer.
+
+---
+
+### 4. Animated 3D Explosion & AOE Damage System
+- **Explosion Animation (`assets/explosion.json`)** ([`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - Loads 17 frames (`explosion_00.png` through `explosion_16.png`) from `assets/explosion.json`.
+  - Spawns at 3D detonation coordinates with perspective scaling and per-column run-length Graphics occlusion masks matching raycast walls.
+  - Plays explosion audio effect (`explosion_sound`).
+- **Screen Shake & Proximity Feedback** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added camera screen shake decaying over time with intensity scaled inversely to the player's distance from the blast.
+- **Area-of-Effect (AOE) Damage** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Implemented `applyAreaDamage()` in `RaycastEnemyManager` with distance falloff damage for all enemies inside `explosionRadius`.
+  - Implemented `applyAreaDamage()` in `RaycastBreakableManager` to destroy chairs, tables, and power cells within the blast radius (triggering security barrier deactivation).
+  - Player takes splash damage if caught within the blast radius, complete with screen flash and HUD warning toast.
+
+---
+
+### 5. Stormtrooper Spritesheet & Visibility Fixes
+- **Asset Path Correction** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Updated `stormtrooperConfig.spritesheet` and `initSpritesheets()` to load `assets/raycast/enemies/storm_trooper.json` (resolving 404 error caused by earlier asset restructuring).
+  - Added multi-path fallback resolver supporting alias `"storm_trooper"` and registered sheets under all key formats.
+- **Recursive Group Layer Support** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added `collectLayers()` to recursively unpack any group layers (e.g. elevation groups) when scanning for enemy spawn layers.
+- **Starting Area Proximity Spawn** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Automatically spawns a Stormtrooper at `(5.5, 5.0)` in the starting corridor if no map enemies exist within range 8 of the player spawn `(2, 5)`, ensuring immediate visibility and testing.
+- **Occlusion Mask Refinement** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Enhanced run-length occlusion masking and offscreen bounds culling to prevent false full-occlusion when sprites are partially visible.
+
+---
+
 ## [2026-08-24] - Breakable Furniture System (Chairs & Tables)
 
 ### 1. Dynamic Breakable Furniture & Destruction Physics
