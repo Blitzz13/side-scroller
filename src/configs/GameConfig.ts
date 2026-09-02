@@ -1,9 +1,13 @@
 import { AssetsManifest, BitmapFont, RoundedRectangle } from "pixi.js";
+import { DoorOpen, DoorSlideMode } from "../scenes/raycast/types";
+
+export { DoorOpen, DoorSlideMode };
 
 export const gameConfig = {
   width: 1280,
-  height: 720
-}
+  height: 720,
+  defaultDoorSlide: DoorOpen.UP,
+};
 
 export function registerFonts(): void {
   const dpr = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));

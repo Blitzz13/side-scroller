@@ -2,6 +2,44 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-02] - Tiled Custom Types Refactor & Bidirectional Door Sliding
+
+### 1. Tiled Custom Types Schema Architecture
+- **Dedicated Enum Modules** ([`src/enums/DoorOpen.ts`](file:///D:/Projects/side-scroller/src/enums/DoorOpen.ts), [`src/enums/TileType.ts`](file:///D:/Projects/side-scroller/src/enums/TileType.ts), [`src/enums/Align.ts`](file:///D:/Projects/side-scroller/src/enums/Align.ts), [`src/enums/Anchor.ts`](file:///D:/Projects/side-scroller/src/enums/Anchor.ts), [`src/enums/FlatWallRotation.ts`](file:///D:/Projects/side-scroller/src/enums/FlatWallRotation.ts), [`src/enums/Weapons.ts`](file:///D:/Projects/side-scroller/src/enums/Weapons.ts), [`src/enums/PickUpType.ts`](file:///D:/Projects/side-scroller/src/enums/PickUpType.ts)):
+  - Added string enums matching the Tiled custom type definitions:
+    - `DoorOpen`: `"Up"`, `"Left"`, `"Right"`.
+    - `TileType`: `"door"`, `"thinWall"`, `"thickWall"`, `"ceiling"`, `"floor"`, `"stairs"`.
+    - `Align`: `"-"`, `"left"`, `"right"`, `"top"`, `"bottom"`, `"center"`.
+    - `Anchor`: `"ceiling"`, `"floor"`, `"center"`, `"-"`.
+    - `FlatWallRotation`: `"-"`, `"vertical"`, `"horizontal"`.
+    - `Weapons`: `"e_11"`, `"-"`, `"thermal_detonator"`, `"dh_17"`.
+    - `PickupType`: `"weapon"`, `"ammo"`, `"health"`, `"shield"`, `"-"`, `"blue_keycard"`, `"red_keycard"`, `"green_keycard"`.
+- **Tiled Class Interfaces** ([`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Added `ITile`, `IDestructableWall`, `IObject`, `IPickupItem`, and `IWeapon` representing Tiled classes with member properties and typed enum links.
+  - Extended `TileMeta` with `open` and `tileType`.
+  - Updated `DoorSlideMode` to support `DoorOpen` enum (`"Up"`, `"Left"`, `"Right"`).
+
+### 2. TSX Tileset Auto-Loader & Source Resolution
+- **StarWarsTileset.tsx Integration** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Placed external TSX tileset into the project matching `"source": "StarWarsTileset/StarWarsTileset.tsx"` in `test_level.json`.
+- **`loadExternalTileset` Runtime Parser** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - In `setupScene()`, detects if `tileset.source` is defined without embedded `tiles`, asynchronously fetching and parsing the TSX XML via `DOMParser`.
+  - Populates all 19 tiles, extracting image paths, custom properties, and classes.
+  - Maps image names (`basic_imperial_wall.jpg`, `fence.png`, `metal_door.jpg`, etc.) directly to assets inside `assets/`.
+- **`Tile` Class Defaults**:
+  - In `parseTiledMap()`, tiles with `type="Tile"` automatically inherit class defaults (`tileType = "door"`, `open = "Up"`).
+  - Explicit properties `"tileType"` and `"open"` override defaults accordingly.
+
+### 3. Bidirectional Horizontal Sliding & Vertical Ceiling Doors
+- **Door Sliding Raycasting** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **`DoorOpen.UP` (`"Up"`)**: Slides vertically into the ceiling recess with uncompressed UV scrolling.
+  - **`DoorOpen.LEFT` (`"Left"`)**: Horizontal slide to the left ($offset \le 1.0 - open$). Door UV translates with `texX = offset + open`, opening a gap on the right.
+  - **`DoorOpen.RIGHT` (`"Right"`)**: Horizontal slide to the right ($offset \ge open$). Door UV translates with `texX = offset - open`, opening a gap on the left.
+- **In-Game Toggle Hotkey**:
+  - Pressing <kbd>V</kbd> cycles between `UP (Ceiling)` $\to$ `LEFT` $\to$ `RIGHT` with instant HUD toast feedback.
+
+---
+
 ## [2026-09-01] - Thermal Detonator Weapon, Throwable 3D Physics, AOE Explosions & Enemy Fixes
 
 ### 1. Thermal Detonator Throwable Weapon & Multi-Weapon Inventory
@@ -37,6 +75,21 @@ This document logs recent development changes and enhancements made to the Rayca
 - **Door Opening Audio Effect (`assets/sounds/door_1.mp3`)** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
   - Registered `door_1` in the manifest `sounds` bundle pointing to [`assets/sounds/door_1.mp3`](file:///D:/Projects/side-scroller/assets/sounds/door_1.mp3).
   - Integrated audio playback into `tryOpenDoor()` so the sound plays whenever a door slides open or closed upon interaction.
+- **Configurable Vertical (Up / Down) & Horizontal Sliding Doors** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts), [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json)):
+  - Added full support for three door slide modes:
+    - `"slide_up"`: Door rises smoothly into the ceiling recess to open, drops down to close.
+    - `"slide_down"`: Door sinks smoothly into the floor recess to open, rises up to close.
+    - `"slide_sideways"`: Classic horizontal sliding door (left/right).
+  - **Zero-Distortion Texture Projection**: Implemented dynamic zero-allocation UV cropping pool (`doorColumnTextures`) so vertical doors realistically slide into the ceiling or floor without stretching, squashing, or accordion distortion.
+  - **Ceiling & Floor Occlusion**: Accurately occludes ceiling pixels above rising doors and floor pixels below sinking doors while rendering the rooms and floors behind open door apertures.
+  - **Configurable via 4 Methods**:
+    1. Global default in `GameConfig.ts` (`gameConfig.defaultDoorSlide = "slide_up"`).
+    2. Per-tile / per-door property in Tiled level JSON (`"slide": "up" | "down" | "sideways"`).
+    3. Programmatically via `scene.setDefaultDoorSlideMode(mode)` or `scene.setDoorSlideMode(x, y, mode)`.
+  - **Eliminated Phantom Cell-Entrance Wall**: Removed legacy fallback that drew a flat door texture across the grid cube's outer entry boundary (`distance = dist`) when rays missed the center door plane. Freestanding doors and angled doorway views no longer display flickering partial textures or spurious solid door faces on cube boundaries.
+  - **Door Edge & Jamb Raycasting**: Resolved door side-cutting where diagonal screen columns crossing the perpendicular grid axis were prematurely flagged as solid jambs. All rays intersecting the door plane between `[0, 1]` now uniformly slide up across the entire doorway width.
+  - **Aperture Floor/Ceiling Occlusion**: Open/opening doors (`open >= 0.05`) no longer set ceiling occlusion bounds (`wTop = 0`), which previously caused the background buffer to skip ceiling rendering and leave stale ceiling pixels from previous camera angles when turning quickly.
+  - **Pool Reference Safety**: Replaced array reference shifting in hit deduplication with in-place rotation to maintain distinct object instances across frames.
 
 ---
 

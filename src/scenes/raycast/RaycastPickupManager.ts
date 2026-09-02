@@ -184,7 +184,20 @@ export class RaycastPickupManager {
     this.staticObjects = [];
     this.nextId = 1;
 
-    const objectLayers = mapData.layers.filter(
+    const collectLayers = (layers: any[]): any[] => {
+      let flat: any[] = [];
+      for (const l of layers) {
+        if (l.layers && Array.isArray(l.layers)) {
+          flat = flat.concat(collectLayers(l.layers));
+        } else {
+          flat.push(l);
+        }
+      }
+      return flat;
+    };
+    const allLayers = collectLayers(mapData.layers || []);
+
+    const objectLayers = allLayers.filter(
       (layer: any) =>
         layer.type === "objectgroup" ||
         (layer.name &&

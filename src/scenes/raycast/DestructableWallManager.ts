@@ -14,7 +14,20 @@ export class DestructableWallManager {
     const tileW = mapData.tilewidth || 64;
     const tileH = mapData.tileheight || 64;
 
-    const allObjectLayers = (mapData.layers || []).filter(
+    const collectLayers = (layers: any[]): any[] => {
+      let flat: any[] = [];
+      for (const l of layers) {
+        if (l.layers && Array.isArray(l.layers)) {
+          flat = flat.concat(collectLayers(l.layers));
+        } else {
+          flat.push(l);
+        }
+      }
+      return flat;
+    };
+    const allLayers = collectLayers(mapData.layers || []);
+
+    const allObjectLayers = allLayers.filter(
       (l: any) => l.type === "objectgroup" || l.objects
     );
 

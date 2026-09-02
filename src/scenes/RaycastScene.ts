@@ -23,7 +23,7 @@ import { DestructableWallManager } from "./raycast/DestructableWallManager";
 import { ThermalDetonatorManager } from "./raycast/ThermalDetonatorManager";
 import { RaycastWeaponType } from "../enums/RaycastWeaponType";
 import { RaycastPickupType } from "../enums/RaycastPickupType";
-
+import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
 
 interface RayHit {
   wallType: number;
@@ -36,7 +36,7 @@ interface RayHit {
   rayDirY: number;
   orientation?: "vertical" | "horizontal";
   isDoor?: boolean;
-  doorSlide?: "up" | "sideways";
+  doorSlide?: DoorOpen;
   doorOpen?: number;
 }
 
@@ -106,11 +106,11 @@ export class RaycastScene extends BaseScene {
   private ceilingMapFlat!: Int32Array;
   // Numeric door states keyed by flat index (y * mapWidth + x) instead of string keys
   private doorStatesFlat!: Float64Array;
-  // Door geometry & slide configuration
   private doorOrientationsFlat!: Uint8Array; // 0 = NS (plane at x + 0.5), 1 = EW (plane at y + 0.5)
-  private doorSlideModesFlat!: Uint8Array; // 0 = sideways, 1 = up
-  private doorSlideModes: Record<string, "slide_up" | "slide_sideways"> = {};
-  public defaultDoorSlide: "slide_up" | "slide_sideways" = "slide_sideways";
+  private doorSlideModesFlat!: Uint8Array; // 0 = DoorOpen.LEFT, 1 = DoorOpen.UP, 3 = DoorOpen.RIGHT
+  private doorSlideModes: Record<string, DoorOpen> = {};
+  public defaultDoorSlide: DoorOpen = gameConfig.defaultDoorSlide || DoorOpen.UP;
+  private doorColumnTextures: Texture[] = [];
 
   // Numeric tile type flags (0=empty, 1=thickWall, 2=door, 3=thinWall)
   private static readonly TILE_EMPTY = 0;
@@ -210,6 +210,9 @@ export class RaycastScene extends BaseScene {
         columnSprites.push(sprite);
       }
       this.spritePool.push(columnSprites);
+      this.doorColumnTextures.push(
+        new Texture(Texture.WHITE.baseTexture, new Rectangle(0, 0, 1, 1))
+      );
 
       // Pre-allocate ray hit pool for zero-allocation raycasting
       const colHits: RayHit[] = [];
@@ -304,6 +307,144 @@ export class RaycastScene extends BaseScene {
       for (let x = 0; x < gameConfig.width; x++) {
         this.skyBuffer[rowOffset + x] = color;
       }
+    }
+  }
+
+  private async loadExternalTileset(tileset: any): Promise<void> {
+    const source = tileset.source;
+    if (!source) return;
+
+    const baseName = source.split(/[\\/]/).pop() || "";
+    const candidatePaths = [
+      `assets/raycast/levels/${source}`,
+      `assets/raycast/${source}`,
+      `assets/${source}`,
+      `assets/raycast/levels/StarWarsTileset/${baseName}`,
+      `assets/raycast/levels/${baseName}`,
+      `assets/${baseName}`,
+    ];
+
+    let xmlText = "";
+    for (const p of candidatePaths) {
+      try {
+        const res = await fetch(p);
+        if (res.ok) {
+          const text = await res.text();
+          if (text && text.includes("<tileset")) {
+            xmlText = text;
+            break;
+          }
+        }
+      } catch {
+        // continue trying next path
+      }
+    }
+
+    if (xmlText) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, "text/xml");
+        const tilesetEl = doc.getElementsByTagName("tileset")[0];
+        if (tilesetEl) {
+          const tileEls = Array.from(tilesetEl.getElementsByTagName("tile"));
+          const parsedTiles: any[] = [];
+
+          for (const tileEl of tileEls) {
+            const id = parseInt(tileEl.getAttribute("id") || "0", 10);
+            const type = tileEl.getAttribute("type") || undefined;
+            const imgEl = tileEl.getElementsByTagName("image")[0];
+            const image = imgEl ? imgEl.getAttribute("source") || undefined : undefined;
+            const imagewidth = imgEl ? parseInt(imgEl.getAttribute("width") || "0", 10) : undefined;
+            const imageheight = imgEl ? parseInt(imgEl.getAttribute("height") || "0", 10) : undefined;
+
+            const propsEl = tileEl.getElementsByTagName("properties")[0];
+            const properties: any[] = [];
+            if (propsEl) {
+              for (let i = 0; i < propsEl.children.length; i++) {
+                const prop = propsEl.children[i];
+                if (prop.tagName !== "property") continue;
+                const name = prop.getAttribute("name") || "";
+                const propType = prop.getAttribute("type") || "string";
+                const propertytype = prop.getAttribute("propertytype") || undefined;
+                let val: any = prop.getAttribute("value");
+
+                if (propType === "class") {
+                  const nestedPropsEl = prop.getElementsByTagName("properties")[0];
+                  if (nestedPropsEl) {
+                    const subObj: Record<string, any> = {};
+                    for (let j = 0; j < nestedPropsEl.children.length; j++) {
+                      const sp = nestedPropsEl.children[j];
+                      if (sp.tagName !== "property") continue;
+                      const spName = sp.getAttribute("name") || "";
+                      const spType = sp.getAttribute("type") || "string";
+                      let spVal: any = sp.getAttribute("value");
+                      if (spType === "int") spVal = parseInt(spVal, 10);
+                      else if (spType === "float") spVal = parseFloat(spVal);
+                      else if (spType === "bool") spVal = spVal === "true";
+                      subObj[spName] = spVal;
+                    }
+                    val = subObj;
+                  }
+                } else if (propType === "int") {
+                  val = parseInt(val, 10);
+                } else if (propType === "float") {
+                  val = parseFloat(val);
+                } else if (propType === "bool") {
+                  val = val === "true";
+                }
+
+                properties.push({ name, type: propType, propertytype, value: val });
+              }
+            }
+
+            parsedTiles.push({
+              id,
+              type,
+              image,
+              imagewidth,
+              imageheight,
+              properties,
+            });
+          }
+
+          if (parsedTiles.length > 0) {
+            tileset.tiles = parsedTiles;
+            if (tilesetEl.getAttribute("tilewidth")) {
+              tileset.tilewidth = parseInt(tilesetEl.getAttribute("tilewidth") || "64", 10);
+            }
+            if (tilesetEl.getAttribute("tileheight")) {
+              tileset.tileheight = parseInt(tilesetEl.getAttribute("tileheight") || "64", 10);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`Error parsing TSX tileset XML for ${source}:`, err);
+      }
+    }
+
+    // Reliable fallback for StarWarsTileset if fetch was blocked or unavailable
+    if (!tileset.tiles || tileset.tiles.length === 0) {
+      tileset.tiles = [
+        { id: 0, image: "basic_imperial_wall.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 1, image: "fence.png", type: "Tile", properties: [{ name: "tileType", value: "thinWall" }] },
+        { id: 2, image: "imperial_grilled_wall.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 3, image: "metal_door.jpg", type: "Tile", properties: [{ name: "tileType", value: "door" }, { name: "open", value: "Up" }] },
+        { id: 4, image: "inside_floor.jpg", type: "Tile", properties: [{ name: "tileType", value: "thinWall" }] },
+        { id: 5, image: "floor.png", type: "Tile", properties: [{ name: "tileType", value: "floor" }] },
+        { id: 6, image: "ceiling_3.jpg", type: "Tile", properties: [{ name: "tileType", value: "ceiling" }] },
+        { id: 7, image: "ceiling_1.jpg", type: "Tile", properties: [{ name: "tileType", value: "ceiling" }] },
+        { id: 8, image: "ceiling_2.jpg", type: "Tile", properties: [{ name: "tileType", value: "ceiling" }] },
+        { id: 9, image: "e_11_item.png", type: "PickupItem", properties: [{ name: "amount", value: 20 }, { name: "object", value: { anchor: "floor", scale: 0.2 } }, { name: "type", value: "weapon" }, { name: "weaponType", value: "e_11" }] },
+        { id: 10, image: "health.png", type: "PickupItem", properties: [{ name: "amount", value: 20 }, { name: "type", value: "health" }] },
+        { id: 11, image: "storm_trooper.png", type: "Tile" },
+        { id: 12, image: "table.png", type: "Object", properties: [{ name: "anchor", value: "floor" }] },
+        { id: 13, image: "chair.png", type: "Object", properties: [{ name: "anchor", value: "floor" }] },
+        { id: 14, image: "key_card_blue_1.png", type: "PickupItem", properties: [{ name: "object", value: { anchor: "center", scale: 0.4 } }, { name: "type", value: "blue_keycard" }] },
+        { id: 15, image: "stairs.png", type: "Tile", properties: [{ name: "tileType", value: "stairs" }] },
+        { id: 16, image: "power_cell.PNG", type: "Object", properties: [{ name: "anchor", value: "floor" }] },
+        { id: 17, image: "thermal_detonator.png", type: "PickupItem" },
+        { id: 18, image: "dh_17.png", type: "PickupItem" },
+      ];
     }
   }
 
@@ -404,6 +545,14 @@ export class RaycastScene extends BaseScene {
         mapData = await Assets.load(`assets/${levelName}.json`);
       } catch {
         mapData = await Assets.load(`assets/raycast/levels/test_level.json`);
+      }
+    }
+
+    if (mapData.tilesets) {
+      for (const tileset of mapData.tilesets) {
+        if (!tileset.tiles && tileset.source) {
+          await this.loadExternalTileset(tileset);
+        }
       }
     }
 
@@ -540,14 +689,33 @@ export class RaycastScene extends BaseScene {
             const meta: TileMeta = {};
             if (tile.type) {
               meta.tileClass = tile.type;
+              if (tile.type === "Tile") {
+                // Class "Tile" defaults according to user's Tiled type schema
+                meta.type = TileType.DOOR;
+                meta.tileType = TileType.DOOR;
+                meta.open = DoorOpen.UP;
+                this.tileTypes[gid] = TileType.DOOR;
+              }
             }
             if (tile.properties) {
               tile.properties.forEach((prop: any) => {
                 const pName = prop.name.toLowerCase();
                 const pVal = prop.value;
-                if (pName === "type") {
-                  this.tileTypes[gid] = pVal;
-                  meta.type = pVal;
+                if (pName === "type" || pName === "tiletype") {
+                  const val = String(pVal).toLowerCase();
+                  if (val === TileType.DOOR) meta.tileType = TileType.DOOR;
+                  else if (val === TileType.THIN_WALL.toLowerCase()) meta.tileType = TileType.THIN_WALL;
+                  else if (val === TileType.THICK_WALL.toLowerCase()) meta.tileType = TileType.THICK_WALL;
+                  else if (val === TileType.CEILING) meta.tileType = TileType.CEILING;
+                  else if (val === TileType.FLOOR) meta.tileType = TileType.FLOOR;
+                  else if (val === TileType.STAIRS) meta.tileType = TileType.STAIRS;
+                  this.tileTypes[gid] = meta.tileType || pVal;
+                  meta.type = this.tileTypes[gid];
+                }
+                if (pName === "open" || pName === "doorslide" || pName === "slide" || pName === "slidemode") {
+                  if (pVal === DoorOpen.LEFT) meta.open = DoorOpen.LEFT;
+                  else if (pVal === DoorOpen.RIGHT) meta.open = DoorOpen.RIGHT;
+                  else meta.open = DoorOpen.UP;
                 }
                 if (pName === "weapontype") {
                   meta.weaponType = String(pVal);
@@ -589,173 +757,198 @@ export class RaycastScene extends BaseScene {
       });
     }
 
-    const floorLayer = mapData.layers.find(
-      (layer: any) => layer.name === "Floor"
-    );
-    if (floorLayer) {
-      floorLayer.data.forEach((tileGid: number, index: number) => {
-        const x = index % floorLayer.width;
-        const y = Math.floor(index / floorLayer.width);
-        if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
-          if (tileGid !== 0) {
-            this.floorMap[y][x] = tileGid - firstgid;
-          } else {
-            this.floorMap[y][x] = -1;
-          }
+    const collectLayers = (layers: any[]): any[] => {
+      let flat: any[] = [];
+      for (const l of layers) {
+        if (l.layers && Array.isArray(l.layers)) {
+          flat = flat.concat(collectLayers(l.layers));
+        } else {
+          flat.push(l);
         }
-      });
+      }
+      return flat;
+    };
+    const allLayers = collectLayers(mapData.layers || []);
+
+    const floorLayers = allLayers.filter(
+      (layer: any) => layer.name && layer.name.toLowerCase() === "floor"
+    );
+    for (const floorLayer of floorLayers) {
+      if (floorLayer.data) {
+        floorLayer.data.forEach((tileGid: number, index: number) => {
+          const x = index % floorLayer.width;
+          const y = Math.floor(index / floorLayer.width);
+          if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+            if (tileGid !== 0) {
+              this.floorMap[y][x] = tileGid - firstgid;
+            } else if (this.floorMap[y][x] === undefined) {
+              this.floorMap[y][x] = -1;
+            }
+          }
+        });
+      }
     }
 
-    const ceilingLayer = mapData.layers.find(
-      (layer: any) => layer.name === "Ceiling"
+    const ceilingLayers = allLayers.filter(
+      (layer: any) => layer.name && layer.name.toLowerCase() === "ceiling"
     );
-    if (ceilingLayer) {
-      ceilingLayer.data.forEach((tileGid: number, index: number) => {
-        const x = index % ceilingLayer.width;
-        const y = Math.floor(index / ceilingLayer.width);
-        if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
-          if (tileGid !== 0) {
-            this.ceilingMap[y][x] = tileGid - firstgid;
-          } else {
-            this.ceilingMap[y][x] = -1;
+    for (const ceilingLayer of ceilingLayers) {
+      if (ceilingLayer.data) {
+        ceilingLayer.data.forEach((tileGid: number, index: number) => {
+          const x = index % ceilingLayer.width;
+          const y = Math.floor(index / ceilingLayer.width);
+          if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+            if (tileGid !== 0) {
+              this.ceilingMap[y][x] = tileGid - firstgid;
+            } else if (this.ceilingMap[y][x] === undefined) {
+              this.ceilingMap[y][x] = -1;
+            }
           }
-        }
-      });
+        });
+      }
     }
 
-    const wallsLayer = mapData.layers.find(
-      (layer: any) => layer.name === "Walls"
+    const wallsLayers = allLayers.filter(
+      (layer: any) => layer.name && layer.name.toLowerCase() === "walls"
     );
-    if (wallsLayer) {
-      wallsLayer.data.forEach((tileId: number, index: number) => {
-        const x = index % wallsLayer.width;
-        const y = Math.floor(index / wallsLayer.width);
-        if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+    for (const wallsLayer of wallsLayers) {
+      if (wallsLayer.data) {
+        wallsLayer.data.forEach((tileId: number, index: number) => {
+          const x = index % wallsLayer.width;
+          const y = Math.floor(index / wallsLayer.width);
+          if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+            if (tileId !== 0) {
+              this.map[y][x] = tileId;
+              const tileType = this.tileTypes[tileId];
+              if (tileType === "door" || tileType === TileType.DOOR) {
+                this.doorStates[`${x},${y}`] = 0;
+              }
+            }
+          }
+        });
+      }
+    }
+
+    const thinWallsLayers = allLayers.filter(
+      (layer: any) => layer.name && layer.name.toLowerCase() === "thinwalls"
+    );
+    for (const thinWallsLayer of thinWallsLayers) {
+      if (thinWallsLayer.data) {
+        const thinWallTiles: Array<{ x: number; y: number; tileId: number }> = [];
+        thinWallsLayer.data.forEach((tileId: number, index: number) => {
           if (tileId !== 0) {
-            this.map[y][x] = tileId;
+            const x = index % thinWallsLayer.width;
+            const y = Math.floor(index / thinWallsLayer.width);
+            thinWallTiles.push({ x, y, tileId });
+          }
+        });
+
+        thinWallTiles.forEach(({ x, y, tileId }) => {
+          const tileType = this.tileTypes[tileId];
+          const adjustedTileId = tileId - firstgid;
+          if (tileType === "thinWall" || tileType === TileType.THIN_WALL) {
+            const hasTop = thinWallTiles.some(
+              (t) =>
+                t.x === x &&
+                t.y === y - 1 &&
+                (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
+            );
+            const hasBottom = thinWallTiles.some(
+              (t) =>
+                t.x === x &&
+                t.y === y + 1 &&
+                (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
+            );
+            const hasLeft = thinWallTiles.some(
+              (t) =>
+                t.x === x - 1 &&
+                t.y === y &&
+                (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
+            );
+            const hasRight = thinWallTiles.some(
+              (t) =>
+                t.x === x + 1 &&
+                t.y === y &&
+                (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
+            );
+
+            let orientation: "vertical" | "horizontal" = "vertical";
+            if ((hasLeft || hasRight) && !(hasTop || hasBottom)) {
+              orientation = "horizontal";
+            } else if ((hasTop || hasBottom) && !(hasLeft || hasRight)) {
+              orientation = "vertical";
+            } else if (hasLeft || hasRight) {
+              orientation = "horizontal";
+            }
+
+            if (orientation === "vertical") {
+              this.thinWalls.push({
+                x1: x + 0.5,
+                y1: y,
+                x2: x + 0.5,
+                y2: y + 1,
+                texture: adjustedTileId,
+                orientation,
+              });
+            } else {
+              this.thinWalls.push({
+                x1: x,
+                y1: y + 0.5,
+                x2: x + 1,
+                y2: y + 0.5,
+                texture: adjustedTileId,
+                orientation,
+              });
+            }
+          }
+        });
+      }
+    }
+
+    const doorsLayers = allLayers.filter(
+      (layer: any) => layer.name && layer.name.toLowerCase() === "doors"
+    );
+    for (const doorsLayer of doorsLayers) {
+      if (doorsLayer.data) {
+        doorsLayer.data.forEach((tileId: number, index: number) => {
+          if (tileId !== 0) {
+            const x = index % doorsLayer.width;
+            const y = Math.floor(index / doorsLayer.width);
             const tileType = this.tileTypes[tileId];
-            if (tileType === "door") {
+            if (tileType === "door" || tileType === TileType.DOOR) {
+              this.map[y][x] = tileId;
               this.doorStates[`${x},${y}`] = 0;
             }
           }
-        }
-      });
-    }
-
-    const thinWallsLayer = mapData.layers.find(
-      (layer: any) => layer.name === "ThinWalls"
-    );
-    if (thinWallsLayer) {
-      const thinWallTiles: Array<{ x: number; y: number; tileId: number }> = [];
-      thinWallsLayer.data.forEach((tileId: number, index: number) => {
-        if (tileId !== 0) {
-          const x = index % thinWallsLayer.width;
-          const y = Math.floor(index / thinWallsLayer.width);
-          thinWallTiles.push({ x, y, tileId });
-        }
-      });
-
-      thinWallTiles.forEach(({ x, y, tileId }) => {
-        const tileType = this.tileTypes[tileId];
-        const adjustedTileId = tileId - firstgid;
-        if (tileType === "thinWall") {
-          const hasTop = thinWallTiles.some(
-            (t) =>
-              t.x === x &&
-              t.y === y - 1 &&
-              this.tileTypes[t.tileId] === "thinWall"
-          );
-          const hasBottom = thinWallTiles.some(
-            (t) =>
-              t.x === x &&
-              t.y === y + 1 &&
-              this.tileTypes[t.tileId] === "thinWall"
-          );
-          const hasLeft = thinWallTiles.some(
-            (t) =>
-              t.x === x - 1 &&
-              t.y === y &&
-              this.tileTypes[t.tileId] === "thinWall"
-          );
-          const hasRight = thinWallTiles.some(
-            (t) =>
-              t.x === x + 1 &&
-              t.y === y &&
-              this.tileTypes[t.tileId] === "thinWall"
-          );
-
-          let orientation: "vertical" | "horizontal" = "vertical";
-          if ((hasLeft || hasRight) && !(hasTop || hasBottom)) {
-            orientation = "horizontal";
-          } else if ((hasTop || hasBottom) && !(hasLeft || hasRight)) {
-            orientation = "vertical";
-          } else if (hasLeft || hasRight) {
-            orientation = "horizontal";
-          }
-
-          if (orientation === "vertical") {
-            this.thinWalls.push({
-              x1: x + 0.5,
-              y1: y,
-              x2: x + 0.5,
-              y2: y + 1,
-              texture: adjustedTileId,
-              orientation,
-            });
-          } else {
-            this.thinWalls.push({
-              x1: x,
-              y1: y + 0.5,
-              x2: x + 1,
-              y2: y + 0.5,
-              texture: adjustedTileId,
-              orientation,
-            });
-          }
-        }
-      });
-    }
-
-    const doorsLayer = mapData.layers.find(
-      (layer: any) => layer.name === "Doors"
-    );
-    if (doorsLayer) {
-      doorsLayer.data.forEach((tileId: number, index: number) => {
-        if (tileId !== 0) {
-          const x = index % doorsLayer.width;
-          const y = Math.floor(index / doorsLayer.width);
-          const tileType = this.tileTypes[tileId];
-          if (tileType === "door") {
-            this.map[y][x] = tileId;
-            this.doorStates[`${x},${y}`] = 0;
-          }
-        }
-      });
+        });
+      }
     }
 
     // Door keys layer parsing (identifies doors requiring keycards)
     this.lockedDoors = {};
-    const keysLayer = mapData.layers.find(
+    const keysLayers = allLayers.filter(
       (layer: any) => layer.name && layer.name.toLowerCase().includes("key")
     );
-    if (keysLayer && keysLayer.data) {
-      keysLayer.data.forEach((tileGid: number, index: number) => {
-        if (tileGid !== 0) {
-          const x = index % keysLayer.width;
-          const y = Math.floor(index / keysLayer.width);
-          const adjustedTileId = tileGid - firstgid;
-          const meta = this.tileMeta[adjustedTileId] || {};
-          const typeStr = (meta.type || this.tileTypes[tileGid] || "").toLowerCase();
-          const imgStr = (meta.image || "").toLowerCase();
+    for (const keysLayer of keysLayers) {
+      if (keysLayer.data) {
+        keysLayer.data.forEach((tileGid: number, index: number) => {
+          if (tileGid !== 0) {
+            const x = index % keysLayer.width;
+            const y = Math.floor(index / keysLayer.width);
+            const adjustedTileId = tileGid - firstgid;
+            const meta = this.tileMeta[adjustedTileId] || {};
+            const typeStr = (meta.type || this.tileTypes[tileGid] || "").toLowerCase();
+            const imgStr = (meta.image || "").toLowerCase();
 
-          let reqKey = "blue";
-          if (typeStr.includes("green") || imgStr.includes("green")) reqKey = "green";
-          else if (typeStr.includes("red") || imgStr.includes("red")) reqKey = "red";
-          else if (typeStr.includes("blue") || imgStr.includes("blue")) reqKey = "blue";
+            let reqKey = "blue";
+            if (typeStr.includes("green") || imgStr.includes("green")) reqKey = "green";
+            else if (typeStr.includes("red") || imgStr.includes("red")) reqKey = "red";
+            else if (typeStr.includes("blue") || imgStr.includes("blue")) reqKey = "blue";
 
-          this.lockedDoors[`${x},${y}`] = reqKey;
-        }
-      });
+            this.lockedDoors[`${x},${y}`] = reqKey;
+          }
+        });
+      }
     }
 
     // Objects and pickups layer parsing (handled via RaycastPickupManager)
@@ -848,28 +1041,18 @@ export class RaycastScene extends BaseScene {
 
           this.doorOrientationsFlat[idx] = isNS ? 0 : 1;
 
-          // Determine slide mode: "slide_up" (1) or "slide_sideways" (0)
+          // Determine slide mode:
+          // 1 = DoorOpen.UP (vertical up into ceiling)
+          // 0 = DoorOpen.LEFT (horizontal slide left)
+          // 3 = DoorOpen.RIGHT (horizontal slide right)
+          // 2 = "down" (legacy vertical down into floor)
           const doorKey = `${x},${y}`;
           const tile = this.mapFlat[idx];
           const meta = this.tileMeta[tile - 1] || {};
           const explicitMode = this.doorSlideModes[doorKey];
-          const slideProp = (
-            meta.slide ||
-            meta.doorSlide ||
-            meta.slideMode ||
-            ""
-          ).toLowerCase();
+          const mode: DoorOpen = explicitMode || meta.open || this.defaultDoorSlide;
 
-          let isSlideUp = this.defaultDoorSlide === "slide_up";
-          if (explicitMode) {
-            isSlideUp = explicitMode === "slide_up";
-          } else if (slideProp.includes("up") || slideProp.includes("vert")) {
-            isSlideUp = true;
-          } else if (slideProp.includes("side") || slideProp.includes("horiz")) {
-            isSlideUp = false;
-          }
-
-          this.doorSlideModesFlat[idx] = isSlideUp ? 1 : 0;
+          this.doorSlideModesFlat[idx] = this.getDoorSlideNumericMode(mode);
         }
       }
     }
@@ -885,16 +1068,55 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  public getDoorSlideNumericMode(mode: DoorOpen | undefined): number {
+    if (mode === DoorOpen.LEFT) return 0;
+    if (mode === DoorOpen.RIGHT) return 3;
+    return 1; // DoorOpen.UP
+  }
+
   public setDoorSlideMode(
     x: number,
     y: number,
-    mode: "slide_up" | "slide_sideways"
+    mode: DoorOpen
   ): void {
     const key = `${x},${y}`;
     this.doorSlideModes[key] = mode;
     if (this.doorSlideModesFlat && x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
-      this.doorSlideModesFlat[y * this.mapWidth + x] = mode === "slide_up" ? 1 : 0;
+      this.doorSlideModesFlat[y * this.mapWidth + x] = this.getDoorSlideNumericMode(mode);
     }
+  }
+
+  public setDefaultDoorSlideMode(mode: DoorOpen): void {
+    this.defaultDoorSlide = mode;
+    if (this.doorSlideModesFlat) {
+      const modeVal = this.getDoorSlideNumericMode(mode);
+      for (let y = 0; y < this.mapHeight; y++) {
+        for (let x = 0; x < this.mapWidth; x++) {
+          const idx = y * this.mapWidth + x;
+          if (this.tileTypeFlags[idx] === RaycastScene.TILE_DOOR) {
+            const doorKey = `${x},${y}`;
+            if (!this.doorSlideModes[doorKey]) {
+              this.doorSlideModesFlat[idx] = modeVal;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  public cycleDoorSlideMode(): DoorOpen {
+    let nextMode: DoorOpen = DoorOpen.UP;
+    if (this.defaultDoorSlide === DoorOpen.UP) {
+      nextMode = DoorOpen.LEFT;
+    } else if (this.defaultDoorSlide === DoorOpen.LEFT) {
+      nextMode = DoorOpen.RIGHT;
+    } else {
+      nextMode = DoorOpen.UP;
+    }
+
+    this.setDefaultDoorSlideMode(nextMode);
+    this.hud.showToast(`[!] Door Mode: ${nextMode.toUpperCase()}`, 0x00e5ff);
+    return nextMode;
   }
 
   public dispose(): void {
@@ -942,6 +1164,10 @@ export class RaycastScene extends BaseScene {
         tex.destroy(false);
       }
     }
+    for (const t of this.doorColumnTextures) {
+      t.destroy(false);
+    }
+    this.doorColumnTextures = [];
     this.columnTextures = {};
     window.removeEventListener("keydown", this.keyDownHandler);
     window.removeEventListener("keyup", this.keyUpHandler);
@@ -1153,6 +1379,10 @@ export class RaycastScene extends BaseScene {
     }
     if (e.key === "q" || e.key === "Q") {
       this.playerController.cycleWeapon(-1);
+    }
+    // Toggle/Cycle Door Slide Mode (V: Up -> Down -> Sideways)
+    if (e.key === "v" || e.key === "V") {
+      this.cycleDoorSlideMode();
     }
   };
 
@@ -1506,6 +1736,11 @@ export class RaycastScene extends BaseScene {
 
     const pool = this.hitPool[column];
     let hitCount = 0;
+    for (let k = 0; k < pool.length; k++) {
+      pool[k].isDoor = false;
+      pool[k].doorSlide = undefined;
+      pool[k].doorOpen = undefined;
+    }
     let solidWallDist = this.MAX_RENDER_DISTANCE;
 
     while (true) {
@@ -1546,19 +1781,21 @@ export class RaycastScene extends BaseScene {
         if (tileFlag === RaycastScene.TILE_DOOR) {
           const orientation = this.doorOrientationsFlat[flatIdx]; // 0 = NS (plane at x + 0.5), 1 = EW (plane at y + 0.5)
           const open = Math.abs(this.doorStatesFlat[flatIdx]); // 0.0 to 1.0
-          const isSlideUp = this.doorSlideModesFlat[flatIdx] === 1;
+          const slideMode = this.doorSlideModesFlat[flatIdx]; // 0 = sideways, 1 = up, 2 = down
 
           if (orientation === 0) {
             // North-South door: plane is in the center at x = mapX + 0.5
-            if (side === 0) {
-              // Crossed X boundary. Distance to center plane x = mapX + 0.5:
+            if (Math.abs(rayDirX) > 1e-6) {
               const doorDist = (sideDistX - deltaDistX) + 0.5 * deltaDistX;
               const hitY = this.player.y + doorDist * rayDirY;
               const offset = hitY - mapY;
 
-              if (offset >= 0 && offset <= 1) {
-                if (!isSlideUp) {
-                  // Sliding sideways along Y axis
+              // Ray intersects door plane within the cell boundaries [0, 1]
+              const hitDoor = doorDist > 0 && (side === 0 || doorDist >= dist) && offset >= 0 && offset <= 1;
+
+              if (hitDoor) {
+                if (slideMode === 3) {
+                  // Sliding right along Y axis (gap on left offset < open)
                   if (offset >= open) {
                     if (hitCount < pool.length) {
                       const h = pool[hitCount++];
@@ -1572,15 +1809,37 @@ export class RaycastScene extends BaseScene {
                       h.rayDirX = rayDirX;
                       h.rayDirY = rayDirY;
                       h.isDoor = true;
-                      h.doorSlide = "sideways";
+                      h.doorSlide = DoorOpen.RIGHT;
                       h.doorOpen = open;
                       solidWallDist = doorDist;
                     }
                     break;
                   }
                   // Else offset < open: passes through open gap! Continue DDA.
+                } else if (slideMode === 0) {
+                  // Sliding left along Y axis (gap on right offset > 1.0 - open)
+                  if (offset <= 1.0 - open) {
+                    if (hitCount < pool.length) {
+                      const h = pool[hitCount++];
+                      h.wallType = adjustedTileId;
+                      h.distance = doorDist;
+                      const texX = offset + open;
+                      h.hitX = stepX > 0 ? texX : 1.0 - texX;
+                      h.side = 0;
+                      h.mapX = mapX;
+                      h.mapY = mapY;
+                      h.rayDirX = rayDirX;
+                      h.rayDirY = rayDirY;
+                      h.isDoor = true;
+                      h.doorSlide = DoorOpen.LEFT;
+                      h.doorOpen = open;
+                      solidWallDist = doorDist;
+                    }
+                    break;
+                  }
+                  // Else offset > 1.0 - open: passes through open gap! Continue DDA.
                 } else {
-                  // Slide up into ceiling
+                  // Vertical slide (1 = up into ceiling, 2 = down into floor)
                   if (open < 0.99) {
                     if (hitCount < pool.length) {
                       const h = pool[hitCount++];
@@ -1593,7 +1852,7 @@ export class RaycastScene extends BaseScene {
                       h.rayDirX = rayDirX;
                       h.rayDirY = rayDirY;
                       h.isDoor = true;
-                      h.doorSlide = "up";
+                      h.doorSlide = DoorOpen.UP;
                       h.doorOpen = open;
 
                       if (open <= 0.01) {
@@ -1604,34 +1863,19 @@ export class RaycastScene extends BaseScene {
                   }
                 }
               }
-            } else {
-              // Entered from Y boundary -> hits side jamb
-              if (hitCount < pool.length) {
-                const h = pool[hitCount++];
-                h.wallType = adjustedTileId;
-                h.distance = dist;
-                h.hitX = hitX;
-                h.side = 1;
-                h.mapX = mapX;
-                h.mapY = mapY;
-                h.rayDirX = rayDirX;
-                h.rayDirY = rayDirY;
-                h.isDoor = false;
-                solidWallDist = dist;
-              }
-              break;
             }
           } else {
             // East-West door: plane is in the center at y = mapY + 0.5
-            if (side === 1) {
-              // Crossed Y boundary. Distance to center plane y = mapY + 0.5:
+            if (Math.abs(rayDirY) > 1e-6) {
               const doorDist = (sideDistY - deltaDistY) + 0.5 * deltaDistY;
               const hitXCoord = this.player.x + doorDist * rayDirX;
               const offset = hitXCoord - mapX;
 
-              if (offset >= 0 && offset <= 1) {
-                if (!isSlideUp) {
-                  // Sliding sideways along X axis
+              const hitDoor = doorDist > 0 && (side === 1 || doorDist >= dist) && offset >= 0 && offset <= 1;
+
+              if (hitDoor) {
+                if (slideMode === 3) {
+                  // Sliding right along X axis (gap on left offset < open)
                   if (offset >= open) {
                     if (hitCount < pool.length) {
                       const h = pool[hitCount++];
@@ -1645,14 +1889,35 @@ export class RaycastScene extends BaseScene {
                       h.rayDirX = rayDirX;
                       h.rayDirY = rayDirY;
                       h.isDoor = true;
-                      h.doorSlide = "sideways";
+                      h.doorSlide = DoorOpen.RIGHT;
+                      h.doorOpen = open;
+                      solidWallDist = doorDist;
+                    }
+                    break;
+                  }
+                } else if (slideMode === 0) {
+                  // Sliding left along X axis (gap on right offset > 1.0 - open)
+                  if (offset <= 1.0 - open) {
+                    if (hitCount < pool.length) {
+                      const h = pool[hitCount++];
+                      h.wallType = adjustedTileId;
+                      h.distance = doorDist;
+                      const texX = offset + open;
+                      h.hitX = stepY > 0 ? 1.0 - texX : texX;
+                      h.side = 1;
+                      h.mapX = mapX;
+                      h.mapY = mapY;
+                      h.rayDirX = rayDirX;
+                      h.rayDirY = rayDirY;
+                      h.isDoor = true;
+                      h.doorSlide = DoorOpen.LEFT;
                       h.doorOpen = open;
                       solidWallDist = doorDist;
                     }
                     break;
                   }
                 } else {
-                  // Slide up into ceiling
+                  // Vertical slide (1 = up into ceiling, 2 = down into floor)
                   if (open < 0.99) {
                     if (hitCount < pool.length) {
                       const h = pool[hitCount++];
@@ -1665,7 +1930,7 @@ export class RaycastScene extends BaseScene {
                       h.rayDirX = rayDirX;
                       h.rayDirY = rayDirY;
                       h.isDoor = true;
-                      h.doorSlide = "up";
+                      h.doorSlide = DoorOpen.UP;
                       h.doorOpen = open;
 
                       if (open <= 0.01) {
@@ -1676,22 +1941,6 @@ export class RaycastScene extends BaseScene {
                   }
                 }
               }
-            } else {
-              // Entered from X boundary -> hits side jamb
-              if (hitCount < pool.length) {
-                const h = pool[hitCount++];
-                h.wallType = adjustedTileId;
-                h.distance = dist;
-                h.hitX = hitX;
-                h.side = 0;
-                h.mapX = mapX;
-                h.mapY = mapY;
-                h.rayDirX = rayDirX;
-                h.rayDirY = rayDirY;
-                h.isDoor = false;
-                solidWallDist = dist;
-              }
-              break;
             }
           }
         } else if (hitCount < pool.length) {
@@ -1705,6 +1954,8 @@ export class RaycastScene extends BaseScene {
           h.rayDirX = rayDirX;
           h.rayDirY = rayDirY;
           h.isDoor = false;
+          h.doorSlide = undefined;
+          h.doorOpen = undefined;
           solidWallDist = dist;
           break;
         }
@@ -1747,6 +1998,9 @@ export class RaycastScene extends BaseScene {
         h.rayDirX = rayDirX;
         h.rayDirY = rayDirY;
         h.orientation = wall.orientation;
+        h.isDoor = false;
+        h.doorSlide = undefined;
+        h.doorOpen = undefined;
       }
     }
 
@@ -1768,10 +2022,12 @@ export class RaycastScene extends BaseScene {
 
     const minDistance = 0.05;
     for (let i = 1; i < hitCount; i++) {
-      if (pool[i].distance + minDistance > pool[i - 1].distance) {
+      if (pool[i - 1].distance - pool[i].distance < minDistance) {
+        const removed = pool[i];
         for (let k = i; k < hitCount - 1; k++) {
           pool[k] = pool[k + 1];
         }
+        pool[hitCount - 1] = removed;
         hitCount--;
         i--;
       }
@@ -2013,22 +2269,20 @@ export class RaycastScene extends BaseScene {
         const flatIdx = ray.mapY * this.mapWidth + ray.mapX;
         const tileFlag = this.tileTypeFlags[flatIdx];
 
-        if (tileFlag === RaycastScene.TILE_DOOR) {
+        if (ray.isDoor && tileFlag === RaycastScene.TILE_DOOR) {
           const open = Math.abs(this.doorStatesFlat[flatIdx]);
-          const isSlideUp = this.doorSlideModesFlat[flatIdx] === 1;
-
+          // When a door is closed (< 0.05 open), it occludes floor and ceiling like a wall
           if (open < 0.05) {
             const lineHeight = screenH / ray.distance;
             const drawStart = -lineHeight / 2 + screenH / 2;
             const drawEnd = lineHeight / 2 + screenH / 2;
             minDrawStart = Math.min(minDrawStart, drawStart);
             maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
-          } else if (isSlideUp && open < 0.95) {
-            const lineHeight = screenH / ray.distance;
-            const drawStart = -lineHeight / 2 + screenH / 2;
-            minDrawStart = Math.min(minDrawStart, drawStart);
           }
-        } else if (tileFlag !== RaycastScene.TILE_THIN) {
+          // When open >= 0.05, the door is an open aperture:
+          // The room behind the door must have its ceiling and floor rendered without occlusion.
+          // The remaining door panel sprite is drawn on top of the background in step 4.
+        } else if (tileFlag !== RaycastScene.TILE_THIN && !ray.isDoor) {
           const lineHeight = screenH / ray.distance;
           const drawStart = -lineHeight / 2 + screenH / 2;
           const drawEnd = lineHeight / 2 + screenH / 2;
@@ -2069,18 +2323,20 @@ export class RaycastScene extends BaseScene {
         let drawStart = -lineHeight / 2 + screenH / 2;
         let drawEnd = lineHeight / 2 + screenH / 2;
 
-        if (ray.isDoor && ray.doorSlide === "up" && ray.doorOpen !== undefined && ray.doorOpen > 0) {
-          const ceilingY = drawStart;
-          const floorY = drawEnd;
-          const doorBottom = floorY - ray.doorOpen * lineHeight;
-          drawEnd = Math.max(ceilingY, doorBottom);
+        const tileType = this.tileTypes[ray.wallType + 1];
+        const isActualDoor = ray.isDoor === true && ray.side !== 2 && tileType === "door";
+
+        if (isActualDoor && ray.doorOpen !== undefined && ray.doorOpen > 0) {
+          if (ray.doorSlide === DoorOpen.UP) {
+            const floorY = drawEnd;
+            drawEnd = Math.max(drawStart, floorY - ray.doorOpen * lineHeight);
+          }
         }
 
         // Viewport culling: skip drawing if wall slice is outside the screen bounds
         if (drawEnd <= 0 || drawStart >= screenH || drawEnd <= drawStart) continue;
 
         const sprite = this.spritePool[i][j];
-        const tileType = this.tileTypes[ray.wallType + 1];
         const slices = this.columnTextures[ray.wallType];
 
         if (slices && slices.length > 0) {
@@ -2089,7 +2345,27 @@ export class RaycastScene extends BaseScene {
             slices.length - 1
           );
 
-          sprite.texture = slices[clampedTexX];
+          if (isActualDoor && ray.doorSlide === DoorOpen.UP) {
+            const texH = slices[clampedTexX].baseTexture.height || 64;
+            const open = ray.doorOpen ?? 0;
+            const doorTex = this.doorColumnTextures[i];
+            doorTex.baseTexture = slices[clampedTexX].baseTexture;
+
+            const srcY = Math.min(texH - 1, Math.floor(open * texH));
+            const srcH = Math.max(1, texH - srcY);
+
+            const origFrame = slices[clampedTexX].frame;
+            doorTex.frame.x = origFrame.x;
+            doorTex.frame.y = origFrame.y + srcY;
+            doorTex.frame.width = 1;
+            doorTex.frame.height = srcH;
+            doorTex.updateUvs();
+
+            sprite.texture = doorTex;
+          } else {
+            sprite.texture = slices[clampedTexX];
+          }
+
           sprite.y = drawStart;
           sprite.height = drawEnd - drawStart;
           sprite.width = 1;

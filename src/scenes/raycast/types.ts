@@ -22,8 +22,27 @@ import {
   raycastEnemyConfigs,
   getRaycastEnemyConfig,
 } from "../../configs/RaycastEnemyConfigs";
+import { DoorOpen } from "../../enums/DoorOpen";
+import { TileType } from "../../enums/TileType";
+import { Align } from "../../enums/Align";
+import { Anchor } from "../../enums/Anchor";
+import { FlatWallRotation } from "../../enums/FlatWallRotation";
+import { Weapons } from "../../enums/Weapons";
+import { PickupType } from "../../enums/PickUpType";
 
-export { RaycastPickupType, RaycastWeaponType, RaycastEnemyType };
+export {
+  DoorOpen,
+  TileType,
+  Align,
+  Anchor,
+  FlatWallRotation,
+  Weapons,
+  PickupType,
+  RaycastPickupType,
+  RaycastWeaponType,
+  RaycastEnemyType,
+};
+export type DoorSlideMode = DoorOpen;
 export {
   IRaycastWeaponConfig,
   IMuzzleFlashConfig,
@@ -95,21 +114,52 @@ export interface MapObject {
 
 export interface TileMeta {
   type?: string;
+  tileType?: TileType;
+  open?: DoorOpen;
   scale?: number;
   scaleX?: number;
   scaleY?: number;
   vOffset?: number;
   z?: number;
-  anchor?: string;
+  anchor?: Anchor | string;
   imageWidth?: number;
   imageHeight?: number;
   amount?: number;
-  weaponType?: string;
+  weaponType?: Weapons | string;
   tileClass?: string;
   image?: string;
-  slide?: string;
-  doorSlide?: string;
-  slideMode?: string;
+}
+
+export interface ITile {
+  open: DoorOpen;
+  tileType: TileType;
+}
+
+export interface IDestructableWall {
+  align: Align | string;
+  linkIds: (string | number)[];
+  offset: number;
+  rotation: FlatWallRotation | string;
+}
+
+export interface IObject {
+  anchor: Anchor | string;
+  scale: number;
+  vOffset: number;
+}
+
+export interface IPickupItem {
+  amount: number;
+  itemId: string;
+  object: IObject;
+  sprite: string;
+  type: PickupType | string;
+  weaponType: Weapons | string;
+}
+
+export interface IWeapon {
+  pickup: IPickupItem;
+  type: Weapons | string;
 }
 
 export interface RaycastBreakable {
