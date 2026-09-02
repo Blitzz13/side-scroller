@@ -1417,10 +1417,20 @@ export class RaycastScene extends BaseScene {
         if (currentState === 0) {
           this.doorStates[key] = 0.01;
           this.doorStatesFlat[y * this.mapWidth + x] = 0.01;
+          try {
+            sound.play("door_1", { volume: 0.5 });
+          } catch (e) {
+            console.warn("Failed to play door_1 sound:", e);
+          }
           break; // Action triggered
         } else if (currentState === 1) {
           this.doorStates[key] = -1;
           this.doorStatesFlat[y * this.mapWidth + x] = -1;
+          try {
+            sound.play("door_1", { volume: 0.4 });
+          } catch (e) {
+            console.warn("Failed to play door_1 sound:", e);
+          }
           break;
         }
       }

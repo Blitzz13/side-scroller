@@ -34,6 +34,9 @@ This document logs recent development changes and enhancements made to the Rayca
     - Key `Q`: Cycle previous weapon.
     - Mouse Wheel: Cycle next/previous weapon.
     - HUD Weapon Box Click/Tap: Interactive weapon switcher with `[1-3 / TAP]` switch hint.
+- **Door Opening Audio Effect (`assets/sounds/door_1.mp3`)** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Registered `door_1` in the manifest `sounds` bundle pointing to [`assets/sounds/door_1.mp3`](file:///D:/Projects/side-scroller/assets/sounds/door_1.mp3).
+  - Integrated audio playback into `tryOpenDoor()` so the sound plays whenever a door slides open or closed upon interaction.
 
 ---
 

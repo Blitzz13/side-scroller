@@ -86,6 +86,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/sounds/dh_17_blaster.mp3"
           },
           {
+            alias: "door_1",
+            src: "./assets/sounds/door_1.mp3"
+          },
+          {
             alias: "stormtrooper_pain_1",
             src: "./assets/stormtrooper_pain_1.mp3"
           },
