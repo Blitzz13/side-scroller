@@ -157,6 +157,8 @@ export class RaycastScene extends BaseScene {
   private shakeIntensity: number = 0;
   private shakeDuration: number = 0;
   private lockedDoors: Record<string, string> = {};
+  private isLeftMouseDown: boolean = false;
+  private isRightMouseDown: boolean = false;
 
   constructor(stage: Container, scale: number, level: string = "test_level") {
     super(stage, scale);
@@ -945,6 +947,9 @@ export class RaycastScene extends BaseScene {
     window.removeEventListener("keyup", this.keyUpHandler);
     window.removeEventListener("mousemove", this.mouseMoveHandler);
     window.removeEventListener("mousedown", this.mouseDownHandler);
+    window.removeEventListener("mouseup", this.mouseUpHandler);
+    window.removeEventListener("contextmenu", this.contextMenuHandler);
+    window.removeEventListener("blur", this.blurHandler);
     window.removeEventListener("wheel", this.wheelHandler);
     if (this.detonatorManager) {
       this.detonatorManager.dispose();
@@ -968,6 +973,9 @@ export class RaycastScene extends BaseScene {
     window.addEventListener("keyup", this.keyUpHandler);
     window.addEventListener("mousemove", this.mouseMoveHandler);
     window.addEventListener("mousedown", this.mouseDownHandler);
+    window.addEventListener("mouseup", this.mouseUpHandler);
+    window.addEventListener("contextmenu", this.contextMenuHandler);
+    window.addEventListener("blur", this.blurHandler);
     window.addEventListener("wheel", this.wheelHandler, { passive: true });
 
     document.addEventListener(
@@ -988,12 +996,30 @@ export class RaycastScene extends BaseScene {
     }
   };
 
+  private contextMenuHandler = (e: MouseEvent) => {
+    e.preventDefault();
+  };
+
+  private blurHandler = () => {
+    this.isLeftMouseDown = false;
+    this.isRightMouseDown = false;
+  };
+
+  private mouseUpHandler = (e: MouseEvent) => {
+    if (e.button === 0) {
+      this.isLeftMouseDown = false;
+    } else if (e.button === 2) {
+      this.isRightMouseDown = false;
+    }
+  };
+
   private mouseDownHandler = (e: MouseEvent) => {
-    // Only handle primary left click
-    if (e.button !== 0) return;
+    if (e.button === 2) {
+      e.preventDefault();
+    }
 
     if (!this.isMobileDevice()) {
-      // If pointer is not locked yet, request pointer lock on left click on desktop
+      // If pointer is not locked yet, request pointer lock on click on desktop
       if (!document.pointerLockElement) {
         try {
           const p: any = (document.body as any).requestPointerLock?.();
@@ -1003,16 +1029,37 @@ export class RaycastScene extends BaseScene {
         } catch (err) {}
       }
 
-      // Always shoot on left click (works reliably when pointer is locked & mouse cursor is hidden)
-      this.tryShoot();
+      if (e.button === 0) {
+        this.isLeftMouseDown = true;
+        this.tryShoot(false);
+      } else if (e.button === 2) {
+        this.isRightMouseDown = true;
+
+        // Auto-switch to E-11 if player owns it and isn't currently holding it
+        if (
+          this.playerController.equippedWeapon !== RaycastWeaponType.E11 &&
+          this.playerController.weaponInventory.has(RaycastWeaponType.E11)
+        ) {
+          this.playerController.switchWeapon(RaycastWeaponType.E11);
+        }
+
+        if (this.playerController.equippedWeapon === RaycastWeaponType.E11) {
+          this.tryShoot(true);
+        } else {
+          this.hud.showToast("[!] E-11 Blaster Rifle required for Auto-Fire", 0x88bbdd);
+        }
+      }
     }
   };
 
   private pointerLockChangeHandler = () => {
-    console.log("Pointer lock state:", document.pointerLockElement);
+    if (!document.pointerLockElement) {
+      this.isLeftMouseDown = false;
+      this.isRightMouseDown = false;
+    }
   };
 
-  private tryShoot(): void {
+  private tryShoot(isAutoFire: boolean = false): void {
     const currentCfg = this.playerController.weaponConfig;
     if (!currentCfg) return;
 
@@ -1041,8 +1088,8 @@ export class RaycastScene extends BaseScene {
       return;
     }
 
-    // 2. Direct hitscan firearm (E-11 Blaster)
-    const didShoot = this.playerController.tryShoot();
+    // 2. Direct hitscan firearm (DH-17, E-11, etc.)
+    const didShoot = this.playerController.tryShoot(undefined, isAutoFire);
     if (didShoot) {
       const damage = currentCfg.damage ?? 25;
       const centerCol = Math.floor(gameConfig.width / 2);
@@ -1196,6 +1243,11 @@ export class RaycastScene extends BaseScene {
       this.keys.d ||
       Math.abs(joyVector.x) > 0.15 ||
       Math.abs(joyVector.y) > 0.15;
+
+    // Automatic continuous firing while right mouse button is pressed with the E-11 Blaster
+    if (this.isRightMouseDown && this.playerController.equippedWeapon === RaycastWeaponType.E11) {
+      this.tryShoot(true);
+    }
 
     this.playerController.update(delta, isMoving);
 

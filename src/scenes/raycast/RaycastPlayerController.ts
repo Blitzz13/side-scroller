@@ -171,7 +171,8 @@ export class RaycastPlayerController {
 
     this.weaponView.equip(config);
     this.hud.setWeapon(weaponName, this.state.ammo);
-    this.hud.showToast(`[+] Equipped ${weaponName} (${newAmmo} Ammo)`, 0x00e5ff);
+    const equipHint = config.type === RaycastWeaponType.E11 ? " (RMB: Auto-Fire)" : "";
+    this.hud.showToast(`[+] Equipped ${weaponName}${equipHint} (${newAmmo} Ammo)`, 0x00e5ff);
     this.hud.flashScreen(0x00ccff, 0.25);
   }
 
@@ -194,7 +195,8 @@ export class RaycastPlayerController {
 
     this.weaponView.equip(config);
     this.hud.setWeapon(config.name, this.state.ammo);
-    this.hud.showToast(`[!] Selected ${config.name}`, 0x00e5ff);
+    const switchHint = config.type === RaycastWeaponType.E11 ? " (RMB: Auto-Fire)" : "";
+    this.hud.showToast(`[!] Selected ${config.name}${switchHint}`, 0x00e5ff);
     return true;
   }
 
@@ -226,12 +228,15 @@ export class RaycastPlayerController {
     this.hud.flashScreen(0xffaa00, 0.2);
   }
 
-  public tryShoot(onThrowRelease?: () => void): boolean {
+  public tryShoot(onThrowRelease?: () => void, isAutoFire: boolean = false): boolean {
     if (!this.state.weaponConfig || this.state.ammo <= 0) {
       return false;
     }
 
-    const fireRate = this.state.weaponConfig.rateOfFire ?? 200;
+    const fireRate =
+      isAutoFire && this.state.weaponConfig.autoFireRate
+        ? this.state.weaponConfig.autoFireRate
+        : (this.state.weaponConfig.rateOfFire ?? 200);
     const now = Date.now();
 
     if (now - this.lastShotTime < fireRate) {

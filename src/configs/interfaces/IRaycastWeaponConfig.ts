@@ -62,6 +62,7 @@ export interface IRaycastWeaponConfig {
   maxAmmo: number;
   defaultAmmo: number;
   rateOfFire: number; // minimum ms between shots/throws
+  autoFireRate?: number; // Optional rapid fire rate (ms) for automatic fire mode (e.g. 140ms)
   equippedTexture: string;
   itemTexture: string;
   shootSounds: ISoundConfig[];

@@ -20,6 +20,11 @@ This document logs recent development changes and enhancements made to the Rayca
   - Added `RaycastWeaponType.DH17` enum and `dh17Config` using [`assets/raycast/weapons/dh_17.png`](file:///D:/Projects/side-scroller/assets/raycast/weapons/dh_17.png) and authentic firing sound [`assets/sounds/dh_17_blaster.mp3`](file:///D:/Projects/side-scroller/assets/sounds/dh_17_blaster.mp3).
   - Player now begins the game equipped with the **DH-17 Blaster Pistol** with 30 starting ammo instead of the E-11.
   - The E-11 Blaster Rifle can still be acquired as a weapon drop from defeated Stormtroopers or map pickups.
+- **E-11 Blaster Rifle Right-Click Automatic Fire Mode** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Added full-auto firing mode when holding the right mouse button with the E-11 Blaster Rifle equipped.
+  - Supported `autoFireRate: 140` ms (~7.1 shots/sec) in `IRaycastWeaponConfig` and `e11Config` for rapid blaster fire.
+  - Registered `contextmenu`, `mouseup`, and `blur` window listeners to prevent browser context menu interruptions and ensure smooth button release detection.
+  - Auto-switches to E-11 when right-clicking if the player owns the rifle in their inventory, with immediate first shot execution and a clear HUD hint if the weapon is not yet owned.
 - **Multi-Weapon Inventory & Switching Controls** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
   - Player inventory now tracks separate ammo counters for all owned weapons (`DH-17`, `E-11`, `Thermal Detonator`).
   - Added weapon switching support:
