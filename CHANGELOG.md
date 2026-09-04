@@ -2,6 +2,29 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-04] - Mobile Weapon Switching & Touch Controls Fix
+
+### 1. Dedicated Mobile Weapon Switch Virtual Button
+- **On-Screen `[WPN]` Button** ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts)):
+  - Added dedicated `btnWeapon: VirtualButton` with `[WPN]` label positioned at `(screenW - 180, screenH - 230)` right beside the action button `[E]` and above quick-turn `[>]`.
+  - Configured tap handler to emit `"switchWeapon"`.
+  - Properly disposed in `MobileControls.dispose()`.
+
+### 2. Multi-Target Touch & Tap Weapon Switching
+- **Interactive Weapon Sprite** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Enabled `weaponSprite.eventMode = "static"` and `cursor = "pointer"`.
+  - Added `pointerdown` and `pointertap` listeners that emit `"switchWeapon"` when the player taps their equipped weapon on-screen.
+- **HUD & Weapon View Tap Proxy** ([`src/ui/TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts), [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts)):
+  - Added tap detection to `TouchLookArea` for short-duration stationary touches (`< 12px` movement, `< 350ms`).
+  - Tapping either the HUD weapon box (bottom-right) or the equipped weapon area forwards to `"switchWeapon"`.
+  - Added `stopPropagation()` to `VirtualButton` so button presses do not conflict with the look area or display objects underneath.
+
+### 3. Comprehensive Weapon Cycling Feedback
+- **Scene & Controller Wiring** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Connected `mobileControls.on("switchWeapon")` and `weaponView.on("switchWeapon")` to `playerController.cycleWeapon(1)`.
+  - Updated `cycleWeapon()` to display informative toast notifications if the player has only 1 weapon in inventory or if alternate weapons are out of ammo, providing instant visual feedback.
+  - Added `hud.adaptForMobile()` to display `[TAP / WPN]` instead of desktop key hints `[1-3 / TAP]`.
+
 ## [2026-09-04] - Raycaster Engine Performance Overhaul
 
 ### 1. Hierarchical Layer Containers & Scene Isolation

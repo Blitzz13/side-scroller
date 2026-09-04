@@ -53,6 +53,20 @@ export class RaycastWeaponView extends Container {
     this.weaponSprite.scale.set(this.baseScale);
     this.weaponSprite.position.set(this.basePosX, this.basePosY);
     this.weaponSprite.visible = false;
+    this.weaponSprite.eventMode = "static";
+    this.weaponSprite.cursor = "pointer";
+    this.weaponSprite.on("pointerdown", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") {
+        e.stopPropagation();
+      }
+      this.emit("switchWeapon");
+    });
+    this.weaponSprite.on("pointertap", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") {
+        e.stopPropagation();
+      }
+      this.emit("switchWeapon");
+    });
     this.addChild(this.weaponSprite);
   }
 

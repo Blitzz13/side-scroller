@@ -8,6 +8,11 @@ export class TouchLookArea extends Container implements IDisposable {
   private accumulatedDelta: number = 0;
   private sensitivity: number;
 
+  private startX: number = 0;
+  private startY: number = 0;
+  private startTime: number = 0;
+  private isDrag: boolean = false;
+
   constructor(
     width: number,
     height: number,
@@ -43,10 +48,18 @@ export class TouchLookArea extends Container implements IDisposable {
     if (this.activePointerId !== null) return;
     this.activePointerId = e.pointerId;
     this.lastX = e.global.x;
+    this.startX = e.global.x;
+    this.startY = e.global.y;
+    this.startTime = Date.now();
+    this.isDrag = false;
   }
 
   private onPointerMove(e: FederatedPointerEvent): void {
     if (this.activePointerId !== e.pointerId) return;
+    const dist = Math.hypot(e.global.x - this.startX, e.global.y - this.startY);
+    if (dist > 12) {
+      this.isDrag = true;
+    }
     const dx = e.global.x - this.lastX;
     this.lastX = e.global.x;
     this.accumulatedDelta += dx * this.sensitivity;
@@ -55,6 +68,9 @@ export class TouchLookArea extends Container implements IDisposable {
   private onPointerUp(e: FederatedPointerEvent): void {
     if (this.activePointerId === e.pointerId) {
       this.activePointerId = null;
+      if (!this.isDrag && Date.now() - this.startTime < 350) {
+        this.emit("tap", e);
+      }
     }
   }
 

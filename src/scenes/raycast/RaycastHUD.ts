@@ -14,6 +14,7 @@ export class RaycastHUD extends Container {
   private weaponNameText: Text;
   private ammoText: Text;
   private ammoIcon: Sprite;
+  private switchHint: Text;
 
   // Toast notification
   private toastContainer: Container;
@@ -131,16 +132,16 @@ export class RaycastHUD extends Container {
     this.weaponContainer.addChild(this.ammoText);
 
     // Small weapon switch hotkey / tap indicator
-    const switchHint = new Text("[1-3 / TAP]", {
+    this.switchHint = new Text("[1-3 / TAP]", {
       fontFamily: "Arial, sans-serif",
       fontSize: 10,
       fontWeight: "bold",
       fill: 0x88bbdd,
       letterSpacing: 0.5,
     });
-    switchHint.resolution = dpr;
-    switchHint.position.set(170, 36);
-    this.weaponContainer.addChild(switchHint);
+    this.switchHint.resolution = dpr;
+    this.switchHint.position.set(170, 36);
+    this.weaponContainer.addChild(this.switchHint);
 
     this.addChild(this.weaponContainer);
 
@@ -278,6 +279,12 @@ export class RaycastHUD extends Container {
     } else {
       this.weaponNameText.text = "UNARMED";
       this.ammoText.text = "--";
+    }
+  }
+
+  public adaptForMobile(): void {
+    if (this.switchHint) {
+      this.switchHint.text = "[TAP / WPN]";
     }
   }
 

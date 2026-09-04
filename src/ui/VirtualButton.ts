@@ -66,6 +66,9 @@ export class VirtualButton extends Container implements IDisposable {
 
   private onPointerDown(e: FederatedPointerEvent): void {
     if (this.activePointerId !== null) return;
+    if (e && typeof e.stopPropagation === "function") {
+      e.stopPropagation();
+    }
     this.activePointerId = e.pointerId;
     this._isPressed = true;
     this.drawButton(true);
@@ -75,6 +78,9 @@ export class VirtualButton extends Container implements IDisposable {
 
   private onPointerUp(e: FederatedPointerEvent): void {
     if (this.activePointerId === e.pointerId) {
+      if (e && typeof e.stopPropagation === "function") {
+        e.stopPropagation();
+      }
       this.activePointerId = null;
       this._isPressed = false;
       this.drawButton(false);

@@ -330,10 +330,12 @@ export class RaycastScene extends BaseScene {
 
     // Overlay mobile on-screen controls (only on mobile devices)
     if (this.isMobileDevice()) {
+      this.hud.adaptForMobile();
       this.mobileControls = new MobileControls();
       this.mobileControls.zIndex = 80;
       this.mobileControls.on("action", () => this.tryOpenDoor());
       this.mobileControls.on("fire", () => this.tryShoot());
+      this.mobileControls.on("switchWeapon", () => this.playerController.cycleWeapon(1));
       this.addChild(this.mobileControls);
     }
 
@@ -1297,6 +1299,10 @@ export class RaycastScene extends BaseScene {
     );
 
     this.hud.on("switchWeapon", () => {
+      this.playerController.cycleWeapon(1);
+    });
+
+    this.weaponView.on("switchWeapon", () => {
       this.playerController.cycleWeapon(1);
     });
   }

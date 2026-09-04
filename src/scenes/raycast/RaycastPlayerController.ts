@@ -201,10 +201,18 @@ export class RaycastPlayerController {
   }
 
   public cycleWeapon(direction: number = 1): void {
+    if (this.inventory.size <= 1) {
+      this.hud.showToast("[!] No other weapons in inventory", 0x88bbdd);
+      return;
+    }
+
     const owned = Array.from(this.inventory.keys()).filter(
       (k) => (this.inventory.get(k) ?? 0) > 0
     );
-    if (owned.length <= 1) return;
+    if (owned.length <= 1) {
+      this.hud.showToast("[!] Other weapons out of ammo", 0xffaa00);
+      return;
+    }
 
     const currIdx = this.state.equippedWeapon !== null ? owned.indexOf(this.state.equippedWeapon) : -1;
     let nextIdx: number;

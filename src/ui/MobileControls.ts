@@ -13,6 +13,7 @@ export class MobileControls extends Container implements IDisposable {
   private btnTurnRight: VirtualButton;
   private btnFire: VirtualButton;
   private btnAction: VirtualButton;
+  private btnWeapon: VirtualButton;
   private btnFullscreen: VirtualButton;
   private buttonTurnSpeed: number = 0.04;
 
@@ -25,6 +26,17 @@ export class MobileControls extends Container implements IDisposable {
     // 1. Right-side touch look area (swipe anywhere on right half of screen to look)
     this.lookArea = new TouchLookArea(screenW / 2, screenH);
     this.lookArea.position.set(screenW / 2, 0);
+    this.lookArea.on("tap", (e: any) => {
+      const posX = e.global?.x ?? e.x ?? 0;
+      const posY = e.global?.y ?? e.y ?? 0;
+      // Check if tapped over HUD weapon info container (bottom right corner)
+      const inWeaponHud = posX >= screenW - 270 && posY >= screenH - 95;
+      // Check if tapped over weapon sprite area (lower right-center)
+      const inWeaponView = posX >= screenW * 0.45 && posX <= screenW * 0.85 && posY >= screenH * 0.50;
+      if (inWeaponHud || inWeaponView) {
+        (this as any).emit("switchWeapon");
+      }
+    });
     this.addChild(this.lookArea);
 
     // 2. Left-side thumbstick for walking & strafing
@@ -58,7 +70,15 @@ export class MobileControls extends Container implements IDisposable {
     });
     this.addChild(this.btnAction);
 
-    // 7. Fullscreen Button ([FS])
+    // 7. Weapon Switch Button ([WPN])
+    this.btnWeapon = new VirtualButton(42, "WPN", 0x224466);
+    this.btnWeapon.position.set(screenW - 180, screenH - 230);
+    this.btnWeapon.on("tap", () => {
+      (this as any).emit("switchWeapon");
+    });
+    this.addChild(this.btnWeapon);
+
+    // 8. Fullscreen Button ([FS])
     this.btnFullscreen = new VirtualButton(36, "FS", 0x222244);
     this.btnFullscreen.position.set(screenW - 70, 60);
     this.btnFullscreen.on("tap", () => {
@@ -92,6 +112,7 @@ export class MobileControls extends Container implements IDisposable {
     this.btnTurnRight.dispose();
     this.btnFire.dispose();
     this.btnAction.dispose();
+    this.btnWeapon.dispose();
     this.btnFullscreen.dispose();
     this.destroy({ children: true });
   }
