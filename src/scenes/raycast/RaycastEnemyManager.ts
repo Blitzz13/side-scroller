@@ -10,15 +10,30 @@ import {
 import { RaycastPickupManager } from "./RaycastPickupManager";
 import { RaycastPlayerController } from "./RaycastPlayerController";
 import { gameConfig } from "../../configs/GameConfig";
+import { EnemyVoicelineManager } from "./EnemyVoicelineManager";
 
 export class RaycastEnemyManager {
   private container: Container;
   private enemies: RaycastEnemy[] = [];
   private spritesheets: Record<string, Spritesheet> = {};
   private nextEnemyId: number = 1;
+  private voicelineManager: EnemyVoicelineManager;
 
   constructor(container: Container) {
     this.container = container;
+    this.voicelineManager = new EnemyVoicelineManager();
+  }
+
+  public getVoicelineManager(): EnemyVoicelineManager {
+    return this.voicelineManager;
+  }
+
+  public getAliveEnemies(): RaycastEnemy[] {
+    return this.enemies.filter((e) => !e.isDead);
+  }
+
+  public onPlayerThrowGrenade(playerX: number, playerY: number): void {
+    this.voicelineManager.onPlayerThrowGrenade(playerX, playerY, this.enemies);
   }
 
   public async initSpritesheets(): Promise<void> {
@@ -161,6 +176,10 @@ export class RaycastEnemyManager {
       enemy.animatedSprite.mask = mask;
       enemy.occlusionMask = mask;
     }
+
+    enemy.onDeathCallback = (deadEnemy) => {
+      this.voicelineManager.onEnemyDeath(deadEnemy.id);
+    };
 
     this.enemies.push(enemy);
     return enemy;
@@ -346,6 +365,11 @@ export class RaycastEnemyManager {
     };
 
     for (const enemy of this.enemies) {
+      const dx = playerX - enemy.x;
+      const dy = playerY - enemy.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const los = losChecker(enemy.x, enemy.y, playerX, playerY);
+
       enemy.update(
         delta,
         playerX,
@@ -353,6 +377,15 @@ export class RaycastEnemyManager {
         losChecker,
         moveChecker,
         onShootPlayer
+      );
+
+      // Trigger stormtrooper voicelines based on visibility & proximity
+      this.voicelineManager.onEnemyUpdate(
+        enemy,
+        playerX,
+        playerY,
+        los,
+        dist
       );
 
       // Handle weapon drop on death
@@ -375,6 +408,9 @@ export class RaycastEnemyManager {
         }
       }
     }
+
+    // Update queue, concurrency, and spacing for stormtrooper voicelines
+    this.voicelineManager.update(delta, playerX, playerY);
   }
 
   public render(
@@ -550,10 +586,7 @@ export class RaycastEnemyManager {
     }
 
     if (closestEnemy) {
-      const killed = closestEnemy.takeDamage(damage, onEnemyKilled);
-      if (killed && onEnemyKilled) {
-        onEnemyKilled(closestEnemy);
-      }
+      closestEnemy.takeDamage(damage, onEnemyKilled);
       return closestEnemy;
     }
 
@@ -580,10 +613,7 @@ export class RaycastEnemyManager {
       if (dist <= radius) {
         const falloff = 1 - dist / radius;
         const damage = Math.max(15, Math.round(maxDamage * falloff));
-        const killed = enemy.takeDamage(damage, onEnemyKilled);
-        if (killed && onEnemyKilled) {
-          onEnemyKilled(enemy);
-        }
+        enemy.takeDamage(damage, onEnemyKilled);
         hitEnemies.push(enemy);
       }
     }
@@ -605,6 +635,7 @@ export class RaycastEnemyManager {
 
   public dispose(): void {
     this.disposeEnemies();
+    this.voicelineManager.dispose();
     this.spritesheets = {};
   }
 }

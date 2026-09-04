@@ -1291,7 +1291,7 @@ export class RaycastScene extends BaseScene {
 
     // 1. Throwable weapons (Thermal Detonator)
     if (currentCfg.isThrowable) {
-      this.playerController.tryShoot(() => {
+      const started = this.playerController.tryShoot(() => {
         // Detonator projectile releases at peak toss of first-person throw animation
         this.detonatorManager.throwDetonator(
           this.player.x,
@@ -1311,6 +1311,11 @@ export class RaycastScene extends BaseScene {
           }
         );
       });
+
+      if (started) {
+        // Alert stormtroopers immediately when grenade throw begins
+        this.enemyManager.onPlayerThrowGrenade(this.player.x, this.player.y);
+      }
       return;
     }
 

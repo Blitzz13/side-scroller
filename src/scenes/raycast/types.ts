@@ -207,3 +207,7 @@ export interface DestructableWallConfig {
   linkIds?: string[] | string | number;
 }
 
+export * from "../../configs/interfaces/IEnemyVoicelineConfig";
+export * from "../../configs/EnemyVoicelineConfig";
+export * from "./EnemyVoicelineManager";
+

@@ -1,12 +1,15 @@
 import { AssetsManifest, BitmapFont, RoundedRectangle } from "pixi.js";
 import { DoorOpen, DoorSlideMode } from "../scenes/raycast/types";
+import { enemyVoicelineConfig, stormtrooperVoicelineConfig } from "./EnemyVoicelineConfig";
 
-export { DoorOpen, DoorSlideMode };
+export { DoorOpen, DoorSlideMode, enemyVoicelineConfig, stormtrooperVoicelineConfig };
 
 export const gameConfig = {
   width: 1280,
   height: 720,
   defaultDoorSlide: DoorOpen.UP,
+  enemyVoicelines: enemyVoicelineConfig,
+  stormtrooperVoicelines: enemyVoicelineConfig,
 };
 
 export function registerFonts(): void {
@@ -100,6 +103,22 @@ export const manifest: AssetsManifest = {
           {
             alias: "stormtrooper_death_1",
             src: "./assets/stormtrooper_death_1.mp3"
+          },
+          {
+            alias: "stormtrooper_grenade",
+            src: "./assets/raycast/voicelines/storm_trooper/grenade_grenade.mp3"
+          },
+          {
+            alias: "stormtrooper_hear_something",
+            src: "./assets/raycast/voicelines/storm_trooper/i_hear_something.mp3"
+          },
+          {
+            alias: "stormtrooper_rebel_scum",
+            src: "./assets/raycast/voicelines/storm_trooper/rebel_scum.mp3"
+          },
+          {
+            alias: "stormtrooper_there_he_is",
+            src: "./assets/raycast/voicelines/storm_trooper/there_he_is.mp3"
           },
         ]
       },

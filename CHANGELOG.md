@@ -2,6 +2,67 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-04] - Generic Enemy Voicelines, Concurrency Control & Audio Death Cutoff
+
+### 1. Generic Enemy Voiceline Architecture & Extensibility
+- **Generalized Enemy Architecture** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/configs/interfaces/IEnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IEnemyVoicelineConfig.ts), [`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts)):
+  - Refactored and generalized the voice system from Stormtrooper-specific classes to an extensible enemy framework: `EnemyVoicelineManager`, `IEnemyVoicelineConfig`, `IEnemyVoicePool`, and `enemyVoicelineConfig`.
+  - Added backward-compatibility aliases ([`src/scenes/raycast/StormtrooperVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/StormtrooperVoicelineManager.ts), [`src/configs/interfaces/IStormtrooperVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IStormtrooperVoicelineConfig.ts), [`src/configs/StormtrooperVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/StormtrooperVoicelineConfig.ts)) ensuring legacy references remain fully functional.
+- **Dynamic Voice Pool Hierarchy & Registry**:
+  - Implemented 3-tier dynamic voice pool resolution via `getVoicePool(enemy)`:
+    1. **Enemy instance override**: `enemy.config.voicelines` (per-enemy custom pool in `IRaycastEnemyConfig`).
+    2. **Registered enemy type pool**: `voicePools[enemyType]` (e.g. `registerEnemyVoicePool("officer", pool)` or `"droid"`).
+    3. **Default voice pool**: Fallback pool defined in `defaultVoicePool`.
+  - Enables adding new enemy types (Imperial Officers, Battle Droids, Commanders) or individual boss voice sets without modifying manager code.
+
+### 2. Situational Audio Triggers & Asset Integration
+- **Sound Asset Registration** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts)):
+  - Registered authentic Stormtrooper audio assets in the PixiJS sound manifest:
+    - `"stormtrooper_grenade"`: [`assets/raycast/voicelines/storm_trooper/grenade_grenade.mp3`](file:///D:/Projects/side-scroller/assets/raycast/voicelines/storm_trooper/grenade_grenade.mp3)
+    - `"stormtrooper_hear_something"`: [`assets/raycast/voicelines/storm_trooper/i_hear_something.mp3`](file:///D:/Projects/side-scroller/assets/raycast/voicelines/storm_trooper/i_hear_something.mp3)
+    - `"stormtrooper_rebel_scum"`: [`assets/raycast/voicelines/storm_trooper/rebel_scum.mp3`](file:///D:/Projects/side-scroller/assets/raycast/voicelines/storm_trooper/rebel_scum.mp3)
+    - `"stormtrooper_there_he_is"`: [`assets/raycast/voicelines/storm_trooper/there_he_is.mp3`](file:///D:/Projects/side-scroller/assets/raycast/voicelines/storm_trooper/there_he_is.mp3)
+- **Contextual State Triggers** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Player Spotted Callouts**: When an enemy gains line of sight to the player (`hasLOS = true`), randomly selects between `"stormtrooper_rebel_scum"` and `"stormtrooper_there_he_is"`.
+  - **Suspicious Proximity Callouts**: When the player is close ($dist \le hearingRange$, default $7.0$ grid units) but out of sight (`hasLOS = false`, e.g. behind walls or closed doors), triggers `"stormtrooper_hear_something"`.
+  - **Grenade Detection**: When a thermal detonator is thrown, nearby enemies react with `"stormtrooper_grenade"`.
+
+### 3. Concurrency Limiting, Priority Queue & Spacing
+- **Configurable Concurrency & Spacing Controls** ([`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - `maxConcurrentVoicelines: 1`: Limits how many voice lines can play at once across all enemies, preventing cacophonous speech overlap.
+  - `voicelineSpacing: 2500` ms: Enforces natural conversational spacing between consecutive voice lines.
+  - Runtime setters `setMaxConcurrentVoicelines(count)` and `setVoicelineSpacing(spacingMs)` allow dynamic tuning.
+- **Priority Queue & Cooldowns**:
+  - Implemented priority queue (`QueuedVoiceline`) that prioritizes high-urgency callouts (grenades > spotted > suspicious) and discards stale audio requests (`maxAgeMs`).
+  - Per-category cooldowns to prevent repetitive spam: `spottedCooldown: 7000` ms, `suspiciousCooldown: 10000` ms, `grenadeCooldown: 1200` ms.
+- **Spatial Panning & Volume Attenuation**:
+  - Automatically calculates 3D directional panning based on angle to player camera and distance attenuation with configurable `minSpatialVolume: 0.5`.
+
+### 4. Emergency Priority & Guaranteed Grenade Shouts
+- **Zero-Latency Grenade Windup Trigger** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Triggered immediately when the player initiates a throw in `playThrowAnimation()` rather than waiting for projectile release, ensuring immediate audible feedback.
+- **Emergency Priority Interruption** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Grenade alerts bypass normal conversational spacing checks.
+  - If voice channels are full (`activeHandles.size >= maxConcurrentVoicelines`), casual chatter ("i hear something", "rebel scum") is immediately interrupted and stopped to play the grenade shout.
+- **Reliable Fallback Positioning**:
+  - Finds the closest alive enemy to shout; if all enemies on the map are eliminated or out of range, audio falls back to player coordinates at high volume ($0.95$) so the player is guaranteed to hear the reaction every time.
+
+### 5. Instant Sound & Voiceline Cutoff on Enemy Death
+- **Active Sound Instance Tracking** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Added `activeSoundInstances` and `trackSoundInstance(res)` to track all running `@pixi/sound` instances (pain sounds, attack sounds, voice clips).
+  - Added `stopActiveSounds()` which stops every playing audio instance immediately.
+- **Immediate Termination on Fatal Damage**:
+  - In `takeDamage()`, when health reaches 0, `stopActiveSounds()` is executed synchronously alongside `onDeathCallback`.
+  - Invokes `EnemyVoicelineManager.onEnemyDeath(enemyId)`:
+    - Immediately calls `.stop()` on any active voice lines belonging to the slain enemy.
+    - Purges any pending lines for that enemy from the voiceline queue.
+    - Adds enemy ID to `deadEnemyIds` to reject any pending asynchronous playback callbacks.
+    - Protects grenade shouts from cutoff if the enemy is eliminated by the grenade explosion while shouting.
+- **Disposal Safety**:
+  - `dispose()` calls `stopActiveSounds()` to prevent orphaned audio playback when enemies are cleared or scenes unload.
+
+---
+
 ## [2026-09-02] - Tiled Custom Types Refactor & Bidirectional Door Sliding
 
 ### 1. Tiled Custom Types Schema Architecture

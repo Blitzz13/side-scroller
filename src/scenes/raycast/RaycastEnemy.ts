@@ -28,6 +28,51 @@ export class RaycastEnemy {
   public lastShotTime: number = 0;
   public hasDroppedLoot: boolean = false;
 
+  // Voiceline & awareness tracking
+  public wasSeeingPlayer: boolean = false;
+  public lastSpottedTime: number = 0;
+  public lastSuspiciousTime: number = 0;
+
+  // Sound instance tracking to allow immediate stopping on death
+  public onDeathCallback?: (enemy: RaycastEnemy) => void;
+  private activeSoundInstances: Set<any> = new Set();
+
+  public stopActiveSounds(): void {
+    for (const inst of Array.from(this.activeSoundInstances)) {
+      try {
+        if (typeof inst?.stop === "function") {
+          inst.stop();
+        }
+      } catch {}
+    }
+    this.activeSoundInstances.clear();
+  }
+
+  private trackSoundInstance(res: any): void {
+    if (!res) return;
+    if (typeof res.then === "function") {
+      res
+        .then((inst: any) => {
+          if (this.isDead) {
+            try {
+              inst?.stop?.();
+            } catch {}
+          } else if (inst) {
+            this.activeSoundInstances.add(inst);
+          }
+        })
+        .catch(() => {});
+    } else {
+      if (this.isDead) {
+        try {
+          res.stop?.();
+        } catch {}
+      } else {
+        this.activeSoundInstances.add(res);
+      }
+    }
+  }
+
   constructor(
     id: number,
     config: IRaycastEnemyConfig,
@@ -130,6 +175,17 @@ export class RaycastEnemy {
     if (this.health <= 0) {
       this.state = "dead";
 
+      // Stop any active sounds (voicelines, attacks, pain) immediately
+      this.stopActiveSounds();
+
+      if (this.onDeathCallback) {
+        this.onDeathCallback(this);
+      }
+
+      if (onDeath) {
+        onDeath(this);
+      }
+
       // Play death animation
       this.playAnimation("death_1", false, 0.14);
 
@@ -145,19 +201,17 @@ export class RaycastEnemy {
         }
       }
 
-      if (onDeath) {
-        onDeath(this);
-      }
       return true;
     }
 
-    // Play pain sound
+    // Play pain sound (only if alive)
     if (this.config.painSounds && this.config.painSounds.length > 0) {
       const snd = this.config.painSounds[
         Math.floor(Math.random() * this.config.painSounds.length)
       ];
       try {
-        sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
+        const res = sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
+        this.trackSoundInstance(res);
       } catch (e) {
         console.warn("Failed to play enemy pain sound:", e);
       }
@@ -246,7 +300,8 @@ export class RaycastEnemy {
               Math.floor(Math.random() * this.config.attackSounds.length)
             ];
             try {
-              sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
+              const res = sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
+              this.trackSoundInstance(res);
             } catch (e) {
               console.warn("Failed to play enemy attack sound:", e);
             }
@@ -342,6 +397,7 @@ export class RaycastEnemy {
   }
 
   public dispose(): void {
+    this.stopActiveSounds();
     if (this.animatedSprite) {
       this.animatedSprite.mask = null;
       this.animatedSprite.stop();

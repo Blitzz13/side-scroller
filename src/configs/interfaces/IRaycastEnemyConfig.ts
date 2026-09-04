@@ -1,6 +1,7 @@
 import { ISoundConfig } from "./ISoundConfig";
 import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
 import { RaycastWeaponType } from "../../enums/RaycastWeaponType";
+import { IEnemyVoicePool } from "./IStormtrooperVoicelineConfig";
 
 export interface IRaycastEnemyConfig {
   type: RaycastEnemyType;
@@ -24,4 +25,5 @@ export interface IRaycastEnemyConfig {
   painSounds?: ISoundConfig[];
   deathSounds?: ISoundConfig[];
   attackSounds?: ISoundConfig[];
+  voicelines?: IEnemyVoicePool;
 }
