@@ -10,6 +10,7 @@ export const gameConfig = {
   defaultDoorSlide: DoorOpen.UP,
   enemyVoicelines: enemyVoicelineConfig,
   stormtrooperVoicelines: enemyVoicelineConfig,
+  musicVolume: 0.45,
 };
 
 export function registerFonts(): void {
@@ -95,6 +96,10 @@ export const manifest: AssetsManifest = {
           {
             alias: "door_1",
             src: "./assets/sounds/door_1.mp3"
+          },
+          {
+            alias: "calm_loop",
+            src: "./assets/sounds/calm_loop.mp3"
           },
           {
             alias: "stormtrooper_pain_1",

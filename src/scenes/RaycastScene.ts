@@ -159,6 +159,7 @@ export class RaycastScene extends BaseScene {
   private lockedDoors: Record<string, string> = {};
   private isLeftMouseDown: boolean = false;
   private isRightMouseDown: boolean = false;
+  private bgMusicInstance: any = null;
 
   constructor(stage: Container, scale: number, level: string = "test_level") {
     super(stage, scale);
@@ -289,6 +290,7 @@ export class RaycastScene extends BaseScene {
     this.setupControls();
     this.loadLevel(level).then(() => {
       Ticker.shared.add(this.tick, this);
+      this.playBackgroundMusic();
     });
   }
 
@@ -1119,8 +1121,41 @@ export class RaycastScene extends BaseScene {
     return nextMode;
   }
 
+  public playBackgroundMusic(): void {
+    if (this.bgMusicInstance) return;
+    try {
+      if (!sound.exists("calm_loop")) {
+        sound.add("calm_loop", { url: "./assets/sounds/calm_loop.mp3", preload: true });
+      }
+      const res = sound.play("calm_loop", {
+        loop: true,
+        volume: gameConfig.musicVolume ?? 0.35,
+      });
+      if (res && typeof (res as any).then === "function") {
+        (res as any)
+          .then((inst: any) => {
+            this.bgMusicInstance = inst;
+          })
+          .catch(() => {});
+      } else {
+        this.bgMusicInstance = res;
+      }
+    } catch (e) {
+      console.warn("Could not start background music calm_loop:", e);
+    }
+  }
+
   public dispose(): void {
     Ticker.shared.remove(this.tick, this);
+    if (this.bgMusicInstance) {
+      try {
+        this.bgMusicInstance.stop?.();
+      } catch {}
+      this.bgMusicInstance = null;
+    }
+    try {
+      sound.stop("calm_loop");
+    } catch {}
     this.removeChildren();
     if (this.bgTexture) {
       this.bgTexture.destroy(true);
@@ -1244,6 +1279,10 @@ export class RaycastScene extends BaseScene {
       e.preventDefault();
     }
 
+    if (!this.bgMusicInstance) {
+      this.playBackgroundMusic();
+    }
+
     if (!this.isMobileDevice()) {
       // If pointer is not locked yet, request pointer lock on click on desktop
       if (!document.pointerLockElement) {
@@ -1363,6 +1402,9 @@ export class RaycastScene extends BaseScene {
   }
 
   private keyDownHandler = (e: KeyboardEvent) => {
+    if (!this.bgMusicInstance) {
+      this.playBackgroundMusic();
+    }
     if (e.key in this.keys) {
       this.keys[e.key] = true;
     }
