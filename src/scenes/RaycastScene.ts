@@ -122,17 +122,25 @@ export class RaycastScene extends BaseScene {
   private rawTexArray: (RawTextureData | undefined)[] = [];
   // Global row-skip bounds
   private globalMinWallTop: number = 0;
+  private globalMaxWallTop: number = 0;
+  private globalMinWallBottom: number = 0;
   private globalMaxWallBottom: number = 0;
 
   private wallTop: Int32Array = new Int32Array(gameConfig.width);
   private wallBottom: Int32Array = new Int32Array(gameConfig.width);
   private hitCounts: Int32Array = new Int32Array(gameConfig.width);
+  private prevHitCounts: Int32Array = new Int32Array(gameConfig.width);
   private zBuffer: Float64Array = new Float64Array(gameConfig.width);
 
   private mapObjects: MapObject[] = [];
   private objectContainer!: Container;
   private objectSpritePool: Sprite[] = [];
   private objectSpritePoolIndex: number = 0;
+
+  // Layered containers for clean scene hierarchy and fast transforms
+  private worldContainer!: Container;
+  private backgroundContainer!: Container;
+  private wallContainer!: Container;
 
   private bgCanvas!: HTMLCanvasElement;
   private bgCtx!: CanvasRenderingContext2D;
@@ -141,6 +149,26 @@ export class RaycastScene extends BaseScene {
   private bgTexture!: Texture;
   private bgSprite!: Sprite;
   private skyBuffer: Uint32Array = new Uint32Array(0);
+  private graphicsUsed: boolean = false;
+
+  // Reusable zero-allocation arrays and constants (High Priority Fixes)
+  private static readonly ZERO_VECTOR = { x: 0, y: 0 };
+  private static readonly NEARBY_OFFSETS = [
+    [0, 0],
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+  private allThinWalls: Array<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    texture: number;
+    orientation: "vertical" | "horizontal";
+  }> = [];
+  private doorEntries: Array<{ key: string; flatIdx: number; x: number; y: number }> = [];
 
   private mobileControls!: MobileControls;
   private weaponView!: RaycastWeaponView;
@@ -179,6 +207,11 @@ export class RaycastScene extends BaseScene {
       planeY: 0.8,
     };
 
+    // 1. World container holding all 3D world elements (supports isolated sorting and shake)
+    this.worldContainer = new Container();
+    this.worldContainer.sortableChildren = true;
+    this.addChild(this.worldContainer);
+
     // Background sprite for floor & ceiling/sky rendering (native 1:1 crisp resolution)
     this.bgCanvas = document.createElement("canvas");
     this.bgCanvas.width = gameConfig.width;
@@ -193,12 +226,22 @@ export class RaycastScene extends BaseScene {
     this.bgSprite = new Sprite(this.bgTexture);
     this.bgSprite.width = gameConfig.width;
     this.bgSprite.height = gameConfig.height;
-    this.addChild(this.bgSprite);
 
     this.initSkyGradient();
 
     this.graphics = new Graphics();
-    this.addChild(this.graphics);
+
+    // Background layer container (floor, ceiling, sky, graphics fallback)
+    this.backgroundContainer = new Container();
+    this.backgroundContainer.zIndex = 0;
+    this.backgroundContainer.addChild(this.bgSprite);
+    this.backgroundContainer.addChild(this.graphics);
+    this.worldContainer.addChild(this.backgroundContainer);
+
+    // Wall layer container (isolates the 7,680 wall column slice sprites)
+    this.wallContainer = new Container();
+    this.wallContainer.zIndex = 10;
+    this.worldContainer.addChild(this.wallContainer);
 
     for (let i = 0; i < gameConfig.width; i++) {
       const columnSprites: Sprite[] = [];
@@ -207,7 +250,7 @@ export class RaycastScene extends BaseScene {
         sprite.width = 1;
         sprite.x = i;
         sprite.visible = false;
-        this.addChild(sprite);
+        this.wallContainer.addChild(sprite);
         columnSprites.push(sprite);
       }
       this.spritePool.push(columnSprites);
@@ -234,9 +277,10 @@ export class RaycastScene extends BaseScene {
 
     // Container for billboard sprites (rendered on top of wall columns with depth testing)
     this.objectContainer = new Container();
-    this.addChild(this.objectContainer);
+    this.objectContainer.zIndex = 20;
+    this.worldContainer.addChild(this.objectContainer);
 
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < 2000; i++) {
       const sprite = new Sprite();
       sprite.width = 1;
       sprite.visible = false;
@@ -244,24 +288,39 @@ export class RaycastScene extends BaseScene {
       this.objectSpritePool.push(sprite);
     }
 
-    // Container for animated world props (keycards, rotating pickups) with hardware rotation & Z-ordering
+    // Container for animated world props (keycards, rotating pickups)
     this.animatedPickupContainer = new Container();
+    this.animatedPickupContainer.zIndex = 30;
     this.animatedPickupContainer.sortableChildren = true;
-    this.addChild(this.animatedPickupContainer);
+    this.worldContainer.addChild(this.animatedPickupContainer);
 
-    // Container for animated enemy sprites with hardware rotation & Z-ordering (in 3D world)
+    // Container for animated enemy sprites
     this.enemyContainer = new Container();
+    this.enemyContainer.zIndex = 40;
     this.enemyContainer.sortableChildren = true;
-    this.addChild(this.enemyContainer);
+    this.worldContainer.addChild(this.enemyContainer);
 
     this.enemyManager = new RaycastEnemyManager(this.enemyContainer);
 
+    // 3D Detonator projectile & explosion container
+    this.detonatorContainer = new Container();
+    this.detonatorContainer.zIndex = 50;
+    this.detonatorContainer.sortableChildren = true;
+    this.worldContainer.addChild(this.detonatorContainer);
+
+    this.detonatorManager = new ThermalDetonatorManager(this.detonatorContainer);
+    this.detonatorManager.onDetonate = (x, y, z, radius, damage) => {
+      this.handleExplosionDetonation(x, y, z, radius, damage);
+    };
+
     // First-person equipped weapon view (rendered in front of 3D world, behind HUD)
     this.weaponView = new RaycastWeaponView();
+    this.weaponView.zIndex = 60;
     this.addChild(this.weaponView);
 
     // Modern Star Wars HUD (crosshair, health bar, ammo counter, pickup toasts, screen flash)
     this.hud = new RaycastHUD();
+    this.hud.zIndex = 70;
     this.addChild(this.hud);
 
     this.playerController = new RaycastPlayerController(this.weaponView, this.hud);
@@ -269,19 +328,10 @@ export class RaycastScene extends BaseScene {
     this.breakableManager = new RaycastBreakableManager();
     this.destructableWallManager = new DestructableWallManager();
 
-    // 3D Detonator projectile & explosion container
-    this.detonatorContainer = new Container();
-    this.detonatorContainer.sortableChildren = true;
-    this.addChild(this.detonatorContainer);
-
-    this.detonatorManager = new ThermalDetonatorManager(this.detonatorContainer);
-    this.detonatorManager.onDetonate = (x, y, z, radius, damage) => {
-      this.handleExplosionDetonation(x, y, z, radius, damage);
-    };
-
     // Overlay mobile on-screen controls (only on mobile devices)
     if (this.isMobileDevice()) {
       this.mobileControls = new MobileControls();
+      this.mobileControls.zIndex = 80;
       this.mobileControls.on("action", () => this.tryOpenDoor());
       this.mobileControls.on("fire", () => this.tryShoot());
       this.addChild(this.mobileControls);
@@ -972,6 +1022,7 @@ export class RaycastScene extends BaseScene {
     this.doorOrientationsFlat = new Uint8Array(totalCells);
     this.doorSlideModesFlat = new Uint8Array(totalCells);
 
+    this.doorEntries = [];
     let maxTileId = 0;
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
@@ -995,6 +1046,7 @@ export class RaycastScene extends BaseScene {
         const doorKey = `${x},${y}`;
         if (doorKey in this.doorStates) {
           this.doorStatesFlat[idx] = this.doorStates[doorKey];
+          this.doorEntries.push({ key: doorKey, flatIdx: idx, x, y });
         }
 
         // Track max tile IDs for flat texture array
@@ -1457,24 +1509,33 @@ export class RaycastScene extends BaseScene {
   };
 
   private tick(delta: number) {
-    // Screen shake update
+    // Screen shake update (only shakes the 3D world, keeping HUD and overlays steady)
     if (this.shakeDuration > 0) {
       this.shakeDuration -= delta / 60;
       const offsetX = (Math.random() * 2 - 1) * this.shakeIntensity;
       const offsetY = (Math.random() * 2 - 1) * this.shakeIntensity;
-      this.position.set(offsetX, offsetY);
+      this.worldContainer.position.set(offsetX, offsetY);
       this.shakeIntensity = Math.max(0, this.shakeIntensity - 15 * (delta / 60));
-    } else {
-      this.position.set(0, 0);
+    } else if (this.worldContainer.x !== 0 || this.worldContainer.y !== 0) {
+      this.worldContainer.position.set(0, 0);
     }
 
     this.updatePlayer(delta);
     this.updateDoors(delta);
     this.pickupManager.update(delta);
 
-    const allThinWalls = this.thinWalls.concat(
-      this.destructableWallManager ? this.destructableWallManager.getThinWalls() : []
-    );
+    // Build allThinWalls into reusable array without concat allocations
+    this.allThinWalls.length = 0;
+    for (let i = 0; i < this.thinWalls.length; i++) {
+      this.allThinWalls.push(this.thinWalls[i]);
+    }
+    if (this.destructableWallManager) {
+      const destWalls = this.destructableWallManager.getThinWalls();
+      for (let i = 0; i < destWalls.length; i++) {
+        this.allThinWalls.push(destWalls[i]);
+      }
+    }
+    const allThinWalls = this.allThinWalls;
 
     // Update detonators in-flight physics, bouncing, timer, and active explosions
     if (this.detonatorManager) {
@@ -1512,7 +1573,7 @@ export class RaycastScene extends BaseScene {
     }
 
     // Determine movement for weapon bobbing
-    const joyVector = this.mobileControls?.moveVector ?? { x: 0, y: 0 };
+    const joyVector = this.mobileControls?.moveVector ?? RaycastScene.ZERO_VECTOR;
     const isMoving =
       this.keys.w ||
       this.keys.s ||
@@ -1535,7 +1596,7 @@ export class RaycastScene extends BaseScene {
     const moveSpeed = this.moveSpeed * delta;
 
     // Mobile joystick input
-    const joyVector = this.mobileControls?.moveVector ?? { x: 0, y: 0 };
+    const joyVector = this.mobileControls?.moveVector ?? RaycastScene.ZERO_VECTOR;
     const joyX = joyVector.x;
     const joyY = joyVector.y; // Negative is forward, positive is backward
 
@@ -1592,13 +1653,18 @@ export class RaycastScene extends BaseScene {
   private tryMove(newX: number, newY: number): boolean {
     const targetX = Math.floor(newX);
     const targetY = Math.floor(newY);
-    const tile = this.map[targetY]?.[targetX];
-    const doorKey = `${targetX},${targetY}`;
-    const tileType = this.tileTypes[tile];
-    const isDoorOpen =
-      tileType === "door" && Math.abs(this.doorStates[doorKey] ?? 0) >= 0.7;
+    if (targetX < 0 || targetX >= this.mapWidth || targetY < 0 || targetY >= this.mapHeight) {
+      return false;
+    }
 
-    for (const wall of this.thinWalls) {
+    const flatIdx = targetY * this.mapWidth + targetX;
+    const tile = this.mapFlat[flatIdx];
+    const isDoorOpen =
+      this.tileTypeFlags[flatIdx] === RaycastScene.TILE_DOOR &&
+      Math.abs(this.doorStatesFlat[flatIdx]) >= 0.7;
+
+    for (let i = 0; i < this.thinWalls.length; i++) {
+      const wall = this.thinWalls[i];
       const minX = Math.min(wall.x1, wall.x2);
       const maxX = Math.max(wall.x1, wall.x2);
       const minY = Math.min(wall.y1, wall.y2);
@@ -1625,26 +1691,22 @@ export class RaycastScene extends BaseScene {
   }
 
   private updateDoors(delta: number) {
-    for (const key in this.doorStates) {
-      const state = this.doorStates[key];
-      if (typeof state === "number") {
-        if (state < 0) {
-          // Closing the door
-          this.doorStates[key] = state + 0.05 * delta;
-          if (this.doorStates[key] > 0) {
-            this.doorStates[key] = 0;
-          } // Reset to closed
-        } else if (state > 0) {
-          // Opening the door
-          this.doorStates[key] = state + 0.05 * delta;
-          if (this.doorStates[key] > 1) {
-            this.doorStates[key] = 1; // Fully open
-          }
-        }
-        // Sync to flat array for zero-allocation lookups during raycasting
-        const parts = key.split(",");
-        const flatIdx = parseInt(parts[1]) * this.mapWidth + parseInt(parts[0]);
-        this.doorStatesFlat[flatIdx] = this.doorStates[key];
+    const entries = this.doorEntries;
+    for (let i = 0; i < entries.length; i++) {
+      const door = entries[i];
+      const state = this.doorStatesFlat[door.flatIdx];
+      if (state < 0) {
+        // Closing the door
+        let newState = state + 0.05 * delta;
+        if (newState > 0) newState = 0;
+        this.doorStates[door.key] = newState;
+        this.doorStatesFlat[door.flatIdx] = newState;
+      } else if (state > 0 && state < 1) {
+        // Opening the door
+        let newState = state + 0.05 * delta;
+        if (newState > 1) newState = 1;
+        this.doorStates[door.key] = newState;
+        this.doorStatesFlat[door.flatIdx] = newState;
       }
     }
   }
@@ -1655,77 +1717,77 @@ export class RaycastScene extends BaseScene {
     const lookX = Math.floor(this.player.x + this.player.dirX * 0.85);
     const lookY = Math.floor(this.player.y + this.player.dirY * 0.85);
 
-    const nearbyOffsets = [
-      [lookX - px, lookY - py],
-      [0, 0],
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ];
+    // Prioritize cell directly in front of player
+    if (this.checkAndInteractDoor(lookX, lookY)) {
+      return;
+    }
 
-    const tested = new Set<string>();
-
-    for (const [dx, dy] of nearbyOffsets) {
-      const x = px + dx;
-      const y = py + dy;
-      const key = `${x},${y}`;
-      if (tested.has(key)) continue;
-      tested.add(key);
-
-      const tile = this.map[y]?.[x];
-      if (tile && this.tileTypes[tile] === "door") {
-        const currentState = this.doorStates[key];
-
-        // Check if door requires a keycard to unlock
-        const reqKey = this.lockedDoors[key];
-        if (reqKey && currentState === 0) {
-          if (!this.playerController.hasKeycard(reqKey)) {
-            const keyName = reqKey.charAt(0).toUpperCase() + reqKey.slice(1) + " Keycard";
-            this.hud.showToast(`[X] Access Denied! Requires ${keyName}`, 0xff3333);
-            this.hud.flashScreen(0xff0000, 0.2);
-            continue;
-          } else {
-            const keyName = reqKey.charAt(0).toUpperCase() + reqKey.slice(1) + " Keycard";
-            this.hud.showToast(`[!] Access Granted (${keyName})`, 0x00e5ff);
-          }
-        }
-
-        if (currentState === 0) {
-          this.doorStates[key] = 0.01;
-          this.doorStatesFlat[y * this.mapWidth + x] = 0.01;
-          try {
-            sound.play("door_1", { volume: 0.5 });
-          } catch (e) {
-            console.warn("Failed to play door_1 sound:", e);
-          }
-          break; // Action triggered
-        } else if (currentState === 1) {
-          this.doorStates[key] = -1;
-          this.doorStatesFlat[y * this.mapWidth + x] = -1;
-          try {
-            sound.play("door_1", { volume: 0.4 });
-          } catch (e) {
-            console.warn("Failed to play door_1 sound:", e);
-          }
-          break;
-        }
+    // Check adjacent cells
+    for (let i = 0; i < RaycastScene.NEARBY_OFFSETS.length; i++) {
+      const off = RaycastScene.NEARBY_OFFSETS[i];
+      const x = px + off[0];
+      const y = py + off[1];
+      if (x === lookX && y === lookY) continue;
+      if (this.checkAndInteractDoor(x, y)) {
+        return;
       }
     }
   }
 
+  private checkAndInteractDoor(x: number, y: number): boolean {
+    if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) return false;
+    const flatIdx = y * this.mapWidth + x;
+    if (this.tileTypeFlags[flatIdx] !== RaycastScene.TILE_DOOR) return false;
+
+    const key = `${x},${y}`;
+    const currentState = this.doorStatesFlat[flatIdx];
+
+    // Check if door requires a keycard to unlock
+    const reqKey = this.lockedDoors[key];
+    if (reqKey && currentState === 0) {
+      if (!this.playerController.hasKeycard(reqKey)) {
+        const keyName = reqKey.charAt(0).toUpperCase() + reqKey.slice(1) + " Keycard";
+        this.hud.showToast(`[X] Access Denied! Requires ${keyName}`, 0xff3333);
+        this.hud.flashScreen(0xff0000, 0.2);
+        return false;
+      } else {
+        const keyName = reqKey.charAt(0).toUpperCase() + reqKey.slice(1) + " Keycard";
+        this.hud.showToast(`[!] Access Granted (${keyName})`, 0x00e5ff);
+      }
+    }
+
+    if (currentState === 0) {
+      this.doorStates[key] = 0.01;
+      this.doorStatesFlat[flatIdx] = 0.01;
+      try {
+        sound.play("door_1", { volume: 0.5 });
+      } catch (e) {
+        console.warn("Failed to play door_1 sound:", e);
+      }
+      return true;
+    } else if (currentState === 1) {
+      this.doorStates[key] = -1;
+      this.doorStatesFlat[flatIdx] = -1;
+      try {
+        sound.play("door_1", { volume: 0.4 });
+      } catch (e) {
+        console.warn("Failed to play door_1 sound:", e);
+      }
+      return true;
+    }
+    return false;
+  }
+
   private cullThinWalls(): void {
-    this.activeThinWalls = [];
+    this.activeThinWalls.length = 0;
     const invDet =
       1.0 /
       (this.player.planeX * this.player.dirY -
         this.player.dirX * this.player.planeY);
 
-    const allThinWalls = this.thinWalls.concat(
-      this.destructableWallManager ? this.destructableWallManager.getThinWalls() : []
-    );
-
-    for (const wall of allThinWalls) {
+    const allThinWalls = this.allThinWalls;
+    for (let i = 0; i < allThinWalls.length; i++) {
+      const wall = allThinWalls[i];
       // Transform wall endpoints into player camera space
       const dx1 = wall.x1 - this.player.x;
       const dy1 = wall.y1 - this.player.y;
@@ -2114,18 +2176,26 @@ export class RaycastScene extends BaseScene {
     const drdx = rdx1 - rdx0;
     const drdy = rdy1 - rdy0;
 
-    // Pre-compute inverse screenW for step calculations
     const invScreenW = 1.0 / screenW;
 
     // 1. Ceiling casting for top half (y = 0 to horizon - 1)
+    const gMaxTop = this.globalMaxWallTop;
     for (let y = 0; y < horizon; y++) {
+      // If this entire screen row is at or below the maximum wall top, it's 100% occluded by walls
+      if (y >= gMaxTop) {
+        continue;
+      }
+
       const p = horizon - y;
+      if (p <= 0) continue;
       const rowDist = posZ / p;
 
+      const rowStart = y * screenW;
       // Early termination: if this row is beyond render distance, fill with sky
       if (rowDist > maxDist) {
-        const rowStart = y * screenW;
-        buf.set(sky.subarray(rowStart, rowStart + screenW), rowStart);
+        for (let x = 0; x < screenW; x++) {
+          buf[rowStart + x] = sky[rowStart + x];
+        }
         continue;
       }
 
@@ -2137,7 +2207,8 @@ export class RaycastScene extends BaseScene {
       const shade = 1.0 - rowDist * invMaxDist;
       const shadeInt = (Math.max(0.18, Math.min(1.0, shade)) * 256) | 0;
 
-      let bufIdx = y * screenW;
+      let bufIdx = rowStart;
+      const isFullBright = shadeInt >= 256;
 
       for (let x = 0; x < screenW; x++) {
         // OCCLUSION CULLING: Skip pixels hidden behind walls
@@ -2172,10 +2243,14 @@ export class RaycastScene extends BaseScene {
                 : ((safeY * texData.height) | 0) % texData.height;
 
               const rawPix = texData.pixels[ty * texData.width + tx];
-              const r = ((rawPix & 0xff) * shadeInt) >> 8;
-              const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
-              const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
-              buf[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
+              if (isFullBright) {
+                buf[bufIdx] = rawPix | 0xff000000;
+              } else {
+                const r = ((rawPix & 0xff) * shadeInt) >> 8;
+                const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
+                const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
+                buf[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
+              }
             } else {
               buf[bufIdx] = sky[bufIdx];
             }
@@ -2193,17 +2268,23 @@ export class RaycastScene extends BaseScene {
     }
 
     // 2. Floor casting for bottom half (y = horizon to screenH - 1)
+    const gMinBot = this.globalMinWallBottom;
     for (let y = horizon; y < screenH; y++) {
+      // If this entire screen row is above the minimum wall bottom, it's 100% occluded by walls
+      if (y < gMinBot) {
+        continue;
+      }
+
       const p = y - horizon;
-      if (p === 0) continue;
+      if (p <= 0) continue;
 
       const rowDist = posZ / p;
+      const rowStart = y * screenW;
 
       // Early termination: if this row is beyond render distance, fill with fog
       if (rowDist > maxDist) {
         const fogVal = (0x33 * 46) >> 8; // min shade (0.18) applied to 0x33
         const fogColor = 0xff000000 | (fogVal << 16) | (fogVal << 8) | fogVal;
-        const rowStart = y * screenW;
         buf.fill(fogColor, rowStart, rowStart + screenW);
         continue;
       }
@@ -2216,7 +2297,8 @@ export class RaycastScene extends BaseScene {
       const shade = 1.0 - rowDist * invMaxDist;
       const shadeInt = (Math.max(0.18, Math.min(1.0, shade)) * 256) | 0;
 
-      let bufIdx = y * screenW;
+      let bufIdx = rowStart;
+      const isFullBright = shadeInt >= 256;
 
       for (let x = 0; x < screenW; x++) {
         // OCCLUSION CULLING: Skip pixels hidden behind walls
@@ -2251,10 +2333,14 @@ export class RaycastScene extends BaseScene {
                 : ((safeY * texData.height) | 0) % texData.height;
 
               const rawPix = texData.pixels[ty * texData.width + tx];
-              const r = ((rawPix & 0xff) * shadeInt) >> 8;
-              const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
-              const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
-              buf[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
+              if (isFullBright) {
+                buf[bufIdx] = rawPix | 0xff000000;
+              } else {
+                const r = ((rawPix & 0xff) * shadeInt) >> 8;
+                const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
+                const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
+                buf[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
+              }
             } else {
               const base = 0x33;
               const val = (base * shadeInt) >> 8;
@@ -2289,7 +2375,10 @@ export class RaycastScene extends BaseScene {
     const screenW = gameConfig.width;
     const screenH = gameConfig.height;
 
-    this.graphics.clear();
+    if (this.graphicsUsed) {
+      this.graphics.clear();
+      this.graphicsUsed = false;
+    }
 
     // 1. Frustum cull thin walls before casting rays
     this.cullThinWalls();
@@ -2326,9 +2415,6 @@ export class RaycastScene extends BaseScene {
             minDrawStart = Math.min(minDrawStart, drawStart);
             maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
           }
-          // When open >= 0.05, the door is an open aperture:
-          // The room behind the door must have its ceiling and floor rendered without occlusion.
-          // The remaining door panel sprite is drawn on top of the background in step 4.
         } else if (tileFlag !== RaycastScene.TILE_THIN && !ray.isDoor) {
           const lineHeight = screenH / ray.distance;
           const drawStart = -lineHeight / 2 + screenH / 2;
@@ -2344,25 +2430,39 @@ export class RaycastScene extends BaseScene {
 
     // Compute global row-skip bounds for floor/ceiling early termination
     let gMinTop = screenH;
+    let gMaxTop = 0;
+    let gMinBot = screenH;
     let gMaxBot = 0;
     for (let i = 0; i < screenW; i++) {
-      if (this.wallTop[i] < gMinTop) gMinTop = this.wallTop[i];
-      if (this.wallBottom[i] > gMaxBot) gMaxBot = this.wallBottom[i];
+      const top = this.wallTop[i];
+      const bot = this.wallBottom[i];
+      if (top < gMinTop) gMinTop = top;
+      if (top > gMaxTop) gMaxTop = top;
+      if (bot < gMinBot) gMinBot = bot;
+      if (bot > gMaxBot) gMaxBot = bot;
     }
     this.globalMinWallTop = gMinTop;
+    this.globalMaxWallTop = gMaxTop;
+    this.globalMinWallBottom = gMinBot;
     this.globalMaxWallBottom = gMaxBot;
 
-    // 3. Render floor and ceiling with wall occlusion culling at crisp native 1:1 resolution
+    // 3. Render floor and ceiling with wall occlusion culling
     this.renderFloorAndCeiling();
 
     // 4. Render wall column sprites with viewport culling (back to front order)
     for (let i = 0; i < screenW; i++) {
       const hitCount = this.hitCounts[i];
       const pool = this.hitPool[i];
+      const colSprites = this.spritePool[i];
+      const prevCount = this.prevHitCounts[i];
 
-      for (const sprite of this.spritePool[i]) {
-        sprite.visible = false;
+      // Only hide sprites that were visible previously and are no longer used
+      if (hitCount < prevCount) {
+        for (let s = hitCount; s < prevCount; s++) {
+          colSprites[s].visible = false;
+        }
       }
+      this.prevHitCounts[i] = hitCount;
 
       for (let j = hitCount - 1; j >= 0; j--) {
         const ray = pool[j];
@@ -2383,7 +2483,7 @@ export class RaycastScene extends BaseScene {
         // Viewport culling: skip drawing if wall slice is outside the screen bounds
         if (drawEnd <= 0 || drawStart >= screenH || drawEnd <= drawStart) continue;
 
-        const sprite = this.spritePool[i][j];
+        const sprite = colSprites[j];
         const slices = this.columnTextures[ray.wallType];
 
         if (slices && slices.length > 0) {
@@ -2424,6 +2524,7 @@ export class RaycastScene extends BaseScene {
               ? 0xffffff
               : 0xcccccc;
         } else {
+          this.graphicsUsed = true;
           this.graphics.beginFill(ray.side === 0 ? 0x666666 : 0x999999);
           this.graphics.drawRect(i, drawStart, 1, drawEnd - drawStart);
           this.graphics.endFill();
@@ -2432,10 +2533,17 @@ export class RaycastScene extends BaseScene {
     }
 
     // 5. Render billboard pickups, breakables & detonators with Z-buffer occlusion
+    this.mapObjects.length = 0;
     const pickupObjects = this.pickupManager.getVisibleMapObjects();
-    const breakableObjects = this.breakableManager ? this.breakableManager.getVisibleMapObjects() : [];
-    const detonatorObjects = this.detonatorManager ? this.detonatorManager.getVisibleMapObjects() : [];
-    this.mapObjects = pickupObjects.concat(breakableObjects).concat(detonatorObjects);
+    for (let i = 0; i < pickupObjects.length; i++) this.mapObjects.push(pickupObjects[i]);
+    if (this.breakableManager) {
+      const breakables = this.breakableManager.getVisibleMapObjects();
+      for (let i = 0; i < breakables.length; i++) this.mapObjects.push(breakables[i]);
+    }
+    if (this.detonatorManager) {
+      const detonators = this.detonatorManager.getVisibleMapObjects();
+      for (let i = 0; i < detonators.length; i++) this.mapObjects.push(detonators[i]);
+    }
     this.renderObjects();
 
     // 6. Render animated pickups (keycards) with AnimatedSprite & Z-buffer occlusion
@@ -2478,6 +2586,10 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  private static compareObjects(a: MapObject, b: MapObject): number {
+    return (b.distance ?? 0) - (a.distance ?? 0);
+  }
+
   private renderObjects(): void {
     if (this.mapObjects.length === 0) {
       for (let i = 0; i < this.objectSpritePoolIndex; i++) {
@@ -2505,7 +2617,7 @@ export class RaycastScene extends BaseScene {
     }
 
     // 2. Sort objects from farthest to closest (Painter's algorithm)
-    this.mapObjects.sort((a, b) => (b.distance ?? 0) - (a.distance ?? 0));
+    this.mapObjects.sort(RaycastScene.compareObjects);
 
     let poolIdx = 0;
     const invDet = 1.0 / (planeX * dirY - dirX * planeY);

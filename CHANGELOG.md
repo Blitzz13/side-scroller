@@ -2,6 +2,48 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-04] - Raycaster Engine Performance Overhaul
+
+### 1. Hierarchical Layer Containers & Scene Isolation
+- **Layered Display Architecture** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Removed 7,680 individual wall slice sprites from the root scene container.
+  - Created a designated container hierarchy with explicit `zIndex` sorting:
+    - `worldContainer`: Root 3D world container (`sortableChildren = true`).
+    - `backgroundContainer` (`zIndex = 0`): Houses floor/ceiling `bgSprite` and fallback `graphics`.
+    - `wallContainer` (`zIndex = 10`): Contains all pooled wall column sprites.
+    - `objectContainer` (`zIndex = 20`): Contains billboard object sprites.
+    - `animatedPickupContainer` (`zIndex = 30`): Contains keycards and interactive pickups.
+    - `enemyContainer` (`zIndex = 40`): Contains 3D animated enemy billboards.
+    - `detonatorContainer` (`zIndex = 50`): Contains in-flight projectiles and explosion VFX.
+  - **Stationary Screen Shake**: Screen shake now transforms `worldContainer` directly instead of the scene root, keeping HUD, weapon view, and mobile controls stationary while eliminating transform invalidation across thousands of DisplayObjects.
+
+### 2. Native 1:1 Crisp Floor & Ceiling Buffer with Row Occlusion Culling
+- **Uncompromised 1:1 Crisp Fidelity** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Maintained full 1280×720 native pixel fidelity for floor and ceiling with zero blurriness and zero resolution scaling.
+  - Implemented `globalMaxWallTop` and `globalMinWallBottom` bounds calculation to completely skip scanline rows that are 100% occluded behind solid walls.
+  - Added direct 32-bit pixel copy (`buf[idx] = rawPix | 0xff000000`) for full-brightness tiles near the player.
+
+### 3. Wall Sprite Visibility Deltas
+- **Delta-Based Visibility Updates** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Replaced the brute-force `for..of` loop across all 7,680 column sprites with `prevHitCounts` tracking.
+  - Only sets `sprite.visible = false` for the delta between the previous frame's hit count and current hit count.
+  - Eliminates 1,280 iterator allocations and thousands of unnecessary DisplayObject visibility toggles per frame.
+
+### 4. Zero-Allocation Tick & Render Loops
+- **Pre-Indexed Door Animations**:
+  - Pre-indexes all map door positions into `doorEntries` during level load.
+  - `updateDoors(delta)` now operates strictly over active animated doors using flat array indices (`doorStatesFlat`), eliminating per-frame string concatenation, string splitting (`split(",")`), and `parseInt()`.
+- **Pre-Allocated Thin Wall Buffers**:
+  - Replaced per-frame `thinWalls.concat()` calls with an in-place reusable `allThinWalls` array.
+  - `cullThinWalls()` now reuses `activeThinWalls` without array reallocation.
+- **Pre-Allocated Object Collection & Static Sort**:
+  - Billboard object collection in `renderScene()` clears and pushes into `this.mapObjects` without `.concat()`.
+  - Sorts with static comparator `RaycastScene.compareObjects`, eliminating closure allocations.
+- **Cached Input Vectors**:
+  - Replaced `{ x: 0, y: 0 }` fallback allocations in `updatePlayer` and `tick` with static `RaycastScene.ZERO_VECTOR`.
+  - Replaced `nearbyOffsets` array and `Set` in `tryOpenDoor` with static lookup tables.
+
+
 ## [2026-09-04] - Generic Enemy Voicelines, Concurrency Control & Audio Death Cutoff
 
 ### 1. Generic Enemy Voiceline Architecture & Extensibility
