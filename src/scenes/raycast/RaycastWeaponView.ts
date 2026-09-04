@@ -165,9 +165,10 @@ export class RaycastWeaponView extends Container {
     onRelease?: () => void,
     onComplete?: () => void
   ): boolean {
-    if (this.isThrowing || !this.currentWeapon || !this.weaponSprite.visible) {
+    if (this.isThrowing || !this.currentWeapon) {
       return false;
     }
+    this.weaponSprite.visible = true;
     this.isThrowing = true;
     this.throwProgress = 0;
     this.onThrowRelease = onRelease;
@@ -185,7 +186,7 @@ export class RaycastWeaponView extends Container {
   }
 
   public get isEquipped(): boolean {
-    return this.currentWeapon !== null && this.weaponSprite.visible;
+    return this.currentWeapon !== null && (this.weaponSprite.visible || this.isThrowing);
   }
 
   public get weaponConfig(): IRaycastWeaponConfig | null {
@@ -350,7 +351,7 @@ export class RaycastWeaponView extends Container {
   }
 
   public update(delta: number, isMoving: boolean, moveIntensity: number = 1): void {
-    if (!this.weaponSprite.visible) {
+    if (!this.currentWeapon) {
       this.muzzleFlash.visible = false;
       if (this.flashSprite) this.flashSprite.visible = false;
       return;
@@ -402,6 +403,7 @@ export class RaycastWeaponView extends Container {
       } else {
         // Finished throw animation
         this.isThrowing = false;
+        this.weaponSprite.visible = true;
         this.weaponSprite.x = this.basePosX;
         this.weaponSprite.y = this.basePosY;
         this.weaponSprite.rotation = 0;
@@ -411,6 +413,12 @@ export class RaycastWeaponView extends Container {
           cb();
         }
       }
+      return;
+    }
+
+    if (!this.weaponSprite.visible) {
+      this.muzzleFlash.visible = false;
+      if (this.flashSprite) this.flashSprite.visible = false;
       return;
     }
 

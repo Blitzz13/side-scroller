@@ -52,7 +52,7 @@ export const thermalDetonatorConfig: IRaycastWeaponConfig = {
   damage: 150,
   maxAmmo: 99,
   defaultAmmo: 1,
-  rateOfFire: 800,
+  rateOfFire: 400,
   equippedTexture: "assets/raycast/weapons/thermal_detonator.png",
   itemTexture: "assets/raycast/pickups/thermal_detonator_pickup.png",
   shootSounds: [],

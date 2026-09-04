@@ -243,8 +243,6 @@ export class RaycastPlayerController {
       return false;
     }
 
-    this.lastShotTime = now;
-
     if (this.state.weaponConfig.isThrowable) {
       // Throwable weapon: play throw animation, release projectile at peak toss
       const started = this.weaponView.playThrowAnimation(
@@ -273,8 +271,12 @@ export class RaycastPlayerController {
           }
         }
       );
+      if (started) {
+        this.lastShotTime = now;
+      }
       return started;
     } else {
+      this.lastShotTime = now;
       // Standard firearm shoot
       this.state.ammo--;
       if (this.state.equippedWeapon !== null) {
