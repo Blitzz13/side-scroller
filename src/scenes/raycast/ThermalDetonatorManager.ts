@@ -10,6 +10,7 @@ import {
 } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { gameConfig } from "../../configs/GameConfig";
+import { raycastThermalDetonatorPickupConfig } from "../../configs/RaycastPickupConfigs";
 import { MapObject } from "./types";
 
 export interface ActiveDetonator {
@@ -399,6 +400,10 @@ export class ThermalDetonatorManager {
   public getVisibleMapObjects(): MapObject[] {
     const list: MapObject[] = [];
 
+    const detScale = raycastThermalDetonatorPickupConfig.scale ?? 0.12;
+    const detScaleX = raycastThermalDetonatorPickupConfig.scaleX ?? detScale;
+    const detScaleY = raycastThermalDetonatorPickupConfig.scaleY ?? detScale;
+
     for (const det of this.detonators) {
       // Blinking red LED effect as timer runs down
       const blinkPeriod = det.timer < 0.8 ? 0.12 : det.timer < 1.4 ? 0.22 : 0.35;
@@ -411,9 +416,9 @@ export class ThermalDetonatorManager {
         texture: -1,
         customTexture: this.detonatorTexture ?? undefined,
         customSlices: this.detonatorSlices.length > 0 ? this.detonatorSlices : undefined,
-        scale: 0.16,
-        scaleX: 0.16,
-        scaleY: 0.16,
+        scale: detScale,
+        scaleX: detScaleX,
+        scaleY: detScaleY,
         z: det.z,
         anchor: "floor",
         tint,

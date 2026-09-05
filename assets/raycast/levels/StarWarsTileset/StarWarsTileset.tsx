@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="19" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="20" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -124,5 +124,12 @@
    <property name="weaponType" propertytype="Weapons" value="thermal_detonator"/>
   </properties>
   <image source="thermal_detonator_pickup.png" width="15" height="15"/>
+ </tile>
+ <tile id="19" type="PickupItem">
+  <properties>
+   <property name="amount" type="int" value="25"/>
+   <property name="type" propertytype="PickupType" value="shield"/>
+  </properties>
+  <image source="shield_unit.png" width="38" height="17"/>
  </tile>
 </tileset>

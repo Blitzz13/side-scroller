@@ -524,8 +524,9 @@ export class RaycastScene extends BaseScene {
         { id: 14, image: "key_card_blue_1.png", type: "PickupItem", properties: [{ name: "object", value: { anchor: "center", scale: 0.4 } }, { name: "type", value: "blue_keycard" }] },
         { id: 15, image: "stairs.png", type: "Tile", properties: [{ name: "tileType", value: "stairs" }] },
         { id: 16, image: "power_cell.PNG", type: "Object", properties: [{ name: "anchor", value: "floor" }] },
-        { id: 17, image: "thermal_detonator.png", type: "PickupItem" },
-        { id: 18, image: "dh_17.png", type: "PickupItem" },
+        { id: 17, image: "thermal_detonator_belt.png", type: "PickupItem", properties: [{ name: "amount", value: 5 }, { name: "type", value: "ammo" }, { name: "weaponType", value: "thermal_detonator" }] },
+        { id: 18, image: "thermal_detonator_pickup.png", type: "PickupItem", properties: [{ name: "amount", value: 1 }, { name: "type", value: "ammo" }, { name: "weaponType", value: "thermal_detonator" }] },
+        { id: 19, image: "shield_unit.png", type: "PickupItem", properties: [{ name: "amount", value: 25 }, { name: "type", value: "shield" }] },
       ];
     }
   }
@@ -653,12 +654,17 @@ export class RaycastScene extends BaseScene {
     }
 
     const texturePromises = Object.entries(textureMap).map(
-      ([tileId, fileName]) =>
-        Assets.load(`assets/${fileName}`)
+      ([tileId, fileName]) => {
+        const assetPath =
+          fileName === "health.png"
+            ? "assets/raycast/pickups/health.png"
+            : `assets/${fileName}`;
+        return Assets.load(assetPath)
           .then((texture) => {
             this.textures[parseInt(tileId)] = texture;
           })
-          .catch((err) => console.error(`Failed to load ${fileName}:`, err))
+          .catch((err) => console.error(`Failed to load ${fileName}:`, err));
+      }
     );
     await Promise.all(texturePromises);
 
@@ -721,6 +727,12 @@ export class RaycastScene extends BaseScene {
       3.8,
       5.2,
       1
+    );
+    this.pickupManager.spawnPickup(
+      RaycastPickupType.SHIELD,
+      4.6,
+      5.2,
+      50
     );
 
     console.log("Parsed map:", this.map);
@@ -2677,7 +2689,7 @@ export class RaycastScene extends BaseScene {
       const slices = obj.customSlices ?? this.columnTextures[obj.texture];
       if (!texture || !slices || slices.length === 0) continue;
 
-      const meta = obj.customTexture ? undefined : this.tileMeta[obj.texture];
+      const meta = this.tileMeta[obj.texture];
       const texW = texture.width || 64;
       const texH = texture.height || 64;
       const aspectRatio = texW / texH;
@@ -2687,10 +2699,27 @@ export class RaycastScene extends BaseScene {
 
       // Resolve scale:
       // Priority 1: Object instance scale (from Tiled object layer)
-      // Priority 2: Tile metadata scale (from Tiled tileset custom property)
-      // Priority 3: Automatic image size scaling (relative to 512px standard wall)
-      let effectiveScaleY = obj.scaleY ?? obj.scale ?? meta?.scaleY ?? meta?.scale;
-      let effectiveScaleX = obj.scaleX ?? obj.scale ?? meta?.scaleX ?? meta?.scale;
+      // Priority 2: Pickup config scale (from code configs)
+      // Priority 3: Tile metadata scale (from Tiled tileset custom property)
+      // Priority 4: Automatic image size scaling (relative to 512px standard wall)
+      let effectiveScaleY =
+        obj.scaleY ??
+        obj.scale ??
+        obj.pickupRef?.scaleY ??
+        obj.pickupRef?.scale ??
+        obj.pickupRef?.config?.scaleY ??
+        obj.pickupRef?.config?.scale ??
+        meta?.scaleY ??
+        meta?.scale;
+      let effectiveScaleX =
+        obj.scaleX ??
+        obj.scale ??
+        obj.pickupRef?.scaleX ??
+        obj.pickupRef?.scale ??
+        obj.pickupRef?.config?.scaleX ??
+        obj.pickupRef?.config?.scale ??
+        meta?.scaleX ??
+        meta?.scale;
 
       if (effectiveScaleY === undefined) {
         // Automatic scaling based on image size
@@ -2716,9 +2745,20 @@ export class RaycastScene extends BaseScene {
       // "ceiling" attaches to the ceiling (e.g. lamps, chandeliers)
       // "center" floats at player eye-level
       // z / elevation: exact height factor between 0.0 (floor) and 1.0 (ceiling)
-      const anchor = (obj.anchor ?? meta?.anchor ?? (effectiveScaleY < 0.8 ? "floor" : "center")).toLowerCase();
-      const z = obj.z ?? meta?.z;
-      const vOffset = obj.vOffset ?? meta?.vOffset ?? 0;
+      const anchor = (
+        obj.anchor ??
+        obj.pickupRef?.anchor ??
+        obj.pickupRef?.config?.anchor ??
+        meta?.anchor ??
+        (effectiveScaleY < 0.8 ? "floor" : "center")
+      ).toLowerCase();
+      const z = obj.z ?? obj.pickupRef?.z ?? obj.pickupRef?.config?.z ?? meta?.z;
+      const vOffset =
+        obj.vOffset ??
+        obj.pickupRef?.vOffset ??
+        obj.pickupRef?.config?.vOffset ??
+        meta?.vOffset ??
+        0;
 
       const floorY = Math.floor(screenH / 2 + baseHeight / 2);
       const ceilingY = Math.floor(screenH / 2 - baseHeight / 2);

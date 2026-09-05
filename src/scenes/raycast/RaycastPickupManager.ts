@@ -29,6 +29,8 @@ export class RaycastPickupManager {
   private keycardAnimationFrames: Record<string, Texture[]> = {};
   private pickupTextures: Record<string, Texture> = {};
   private pickupSlices: Record<string, Texture[]> = {};
+  private shieldAnimationFrames: Texture[] = [];
+  private shieldSpritesheet: any = null;
 
   constructor(container?: Container) {
     if (container) {
@@ -38,23 +40,27 @@ export class RaycastPickupManager {
 
   public setContainer(container: Container): void {
     this.container = container;
-    // Bind any existing keycard pickups that were parsed before container was assigned
+    // Bind any existing pickups that were parsed before container was assigned
     for (const pickup of this.pickups) {
       if (pickup.keyColor && !pickup.animatedSprite) {
         this.spawnKeycardSprite(pickup);
+      } else if (pickup.type === RaycastPickupType.SHIELD && !pickup.animatedSprite) {
+        this.spawnShieldSprite(pickup);
       }
     }
   }
 
   public async initTextures(): Promise<void> {
     await this.initKeycardTextures();
+    await this.initShieldTextures();
 
     const standardPickups = [
       { key: "weapon", path: "assets/raycast/pickups/e_11_item.png" },
-      { key: "health", path: "assets/health.png" },
+      { key: "health", path: "assets/raycast/pickups/health.png" },
       { key: "ammo", path: "assets/ammo.png" },
       { key: "thermal_detonator_belt", path: "assets/raycast/pickups/thermal_detonator_belt.png" },
       { key: "thermal_detonator_pickup", path: "assets/raycast/pickups/thermal_detonator_pickup.png" },
+      { key: "shield", path: "assets/raycast/pickups/shield_unit.png" },
     ];
 
     for (const p of standardPickups) {
@@ -131,6 +137,53 @@ export class RaycastPickupManager {
     }
   }
 
+  public async initShieldTextures(): Promise<void> {
+    try {
+      let sheet: any = null;
+      if (Assets.cache.has("shield_unit")) {
+        sheet = Assets.get("shield_unit");
+      } else if (Assets.cache.has("./assets/raycast/pickups/shield_unit.json")) {
+        sheet = Assets.get("./assets/raycast/pickups/shield_unit.json");
+      } else if (Assets.cache.has("assets/raycast/pickups/shield_unit.json")) {
+        sheet = Assets.get("assets/raycast/pickups/shield_unit.json");
+      } else {
+        sheet = await Assets.load("./assets/raycast/pickups/shield_unit.json");
+      }
+
+      if (sheet) {
+        if (sheet.baseTexture) {
+          sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+        }
+        this.shieldSpritesheet = sheet;
+        this.shieldAnimationFrames = [];
+        for (let i = 1; i <= 2; i++) {
+          const frameName = `shield_unit_${i}.png`;
+          const tex = sheet.textures ? sheet.textures[frameName] : null;
+          if (tex) {
+            if (tex.baseTexture) {
+              tex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+            }
+            this.shieldAnimationFrames.push(tex);
+          }
+        }
+
+        if (this.shieldAnimationFrames.length > 0) {
+          this.pickupTextures["shield"] = this.shieldAnimationFrames[0];
+          this.pickupSlices["shield"] = this.sliceTexture(this.shieldAnimationFrames[0]);
+        }
+
+        // Attach AnimatedSprite to any pickups waiting for spritesheet
+        for (const pickup of this.pickups) {
+          if (pickup.type === RaycastPickupType.SHIELD && !pickup.animatedSprite) {
+            this.spawnShieldSprite(pickup);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load shield_unit spritesheet:", err);
+    }
+  }
+
   public update(delta: number): void {
     // AnimatedSprites are automatically ticked by Pixi's Shared Ticker
   }
@@ -161,6 +214,28 @@ export class RaycastPickupManager {
     animSprite.play();
     animSprite.roundPixels = true;
     animSprite.anchor.set(0.5, 0.5);
+    animSprite.visible = false;
+
+    const mask = new Graphics();
+    animSprite.mask = mask;
+
+    this.container.addChild(mask);
+    this.container.addChild(animSprite);
+
+    pickup.animatedSprite = animSprite;
+    pickup.occlusionMask = mask;
+  }
+
+  private spawnShieldSprite(pickup: RaycastPickupItem): void {
+    if (!this.container) return;
+    const frames = this.shieldAnimationFrames;
+    if (!frames || frames.length === 0) return;
+
+    const animSprite = new AnimatedSprite(frames);
+    animSprite.animationSpeed = 0.06;
+    animSprite.play();
+    animSprite.roundPixels = true;
+    animSprite.anchor.set(0.5, 1.0);
     animSprite.visible = false;
 
     const mask = new Graphics();
@@ -284,20 +359,18 @@ export class RaycastPickupManager {
               imgStr.includes("detonator") ||
               imgStr.includes("thermal");
 
+            const isShield =
+              typeStr.includes("shield") ||
+              imgStr.includes("shield");
+
             const isPickup =
               isKeycard ||
               isDetonator ||
+              isShield ||
               meta.tileClass === "PickupItem" ||
               typeStr === "weapon" ||
               typeStr === "health" ||
               typeStr === "ammo";
-
-            const scale = layerScale ?? meta.scale ?? 0.25;
-            const scaleX = layerScaleX ?? meta.scaleX ?? scale;
-            const scaleY = layerScaleY ?? meta.scaleY ?? scale;
-            const vOffset = layerVOffset ?? meta.vOffset;
-            const z = layerZ ?? meta.z;
-            const anchor = layerAnchor ?? meta.anchor ?? (isKeycard ? "center" : "floor");
 
             if (isPickup) {
               let keyColor: string | undefined;
@@ -320,6 +393,8 @@ export class RaycastPickupManager {
                 } else {
                   pickupType = RaycastPickupType.THERMAL_DETONATOR_SINGLE;
                 }
+              } else if (isShield) {
+                pickupType = RaycastPickupType.SHIELD;
               } else {
                 const pConfig = getRaycastPickupConfig(typeStr);
                 pickupType =
@@ -331,12 +406,22 @@ export class RaycastPickupManager {
                     : RaycastPickupType.HEALTH);
               }
 
-              const pConfig = getRaycastPickupConfig(typeStr) || getRaycastPickupConfig(pickupType);
+              const pConfig =
+                pickupType === RaycastPickupType.WEAPON && meta.weaponType
+                  ? getRaycastPickupConfig(meta.weaponType) || getRaycastPickupConfig(pickupType)
+                  : getRaycastPickupConfig(pickupType) || getRaycastPickupConfig(typeStr);
               const weaponConfig = getRaycastWeaponConfig(meta.weaponType || "e_11");
               const weaponEnum: RaycastWeaponType | undefined =
                 pickupType === RaycastPickupType.WEAPON
                   ? weaponConfig?.type ?? RaycastWeaponType.E11
                   : undefined;
+
+              const scale = layerScale ?? meta.scale ?? pConfig?.scale ?? 0.25;
+              const scaleX = layerScaleX ?? meta.scaleX ?? pConfig?.scaleX ?? scale;
+              const scaleY = layerScaleY ?? meta.scaleY ?? pConfig?.scaleY ?? scale;
+              const vOffset = layerVOffset ?? meta.vOffset ?? pConfig?.vOffset;
+              const z = layerZ ?? meta.z ?? pConfig?.z;
+              const anchor = layerAnchor ?? meta.anchor ?? pConfig?.anchor ?? (isKeycard ? "center" : "floor");
 
               const item: RaycastPickupItem = {
                 id: this.nextId++,
@@ -361,6 +446,8 @@ export class RaycastPickupManager {
               this.pickups.push(item);
               if (keyColor) {
                 this.spawnKeycardSprite(item);
+              } else if (pickupType === RaycastPickupType.SHIELD) {
+                this.spawnShieldSprite(item);
               }
             } else {
               const isBreakable =
@@ -375,6 +462,13 @@ export class RaycastPickupManager {
                 meta.tileClass === "DestructableWall";
 
               if (!isBreakable) {
+                const scale = layerScale ?? meta.scale;
+                const scaleX = layerScaleX ?? meta.scaleX ?? scale;
+                const scaleY = layerScaleY ?? meta.scaleY ?? scale;
+                const vOffset = layerVOffset ?? meta.vOffset;
+                const z = layerZ ?? meta.z;
+                const anchor = layerAnchor ?? meta.anchor ?? "floor";
+
                 this.staticObjects.push({
                   x,
                   y,
@@ -401,7 +495,7 @@ export class RaycastPickupManager {
             const adjustedTileId = gid - firstgid;
             const meta = tileMeta[adjustedTileId] || {};
 
-            let objScale = layerScale ?? meta.scale ?? 0.25;
+            let objScale = layerScale ?? meta.scale;
             let objScaleX = layerScaleX ?? meta.scaleX ?? objScale;
             let objScaleY = layerScaleY ?? meta.scaleY ?? objScale;
             let objVOffset = layerVOffset ?? meta.vOffset;
@@ -480,9 +574,15 @@ export class RaycastPickupManager {
               imgStr.includes("thermal") ||
               (obj.name && obj.name.toLowerCase().includes("detonator"));
 
+            const isShield =
+              normalizedType.includes("shield") ||
+              imgStr.includes("shield") ||
+              (obj.name && obj.name.toLowerCase().includes("shield"));
+
             const isPickup =
               isKeycard ||
               isDetonator ||
+              isShield ||
               obj.type === "PickupItem" ||
               meta.tileClass === "PickupItem" ||
               normalizedType === "weapon" ||
@@ -514,6 +614,8 @@ export class RaycastPickupManager {
                 } else {
                   pickupType = RaycastPickupType.THERMAL_DETONATOR_SINGLE;
                 }
+              } else if (isShield) {
+                pickupType = RaycastPickupType.SHIELD;
               } else {
                 const pConfig = getRaycastPickupConfig(normalizedType);
                 pickupType =
@@ -525,12 +627,22 @@ export class RaycastPickupManager {
                     : RaycastPickupType.HEALTH);
               }
 
-              const pConfig = getRaycastPickupConfig(normalizedType) || getRaycastPickupConfig(pickupType);
+              const pConfig =
+                pickupType === RaycastPickupType.WEAPON && objWeaponType
+                  ? getRaycastPickupConfig(objWeaponType) || getRaycastPickupConfig(pickupType)
+                  : getRaycastPickupConfig(pickupType) || getRaycastPickupConfig(normalizedType);
               const weaponConfig = getRaycastWeaponConfig(objWeaponType || "e_11");
               const weaponEnum: RaycastWeaponType | undefined =
                 pickupType === RaycastPickupType.WEAPON
                   ? weaponConfig?.type ?? RaycastWeaponType.E11
                   : undefined;
+
+              const scale = objScale ?? pConfig?.scale ?? 0.25;
+              const scaleX = objScaleX ?? pConfig?.scaleX ?? scale;
+              const scaleY = objScaleY ?? pConfig?.scaleY ?? scale;
+              const vOffset = objVOffset ?? pConfig?.vOffset;
+              const z = objZ ?? pConfig?.z;
+              const anchor = objAnchor ?? pConfig?.anchor ?? (isKeycard ? "center" : "floor");
 
               const item: RaycastPickupItem = {
                 id: this.nextId++,
@@ -542,12 +654,12 @@ export class RaycastPickupManager {
                 keyColor,
                 amount: objAmount || pConfig?.amount || 1,
                 collected: false,
-                scale: objScale,
-                scaleX: objScaleX,
-                scaleY: objScaleY,
-                vOffset: objVOffset,
-                z: objZ,
-                anchor: objAnchor,
+                scale,
+                scaleX,
+                scaleY,
+                vOffset,
+                z,
+                anchor,
                 pickupRadius: objPickupRadius ?? pConfig?.pickupRadius ?? (keyColor ? 0.9 : undefined),
                 config: pConfig,
               };
@@ -555,6 +667,8 @@ export class RaycastPickupManager {
               this.pickups.push(item);
               if (keyColor) {
                 this.spawnKeycardSprite(item);
+              } else if (pickupType === RaycastPickupType.SHIELD) {
+                this.spawnShieldSprite(item);
               }
             } else {
               const isBreakable =
@@ -609,6 +723,8 @@ export class RaycastPickupManager {
             ? "thermal_detonator_belt"
             : pickup.type === RaycastPickupType.THERMAL_DETONATOR_SINGLE
             ? "thermal_detonator_pickup"
+            : pickup.type === RaycastPickupType.SHIELD
+            ? "shield"
             : "health";
 
         const customTex = this.pickupTextures[pTypeKey];
@@ -620,12 +736,12 @@ export class RaycastPickupManager {
           texture: pickup.texture,
           customTexture: customTex,
           customSlices: customSlices,
-          scale: pickup.scale,
-          scaleX: pickup.scaleX,
-          scaleY: pickup.scaleY,
-          vOffset: pickup.vOffset,
-          z: pickup.z,
-          anchor: pickup.anchor ?? "floor",
+          scale: pickup.scale ?? pickup.config?.scale,
+          scaleX: pickup.scaleX ?? pickup.config?.scaleX ?? pickup.scale ?? pickup.config?.scale,
+          scaleY: pickup.scaleY ?? pickup.config?.scaleY ?? pickup.scale ?? pickup.config?.scale,
+          vOffset: pickup.vOffset ?? pickup.config?.vOffset,
+          z: pickup.z ?? pickup.config?.z,
+          anchor: pickup.anchor ?? pickup.config?.anchor ?? "floor",
           pickupRef: pickup,
         });
       }
@@ -693,15 +809,15 @@ export class RaycastPickupManager {
         (screenW / 2) * (1 + transformX / transformY)
       );
       const baseHeight = Math.abs(Math.floor(screenH / transformY));
-      const scale = pickup.scale ?? 0.20;
-      const refHeight = 30; // Native source frame height of keycard
-
-      const baseScale = (baseHeight * scale) / refHeight;
-      sprite.scale.set(baseScale, baseScale);
+      const scale = pickup.scale ?? pickup.config?.scale ?? 0.20;
 
       const curTex = sprite.texture;
       const texW = curTex ? (curTex.orig?.width || curTex.width || 25) : 25;
       const texH = curTex ? (curTex.orig?.height || curTex.height || 30) : 30;
+      const refHeight = texH || 30;
+
+      const baseScale = (baseHeight * scale) / refHeight;
+      sprite.scale.set(baseScale, baseScale);
 
       const spriteWidth = Math.max(
         1,
@@ -709,7 +825,7 @@ export class RaycastPickupManager {
       );
       const spriteHeight = Math.max(
         1,
-        Math.floor(baseHeight * scale * (texH / refHeight))
+        Math.floor(baseHeight * scale)
       );
 
       const halfW = spriteWidth / 2;
@@ -883,6 +999,8 @@ export class RaycastPickupManager {
     this.pickups.push(item);
     if (keyColor) {
       this.spawnKeycardSprite(item);
+    } else if (type === RaycastPickupType.SHIELD) {
+      this.spawnShieldSprite(item);
     }
     return item;
   }

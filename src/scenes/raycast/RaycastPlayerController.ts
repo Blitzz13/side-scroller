@@ -23,6 +23,8 @@ export class RaycastPlayerController {
     this.state = {
       health: 100,
       maxHealth: 100,
+      shield: 0,
+      maxShield: 100,
       equippedWeapon: null,
       weaponConfig: null,
       ammo: 0,
@@ -36,10 +38,15 @@ export class RaycastPlayerController {
     this.equipWeapon(dh17Config, dh17Config.defaultAmmo);
 
     this.hud.setHealth(this.state.health, this.state.maxHealth);
+    this.hud.setShield(this.state.shield, this.state.maxShield);
   }
 
   public get health(): number {
     return this.state.health;
+  }
+
+  public get shield(): number {
+    return this.state.shield;
   }
 
   public get ammo(): number {
@@ -88,6 +95,8 @@ export class RaycastPlayerController {
     for (const item of items) {
       if (item.type === RaycastPickupType.HEALTH) {
         this.heal(item.amount);
+      } else if (item.type === RaycastPickupType.SHIELD) {
+        this.addShield(item.amount);
       } else if (item.type === RaycastPickupType.WEAPON) {
         this.equipWeapon(item.weaponType ?? RaycastWeaponType.E11, item.amount);
       } else if (item.type === RaycastPickupType.AMMO) {
@@ -125,10 +134,42 @@ export class RaycastPlayerController {
     this.hud.flashScreen(0x00ff66, 0.2);
   }
 
+  public addShield(amount: number): void {
+    const oldShield = this.state.shield;
+    this.state.shield = Math.min(this.state.maxShield, this.state.shield + amount);
+    const restored = this.state.shield - oldShield;
+
+    this.hud.setShield(this.state.shield, this.state.maxShield);
+    this.hud.showToast(`[+] Shield Unit (+${restored} Shield)`, 0x00ff66);
+    this.hud.flashScreen(0x00ff66, 0.25);
+  }
+
   public takeDamage(amount: number): void {
-    this.state.health = Math.max(0, this.state.health - amount);
+    if (amount <= 0) return;
+
+    let healthDamage = amount;
+    let shieldAbsorbed = 0;
+
+    if (this.state.shield > 0) {
+      // Shield absorbs a major portion (65%) of incoming damage, negating some but letting the rest penetrate to health
+      const absorptionRate = 0.65;
+      const targetAbsorb = Math.ceil(amount * absorptionRate);
+      shieldAbsorbed = Math.min(this.state.shield, targetAbsorb);
+      this.state.shield -= shieldAbsorbed;
+      healthDamage = amount - shieldAbsorbed;
+    }
+
+    this.state.health = Math.max(0, this.state.health - healthDamage);
     this.hud.setHealth(this.state.health, this.state.maxHealth);
-    this.hud.flashScreen(0xff0000, 0.35);
+    this.hud.setShield(this.state.shield, this.state.maxShield);
+
+    if (shieldAbsorbed > 0 && this.state.health > 0) {
+      // Deflection flash when shield absorbs damage
+      this.hud.flashScreen(0x00e676, 0.3);
+    } else {
+      // Red flash on pure health damage
+      this.hud.flashScreen(0xff0000, 0.35);
+    }
   }
 
   public addThermalDetonators(count: number): void {

@@ -9,6 +9,11 @@ export class RaycastHUD extends Container {
   private healthText: Text;
   private healthIcon: Sprite;
 
+  // Shield components
+  private shieldIcon: Graphics;
+  private shieldBarFill: Graphics;
+  private shieldText: Text;
+
   // Weapon & Ammo components
   private weaponContainer: Container;
   private weaponNameText: Text;
@@ -44,48 +49,99 @@ export class RaycastHUD extends Container {
     this.flashOverlay.visible = false;
     this.addChild(this.flashOverlay);
 
-    // 2. Health HUD (Bottom-Left)
+    // 2. Health & Shield HUD (Bottom-Left)
     this.healthContainer = new Container();
-    this.healthContainer.position.set(24, screenH - 85);
+    this.healthContainer.position.set(24, screenH - 96);
 
     this.healthBarBg = new Graphics();
     this.healthBarBg.beginFill(0x0a1018, 0.75);
     this.healthBarBg.lineStyle(2, 0x00ffff, 0.4);
-    this.healthBarBg.drawRoundedRect(0, 0, 240, 60, 10);
+    this.healthBarBg.drawRoundedRect(0, 0, 240, 72, 10);
     this.healthBarBg.endFill();
     this.healthContainer.addChild(this.healthBarBg);
 
-    // Health icon
+    // Layout metrics for perfect vertical and horizontal centering
+    const iconCenterX = 26;
+    const row1CenterY = 19;
+    const row2CenterY = 53;
+
+    // Health icon - centered at (iconCenterX, row1CenterY)
     try {
       this.healthIcon = Sprite.from("health");
     } catch {
       this.healthIcon = new Sprite();
     }
-    this.healthIcon.scale.set(0.06);
-    this.healthIcon.position.set(12, 12);
+    this.healthIcon.anchor.set(0.5, 0.5);
+    this.healthIcon.scale.set(0.04);
+    this.healthIcon.position.set(iconCenterX, row1CenterY);
     this.healthContainer.addChild(this.healthIcon);
 
-    // Health bar fill
-    this.healthBarFill = new Graphics();
-    this.healthContainer.addChild(this.healthBarFill);
-
-    // Health text (crisp vector text at high resolution)
+    // Health text - vertically centered at row1CenterY
     this.healthText = new Text("100 HP", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 20,
+      fontSize: 14,
       fontWeight: "bold",
       fill: 0xffffff,
       letterSpacing: 0.5,
     });
     this.healthText.resolution = dpr;
-    this.healthText.position.set(55, 10);
+    this.healthText.anchor.set(0, 0.5);
+    this.healthText.position.set(45, row1CenterY);
     this.healthContainer.addChild(this.healthText);
+
+    // Health bar fill
+    this.healthBarFill = new Graphics();
+    this.healthContainer.addChild(this.healthBarFill);
+
+    // Shield vector icon (energy crest emblem) - perfectly centered at (iconCenterX, row2CenterY)
+    this.shieldIcon = new Graphics();
+    // Outer shield rim
+    this.shieldIcon.lineStyle(1.8, 0x00ff66, 1);
+    this.shieldIcon.beginFill(0x00c853, 0.25);
+    this.shieldIcon.moveTo(iconCenterX - 8, row2CenterY - 11);
+    this.shieldIcon.lineTo(iconCenterX + 8, row2CenterY - 11);
+    this.shieldIcon.lineTo(iconCenterX + 11, row2CenterY - 8);
+    this.shieldIcon.lineTo(iconCenterX + 11, row2CenterY);
+    this.shieldIcon.quadraticCurveTo(iconCenterX + 9, row2CenterY + 8, iconCenterX, row2CenterY + 12);
+    this.shieldIcon.quadraticCurveTo(iconCenterX - 9, row2CenterY + 8, iconCenterX - 11, row2CenterY);
+    this.shieldIcon.lineTo(iconCenterX - 11, row2CenterY - 8);
+    this.shieldIcon.closePath();
+    this.shieldIcon.endFill();
+
+    // Inner high-tech deflector chevrons
+    this.shieldIcon.lineStyle(1.5, 0x69f0ae, 0.9);
+    this.shieldIcon.moveTo(iconCenterX - 5, row2CenterY - 6);
+    this.shieldIcon.lineTo(iconCenterX, row2CenterY - 1);
+    this.shieldIcon.lineTo(iconCenterX + 5, row2CenterY - 6);
+
+    this.shieldIcon.moveTo(iconCenterX - 4, row2CenterY + 1);
+    this.shieldIcon.lineTo(iconCenterX, row2CenterY + 5);
+    this.shieldIcon.lineTo(iconCenterX + 4, row2CenterY + 1);
+    this.healthContainer.addChild(this.shieldIcon);
+
+    // Shield text - vertically centered at row2CenterY
+    this.shieldText = new Text("0 SHD", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 14,
+      fontWeight: "bold",
+      fill: 0x00ff66,
+      letterSpacing: 0.5,
+    });
+    this.shieldText.resolution = dpr;
+    this.shieldText.anchor.set(0, 0.5);
+    this.shieldText.position.set(45, row2CenterY);
+    this.healthContainer.addChild(this.shieldText);
+
+    // Shield bar fill
+    this.shieldBarFill = new Graphics();
+    this.healthContainer.addChild(this.shieldBarFill);
 
     this.addChild(this.healthContainer);
     this.drawHealthBar(100, 100);
+    this.drawShieldBar(0, 100);
 
     this.weaponContainer = new Container();
-    this.weaponContainer.position.set(screenW - 264, screenH - 85);
+    this.weaponContainer.position.set(screenW - 264, screenH - 96);
     this.weaponContainer.eventMode = "static";
     this.weaponContainer.cursor = "pointer";
     this.weaponContainer.on("pointerdown", () => {
@@ -95,7 +151,7 @@ export class RaycastHUD extends Container {
     const weaponBg = new Graphics();
     weaponBg.beginFill(0x0a1018, 0.75);
     weaponBg.lineStyle(2, 0xffaa00, 0.4);
-    weaponBg.drawRoundedRect(0, 0, 240, 60, 10);
+    weaponBg.drawRoundedRect(0, 0, 240, 72, 10);
     weaponBg.endFill();
     this.weaponContainer.addChild(weaponBg);
 
@@ -253,19 +309,44 @@ export class RaycastHUD extends Container {
   private drawHealthBar(hp: number, maxHp: number): void {
     this.healthBarFill.clear();
     const ratio = Math.max(0, Math.min(1, hp / maxHp));
-    const width = 170 * ratio;
+    const width = 114 * ratio;
 
-    // Color shift based on HP level
-    let barColor = 0x00ff88;
-    if (ratio <= 0.25) {
-      barColor = 0xff2222;
-    } else if (ratio <= 0.5) {
-      barColor = 0xffaa00;
-    }
-
-    this.healthBarFill.beginFill(barColor, 0.85);
-    this.healthBarFill.drawRoundedRect(55, 38, width, 12, 4);
+    // Dark background track
+    this.healthBarFill.beginFill(0x152530, 0.85);
+    this.healthBarFill.drawRoundedRect(114, 15, 114, 8, 3);
     this.healthBarFill.endFill();
+
+    // Red health bar (darker crimson at critical <= 25%)
+    if (width > 0) {
+      const barColor = ratio <= 0.25 ? 0xcc1111 : 0xff3344;
+
+      this.healthBarFill.beginFill(barColor, 0.95);
+      this.healthBarFill.drawRoundedRect(114, 15, width, 8, 3);
+      this.healthBarFill.endFill();
+    }
+  }
+
+  public setShield(currentShield: number, maxShield: number = 100): void {
+    const clampedShield = Math.max(0, Math.min(maxShield, currentShield));
+    this.shieldText.text = `${Math.ceil(clampedShield)} SHD`;
+    this.drawShieldBar(clampedShield, maxShield);
+  }
+
+  private drawShieldBar(shield: number, maxShield: number): void {
+    this.shieldBarFill.clear();
+    const ratio = Math.max(0, Math.min(1, shield / maxShield));
+    const width = 114 * ratio;
+
+    // Dark background track
+    this.shieldBarFill.beginFill(0x152530, 0.85);
+    this.shieldBarFill.drawRoundedRect(114, 49, 114, 8, 3);
+    this.shieldBarFill.endFill();
+
+    if (width > 0) {
+      this.shieldBarFill.beginFill(0x00e676, 0.95);
+      this.shieldBarFill.drawRoundedRect(114, 49, width, 8, 3);
+      this.shieldBarFill.endFill();
+    }
   }
 
   public setWeapon(weaponName: string | null, ammo: number): void {

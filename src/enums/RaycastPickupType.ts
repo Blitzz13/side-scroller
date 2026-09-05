@@ -8,4 +8,5 @@ export enum RaycastPickupType {
   KEYCARD = 6,
   THERMAL_DETONATOR_SINGLE = 7,
   THERMAL_DETONATOR_BELT = 8,
+  SHIELD = 9,
 }

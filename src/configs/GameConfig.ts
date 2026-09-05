@@ -233,6 +233,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/health.png",
           },
           {
+            name: "health_pickup",
+            src: "./assets/raycast/pickups/health.png",
+          },
+          {
             name: "e_11_item",
             src: "./assets/raycast/pickups/e_11_item.png",
           },
@@ -279,6 +283,10 @@ export const manifest: AssetsManifest = {
           {
             name: "dh_17",
             src: "./assets/raycast/weapons/dh_17.png"
+          },
+          {
+            name: "shield_unit",
+            src: "./assets/raycast/pickups/shield_unit.json"
           }
         ],
       },

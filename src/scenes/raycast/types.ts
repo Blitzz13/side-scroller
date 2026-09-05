@@ -86,6 +86,8 @@ export interface RaycastPickupItem {
 export interface RaycastPlayerState {
   health: number;
   maxHealth: number;
+  shield: number;
+  maxShield: number;
   equippedWeapon: RaycastWeaponType | null;
   weaponConfig: IRaycastWeaponConfig | null;
   ammo: number;

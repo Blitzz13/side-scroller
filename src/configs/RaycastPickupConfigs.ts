@@ -6,13 +6,13 @@ export const raycastHealthPickupConfig: IRaycastPickupConfig = {
   type: RaycastPickupType.HEALTH,
   name: "Health Pack",
   amount: 20,
-  texture: "assets/health.png",
+  texture: "assets/raycast/pickups/health.png",
   pickUpSound: {
     src: "repair_sound",
     loop: false,
     volume: 1,
   },
-  scale: 0.25,
+  scale: 0.15,
   anchor: "floor",
 };
 
@@ -122,7 +122,7 @@ export const raycastThermalDetonatorPickupConfig: IRaycastPickupConfig = {
     loop: false,
     volume: 1,
   },
-  scale: 0.2,
+  scale: 0.12,
   anchor: "floor",
 };
 
@@ -137,7 +137,22 @@ export const raycastThermalDetonatorBeltConfig: IRaycastPickupConfig = {
     loop: false,
     volume: 1,
   },
-  scale: 0.22,
+  scale: 0.12,
+  anchor: "floor",
+};
+
+export const raycastShieldPickupConfig: IRaycastPickupConfig = {
+  type: RaycastPickupType.SHIELD,
+  name: "Shield Unit",
+  amount: 25,
+  texture: "assets/raycast/pickups/shield_unit.png",
+  spritesheet: "assets/raycast/pickups/shield_unit.json",
+  pickUpSound: {
+    src: "repair_sound",
+    loop: false,
+    volume: 1,
+  },
+  scale: 0.12,
   anchor: "floor",
 };
 
@@ -154,6 +169,7 @@ export const raycastPickupConfigs: Record<RaycastPickupType, IRaycastPickupConfi
   [RaycastPickupType.KEYCARD]: raycastBlueKeycardConfig,
   [RaycastPickupType.THERMAL_DETONATOR_SINGLE]: raycastThermalDetonatorPickupConfig,
   [RaycastPickupType.THERMAL_DETONATOR_BELT]: raycastThermalDetonatorBeltConfig,
+  [RaycastPickupType.SHIELD]: raycastShieldPickupConfig,
 };
 
 /**
@@ -209,6 +225,9 @@ export function getRaycastPickupConfig(
   }
   if (normalized.includes("ammo")) {
     return raycastAmmoPickupConfig;
+  }
+  if (normalized.includes("shield") || normalized.includes("armor") || normalized.includes("shd")) {
+    return raycastShieldPickupConfig;
   }
 
   return undefined;

@@ -2,6 +2,34 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-06] - Player Energy Shield System & Animated Shield Pickups
+
+### 1. Dynamic Energy Shield Mechanics & Partial Damage Absorption
+- **Damage Negation & Mitigation** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts)):
+  - Added player shield capability (`shield: 0`, `maxShield: 100`) to the player state.
+  - Implemented 65% damage absorption: when attacked, incoming damage splits so that 65% is absorbed and drained from the energy shield (`shieldAbsorbed = Math.min(shield, Math.ceil(damage * 0.65))`), while the remaining 35% penetrates through to player health.
+  - When the shield is fully depleted to 0, 100% of damage impacts player health directly.
+  - Added emerald-green directional screen deflection flash (`0x00e676`) when shield absorbs damage, matching the green shield generator aesthetic.
+  - Added shield pickup collection method `addShield(amount)` with neon-green HUD toast notification and flash effect.
+
+### 2. Animated Shield Pickup Integration
+- **FreeTexPacker Spritesheet Animation** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/enums/RaycastPickupType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastPickupType.ts)):
+  - Integrated `assets/raycast/pickups/shield_unit.json` and `shield_unit.png` into the asset pipeline and pickup manager.
+  - Automatically loads and parses the spritesheet into a 2-frame loop (`shield_unit_1.png` and `shield_unit_2.png`) with animated pulsation (`animationSpeed = 0.05`).
+  - Added new enum `RaycastPickupType.SHIELD = 9` and config `raycastShieldPickupConfig` granting +25 shield.
+  - Replaced hardcoded reference height (`30px`) in pickup rendering with dynamic reference height based on actual texture dimensions, ensuring pixel-perfect world scaling for both keycards and shield units without distortion.
+  - Added map loader recognition for `shield_unit` in TMX object and tile layers (`tile 19` in `StarWarsTileset.tsx`).
+
+### 3. Tactical HUD Shield Gauge & Centered Alignment
+- **Dual Health & Shield Status Display** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Redesigned and expanded the player status container to 240×72px with symmetric weapon dock alignment.
+  - Aligned the health icon and shield crest emblem to the exact same horizontal centerline (`iconCenterX = 26px`), eliminating prior horizontal offset.
+  - Vertically centered Row 1 (health icon, "100 HP" text, health bar) at `Y = 19px` and Row 2 (shield icon, "XX SHD" text, shield bar) at `Y = 53px`.
+  - Upgraded the shield crest emblem to a neon green theme (`#00ff66` rim, `#00c853` translucent fill, `#69f0ae` deflector chevrons) matching the glowing green dome of the `shield_unit` pickup.
+  - Formatted the readout text (`XX SHD`) and shield gauge fill (`#00e676`) in vibrant matching green.
+  - Converted the health bar from green to vibrant scarlet red (`#ff3344`) with deep crimson (`#cc1111`) at critical HP ($\le 25\%$), creating a sharp visual distinction from the green energy shield.
+  - Dynamically updates whenever shield points are gained or depleted.
+
 ## [2026-09-05] - Hardware-Accelerated GPU Floor & Ceiling Raycasting & Modular Shaders
 
 ### 1. Hardware-Accelerated GLSL Floor & Ceiling Raycasting
@@ -38,6 +66,11 @@ This document logs recent development changes and enhancements made to the Rayca
   - Implemented cinematic near-miss dispersion: inaccurate shots intentionally deviate slightly to the left/right ($0.35$–$0.80$ units), allowing red blaster bolts to whiz visibly past the camera and crash into walls behind the player with multi-colored plasma sparks.
   - Enabled reactive player dodging: players can actively strafe out of the line of fire to evade incoming enemy blaster bolts.
   - Integrated tactical impact feedback: hits trigger player damage, camera screen shake ($5\text{px}$), red screen flash, and HUD warning toast (`[-] Hit by Blaster Fire!`).
+
+### 6. Health Pickup Texture Asset Update
+- **Pixel-Art Health Pickup Integration** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Replaced the legacy 613×569 2D health icon with the dedicated pixel-art medpack sprite [`assets/raycast/pickups/health.png`](file:///D:/Projects/side-scroller/assets/raycast/pickups/health.png) ($28 \times 19\text{px}$).
+  - Updated pickup configuration, pre-slicing texture pipeline, tileset definitions, and scene asset loader to ensure the crisp medpack sprite renders in the 3D world with nearest-neighbor scaling.
 
 ## [2026-09-04] - 3D Blaster Laser Projectiles & Weapon Muzzle Integration
 

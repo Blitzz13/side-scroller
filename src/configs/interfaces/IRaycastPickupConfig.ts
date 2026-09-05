@@ -12,6 +12,8 @@ export interface IRaycastPickupConfig {
   scale?: number;
   scaleX?: number;
   scaleY?: number;
+  vOffset?: number;
+  z?: number;
   anchor?: "floor" | "ceiling" | "center" | string;
   keyColor?: "blue" | "green" | "red" | string;
   spritesheet?: string;

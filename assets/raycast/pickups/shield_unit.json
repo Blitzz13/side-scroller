@@ -1,0 +1,63 @@
+{
+  "frames": {
+    "shield_unit_1.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 38,
+        "h": 17
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 38,
+        "h": 17
+      },
+      "sourceSize": {
+        "w": 38,
+        "h": 17
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "shield_unit_2.png": {
+      "frame": {
+        "x": 38,
+        "y": 0,
+        "w": 38,
+        "h": 17
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 38,
+        "h": 17
+      },
+      "sourceSize": {
+        "w": 38,
+        "h": 17
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "shield_unit.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 76,
+      "h": 17
+    },
+    "scale": 1
+  }
+}
