@@ -1778,7 +1778,13 @@ export class RaycastScene extends BaseScene {
       this.laserManager.update(
         delta,
         this.enemyManager.activeEnemies,
-        this.breakableManager
+        this.breakableManager,
+        this.player,
+        (dmg) => {
+          this.playerController.takeDamage(dmg);
+          this.triggerScreenShake(5, 0.22);
+          this.hud.showToast(`[-] Hit by Blaster Fire! (-${dmg} HP)`, 0xff4444);
+        }
       );
     }
 
@@ -1793,7 +1799,8 @@ export class RaycastScene extends BaseScene {
       this.doorStatesFlat,
       allThinWalls,
       this.playerController,
-      this.pickupManager
+      this.pickupManager,
+      this.laserManager
     );
 
     // Check for item pickups

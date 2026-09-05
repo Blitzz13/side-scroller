@@ -11,6 +11,7 @@ import { RaycastEnemy } from "./RaycastEnemy";
 
 export interface ActiveLaser {
   id: number;
+  source: "player" | "enemy";
   startX: number;
   startY: number;
   startZ: number;
@@ -31,6 +32,8 @@ export interface ActiveLaser {
   targetBreakable: any | null;
   onEnemyKilled?: (enemy: RaycastEnemy) => void;
   onBreakableDestroyed?: (b: any) => void;
+  onPlayerHit?: (damage: number) => void;
+  tint?: number;
   sprite: Sprite;
   alive: boolean;
 }
@@ -157,9 +160,12 @@ export class RaycastLaserManager {
       sprite.texture = this.laserTexture;
     }
     sprite.visible = false;
+    sprite.tint = 0xffffff;
 
     const laser: ActiveLaser = {
       id: this.nextLaserId++,
+      source: "player",
+      tint: 0xffffff,
       startX,
       startY,
       startZ,
@@ -187,10 +193,80 @@ export class RaycastLaserManager {
     this.lasers.push(laser);
   }
 
+  /**
+   * Fires a 3D laser bolt from an enemy towards the player or targeted coordinates.
+   */
+  public fireEnemyLaser(
+    startX: number,
+    startY: number,
+    startZ: number,
+    targetX: number,
+    targetY: number,
+    targetZ: number,
+    damage: number,
+    onPlayerHit?: (damage: number) => void
+  ): void {
+    const dx = targetX - startX;
+    const dy = targetY - startY;
+    const dz = targetZ - startZ;
+    const totalDistance = Math.max(0.1, Math.hypot(dx, dy, dz));
+
+    const vx = dx / totalDistance;
+    const vy = dy / totalDistance;
+    const vz = dz / totalDistance;
+
+    let sprite: Sprite;
+    if (this.laserSpritePool.length > 0) {
+      sprite = this.laserSpritePool.pop()!;
+    } else {
+      sprite = new Sprite(this.laserTexture ?? Texture.WHITE);
+      sprite.anchor.set(0.5, 0.5);
+      sprite.blendMode = BLEND_MODES.ADD;
+      this.container.addChild(sprite);
+    }
+
+    if (this.laserTexture) {
+      sprite.texture = this.laserTexture;
+    }
+    sprite.visible = false;
+    sprite.tint = 0xff3322; // Vibrant red imperial blaster glow
+
+    const laser: ActiveLaser = {
+      id: this.nextLaserId++,
+      source: "enemy",
+      tint: 0xff3322,
+      startX,
+      startY,
+      startZ,
+      currentX: startX,
+      currentY: startY,
+      currentZ: startZ,
+      targetX,
+      targetY,
+      targetZ,
+      vx,
+      vy,
+      vz,
+      speed: 28.0, // High-speed, responsive sci-fi blaster bolt (units/sec)
+      distanceTraveled: 0,
+      totalDistance,
+      damage,
+      targetEnemy: null,
+      targetBreakable: null,
+      onPlayerHit,
+      sprite,
+      alive: true,
+    };
+
+    this.lasers.push(laser);
+  }
+
   public update(
     delta: number,
     activeEnemies: RaycastEnemy[] = [],
-    breakableManager?: any
+    breakableManager?: any,
+    player?: { x: number; y: number; z?: number },
+    onPlayerHit?: (damage: number) => void
   ): void {
     const dt = delta / 60;
 
@@ -210,53 +286,105 @@ export class RaycastLaserManager {
       laser.currentY = laser.startY + (laser.targetY - laser.startY) * progress;
       laser.currentZ = laser.startZ + (laser.targetZ - laser.startZ) * progress;
 
-      // Check collision with targeted enemy or any other enemy in flight path
-      let hitEnemy: RaycastEnemy | null = null;
-      if (laser.targetEnemy && !laser.targetEnemy.isDead) {
-        const distToTarget = Math.hypot(
-          laser.targetEnemy.x - laser.currentX,
-          laser.targetEnemy.y - laser.currentY
-        );
-        if (distToTarget < 0.55 || progress >= 0.98) {
-          hitEnemy = laser.targetEnemy;
-        }
-      }
-
-      if (!hitEnemy) {
-        for (const enemy of activeEnemies) {
-          if (enemy.isDead) continue;
-          const dist = Math.hypot(
-            enemy.x - laser.currentX,
-            enemy.y - laser.currentY
+      if (laser.source === "player") {
+        // Player laser: check collision with targeted enemy or any other enemy in flight path
+        let hitEnemy: RaycastEnemy | null = null;
+        if (laser.targetEnemy && !laser.targetEnemy.isDead) {
+          const distToTarget = Math.hypot(
+            laser.targetEnemy.x - laser.currentX,
+            laser.targetEnemy.y - laser.currentY
           );
-          if (dist < 0.45) {
-            hitEnemy = enemy;
-            break;
+          if (distToTarget < 0.55 || progress >= 0.98) {
+            hitEnemy = laser.targetEnemy;
           }
         }
-      }
 
-      if (hitEnemy) {
-        hitEnemy.takeDamage(laser.damage, laser.onEnemyKilled);
-        this.spawnImpact(laser.currentX, laser.currentY, laser.currentZ);
-        laser.alive = false;
-        this.destroyLaser(laser, i);
-        continue;
-      }
-
-      // Check target arrival (breakable or wall)
-      if (progress >= 1.0) {
-        if (laser.targetBreakable && breakableManager) {
-          breakableManager.damageBreakable(
-            laser.targetBreakable,
-            laser.damage,
-            laser.onBreakableDestroyed
-          );
+        if (!hitEnemy) {
+          for (const enemy of activeEnemies) {
+            if (enemy.isDead) continue;
+            const dist = Math.hypot(
+              enemy.x - laser.currentX,
+              enemy.y - laser.currentY
+            );
+            if (dist < 0.45) {
+              hitEnemy = enemy;
+              break;
+            }
+          }
         }
-        this.spawnImpact(laser.targetX, laser.targetY, laser.targetZ);
-        laser.alive = false;
-        this.destroyLaser(laser, i);
-        continue;
+
+        if (hitEnemy) {
+          hitEnemy.takeDamage(laser.damage, laser.onEnemyKilled);
+          this.spawnImpact(laser.currentX, laser.currentY, laser.currentZ);
+          laser.alive = false;
+          this.destroyLaser(laser, i);
+          continue;
+        }
+
+        // Check target arrival (breakable or wall)
+        if (progress >= 1.0) {
+          if (laser.targetBreakable && breakableManager) {
+            breakableManager.damageBreakable(
+              laser.targetBreakable,
+              laser.damage,
+              laser.onBreakableDestroyed
+            );
+          }
+          this.spawnImpact(laser.targetX, laser.targetY, laser.targetZ);
+          laser.alive = false;
+          this.destroyLaser(laser, i);
+          continue;
+        }
+      } else {
+        // Enemy laser: check collision against player
+        let hitPlayer = false;
+        if (player) {
+          const playerZ = player.z ?? 0.5;
+          const distToPlayer = Math.hypot(
+            player.x - laser.currentX,
+            player.y - laser.currentY,
+            playerZ - laser.currentZ
+          );
+          if (distToPlayer < 0.42) {
+            hitPlayer = true;
+          }
+        }
+
+        if (hitPlayer) {
+          if (laser.onPlayerHit) {
+            laser.onPlayerHit(laser.damage);
+          } else if (onPlayerHit) {
+            onPlayerHit(laser.damage);
+          }
+          this.spawnImpact(laser.currentX, laser.currentY, laser.currentZ);
+          laser.alive = false;
+          this.destroyLaser(laser, i);
+          continue;
+        }
+
+        // Check collision with breakables (furniture cover)
+        if (breakableManager && breakableManager.breakables) {
+          for (const b of breakableManager.breakables) {
+            if (b.isBroken) continue;
+            const distToB = Math.hypot(b.x - laser.currentX, b.y - laser.currentY);
+            if (distToB <= (b.hitRadius ?? 0.4)) {
+              breakableManager.damageBreakable(b, laser.damage);
+              this.spawnImpact(laser.currentX, laser.currentY, laser.currentZ);
+              laser.alive = false;
+              this.destroyLaser(laser, i);
+              break;
+            }
+          }
+          if (!laser.alive) continue;
+        }
+
+        // Reached destination (wall or max range)
+        if (progress >= 1.0) {
+          this.spawnImpact(laser.targetX, laser.targetY, laser.targetZ);
+          laser.alive = false;
+          this.destroyLaser(laser, i);
+          continue;
+        }
       }
     }
 
@@ -275,6 +403,7 @@ export class RaycastLaserManager {
 
   private destroyLaser(laser: ActiveLaser, index: number): void {
     laser.sprite.visible = false;
+    laser.sprite.tint = 0xffffff;
     this.laserSpritePool.push(laser.sprite);
     this.lasers.splice(index, 1);
   }
@@ -381,19 +510,38 @@ export class RaycastLaserManager {
           aheadScreenY - spriteScreenY,
           aheadScreenX - spriteScreenX
         );
+      } else {
+        // Front of bolt passed camera: extrapolate angle from behind
+        const backX = laser.currentX - laser.vx * 0.4;
+        const backY = laser.currentY - laser.vy * 0.4;
+        const backZ = laser.currentZ - laser.vz * 0.4;
+        const backDx = backX - playerX;
+        const backDy = backY - playerY;
+        const backTransX = invDet * (dirY * backDx - dirX * backDy);
+        const backTransY = invDet * (-planeY * backDx + planeX * backDy);
+        if (backTransY > 0.05) {
+          const backScreenX = (screenW / 2) * (1 + backTransX / backTransY);
+          const backBaseH = Math.abs(screenH / backTransY);
+          const backScreenY = screenH / 2 + (0.5 - backZ) * backBaseH;
+          trajectoryAngle = Math.atan2(
+            spriteScreenY - backScreenY,
+            spriteScreenX - backScreenX
+          );
+        }
       }
 
       // True 3D perspective foreshortening:
-      // - Near weapon muzzle (transformY ≈ 0.35), the bolt is elongated (4:1 aspect ratio) along its trajectory.
-      // - In the distance (transformY >= 2.5), viewing the bolt along its flight path from behind naturally
-      //   compresses its apparent length into a compact, symmetrical rounded plasma pulse (1:1 aspect ratio).
-      //   This completely removes any awkward directional tilt or artificial mid-air rotation.
-      const thickScale = Math.min(0.70, Math.max(0.12, 0.45 / transformY));
+      // - Near weapon muzzle / point blank, bolt is elongated along its trajectory.
+      // - In the distance (or viewed head-on), compresses into a compact, symmetrical plasma pulse.
+      const thickScale = Math.min(0.85, Math.max(0.12, 0.48 / transformY));
       const foreshortenT = Math.min(1.0, Math.max(0.0, (transformY - 0.35) / 2.2));
       const smoothT = foreshortenT * foreshortenT * (3 - 2 * foreshortenT);
-      const targetAspect = 4.0 * (1 - smoothT) + 1.05 * smoothT;
-      const lenScale = Math.min(0.85, Math.max(0.035, thickScale * (targetAspect / 4.0)));
+      const targetAspect = laser.source === "player"
+        ? 4.0 * (1 - smoothT) + 1.05 * smoothT
+        : 1.2 * smoothT + 3.2 * (1 - smoothT);
+      const lenScale = Math.min(0.95, Math.max(0.04, thickScale * (targetAspect / 4.0)));
 
+      laser.sprite.tint = laser.tint ?? 0xffffff;
       laser.sprite.rotation = trajectoryAngle;
       laser.sprite.scale.set(lenScale, thickScale);
       laser.sprite.position.set(spriteScreenX, spriteScreenY);

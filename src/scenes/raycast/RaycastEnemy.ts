@@ -226,7 +226,7 @@ export class RaycastEnemy {
     playerY: number,
     hasLineOfSight: (x1: number, y1: number, x2: number, y2: number) => boolean,
     tryMoveEnemy: (enemy: RaycastEnemy, newX: number, newY: number) => boolean,
-    onShootPlayer: (damage: number, accuracy: number, distance: number) => void
+    onShootPlayer: (enemy: RaycastEnemy, damage: number, accuracy: number, distance: number) => void
   ): void {
     if (this.painTimer > 0) {
       this.painTimer = Math.max(0, this.painTimer - delta);
@@ -307,7 +307,7 @@ export class RaycastEnemy {
             }
           }
 
-          onShootPlayer(this.config.damage, this.config.accuracy, dist);
+          onShootPlayer(this, this.config.damage, this.config.accuracy, dist);
         }
       }
     }

@@ -11,6 +11,7 @@ import { RaycastPickupManager } from "./RaycastPickupManager";
 import { RaycastPlayerController } from "./RaycastPlayerController";
 import { gameConfig } from "../../configs/GameConfig";
 import { EnemyVoicelineManager } from "./EnemyVoicelineManager";
+import { RaycastLaserManager } from "./RaycastLaserManager";
 
 export class RaycastEnemyManager {
   private container: Container;
@@ -261,6 +262,85 @@ export class RaycastEnemyManager {
     return true;
   }
 
+  /**
+   * Traces a ray from start position along dirX, dirY using DDA to find the distance
+   * to the first solid wall or closed door, up to maxRange.
+   */
+  public findRayWallDistance(
+    startX: number,
+    startY: number,
+    dirX: number,
+    dirY: number,
+    maxRange: number,
+    mapFlat: Int32Array,
+    mapWidth: number,
+    mapHeight: number,
+    doorStatesFlat: Float64Array
+  ): number {
+    const rayDirX = dirX;
+    const rayDirY = dirY;
+
+    let mapX = Math.floor(startX);
+    let mapY = Math.floor(startY);
+
+    const deltaDistX = Math.abs(1 / (rayDirX === 0 ? 0.00001 : rayDirX));
+    const deltaDistY = Math.abs(1 / (rayDirY === 0 ? 0.00001 : rayDirY));
+
+    let stepX: number;
+    let stepY: number;
+    let sideDistX: number;
+    let sideDistY: number;
+
+    if (rayDirX < 0) {
+      stepX = -1;
+      sideDistX = (startX - mapX) * deltaDistX;
+    } else {
+      stepX = 1;
+      sideDistX = (mapX + 1 - startX) * deltaDistX;
+    }
+
+    if (rayDirY < 0) {
+      stepY = -1;
+      sideDistY = (startY - mapY) * deltaDistY;
+    } else {
+      stepY = 1;
+      sideDistY = (mapY + 1 - startY) * deltaDistY;
+    }
+
+    let currentDist = 0;
+
+    while (currentDist < maxRange) {
+      if (sideDistX < sideDistY) {
+        currentDist = sideDistX;
+        sideDistX += deltaDistX;
+        mapX += stepX;
+      } else {
+        currentDist = sideDistY;
+        sideDistY += deltaDistY;
+        mapY += stepY;
+      }
+
+      if (currentDist >= maxRange) break;
+
+      if (mapX < 0 || mapX >= mapWidth || mapY < 0 || mapY >= mapHeight) {
+        return currentDist;
+      }
+
+      const flatIdx = mapY * mapWidth + mapX;
+      const tile = mapFlat[flatIdx];
+
+      if (tile > 0) {
+        const doorState = doorStatesFlat[flatIdx];
+        if (doorState !== undefined && Math.abs(doorState) >= 0.8) {
+          continue; // Open door
+        }
+        return currentDist; // Solid wall or closed door
+      }
+    }
+
+    return maxRange;
+  }
+
   public tryMoveEnemy(
     enemy: RaycastEnemy,
     newX: number,
@@ -324,7 +404,8 @@ export class RaycastEnemyManager {
     doorStatesFlat: Float64Array,
     thinWalls: Array<{ x1: number; y1: number; x2: number; y2: number }>,
     playerController: RaycastPlayerController,
-    pickupManager: RaycastPickupManager
+    pickupManager: RaycastPickupManager,
+    laserManager?: RaycastLaserManager
   ): void {
     const losChecker = (x1: number, y1: number, x2: number, y2: number) =>
       this.checkLineOfSight(
@@ -351,17 +432,92 @@ export class RaycastEnemyManager {
       );
 
     const onShootPlayer = (
+      enemy: RaycastEnemy,
       damage: number,
       accuracy: number,
       distance: number
     ) => {
-      const effectiveAccuracy = Math.max(
-        0.2,
-        Math.min(0.9, accuracy - (distance / 20) * 0.3)
-      );
-      if (Math.random() <= effectiveAccuracy) {
-        playerController.takeDamage(damage);
+      if (!laserManager) {
+        // Fallback hitscan if no laser manager
+        const effectiveAccuracy = Math.max(
+          0.2,
+          Math.min(0.9, accuracy - (distance / 20) * 0.3)
+        );
+        if (Math.random() <= effectiveAccuracy) {
+          playerController.takeDamage(damage);
+        }
+        return;
       }
+
+      // Calculate direction from enemy to player
+      const dx = playerX - enemy.x;
+      const dy = playerY - enemy.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= 0.001) return;
+
+      const normX = dx / dist;
+      const normY = dy / dist;
+      const perpX = -normY;
+      const perpY = normX;
+
+      const effectiveAccuracy = Math.max(
+        0.25,
+        Math.min(0.85, accuracy - (dist / 20) * 0.25)
+      );
+      const isHit = Math.random() <= effectiveAccuracy;
+
+      let aimDirX: number;
+      let aimDirY: number;
+
+      if (isHit) {
+        // Direct shot towards player with tiny organic jitter (+/- 0.06)
+        const jitter = (Math.random() - 0.5) * 0.06;
+        aimDirX = normX + perpX * jitter;
+        aimDirY = normY + perpY * jitter;
+      } else {
+        // Inaccurate shot: purposefully aims slightly wide to whiz past player
+        const side = Math.random() > 0.5 ? 1 : -1;
+        const missOffset = side * (0.35 + Math.random() * 0.45);
+        aimDirX = normX + perpX * (missOffset / dist);
+        aimDirY = normY + perpY * (missOffset / dist);
+      }
+
+      // Normalize aim vector
+      const aimLen = Math.hypot(aimDirX, aimDirY);
+      aimDirX /= aimLen;
+      aimDirY /= aimLen;
+
+      // Find where this laser will hit a wall/door behind the player (or max range)
+      const maxTraceDist = dist + 16.0;
+      const wallDist = this.findRayWallDistance(
+        enemy.x,
+        enemy.y,
+        aimDirX,
+        aimDirY,
+        maxTraceDist,
+        mapFlat,
+        mapWidth,
+        mapHeight,
+        doorStatesFlat
+      );
+
+      const targetDist = Math.max(0.5, wallDist);
+      const targetX = enemy.x + aimDirX * targetDist;
+      const targetY = enemy.y + aimDirY * targetDist;
+      const targetZ = 0.5;
+
+      laserManager.fireEnemyLaser(
+        enemy.x,
+        enemy.y,
+        0.55, // Stormtrooper standing rifle height
+        targetX,
+        targetY,
+        targetZ,
+        damage,
+        (dmg) => {
+          playerController.takeDamage(dmg);
+        }
+      );
     };
 
     for (const enemy of this.enemies) {

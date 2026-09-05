@@ -30,6 +30,15 @@ This document logs recent development changes and enhancements made to the Rayca
   - Fixed strict typing in `CopyPlugin` transform option (`absoluteFilename?: string`).
   - Handled TypeScript 5+ `IArrayBuffer` type variance for PixiJS `MeshGeometry` buffers.
 
+### 5. Enemy 3D Blaster Laser Projectiles & Real-Time Combat Physics
+- **3D Enemy Blaster Simulation** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Upgraded enemy attacks from instantaneous dice-roll hitscan to true physical 3D flying laser projectiles with crimson glowing blaster bolts (`tint: 0xff3322`).
+  - Enemy bolts originate at the enemy's world position at rifle height ($Z = 0.55$) and fly towards the player at high velocity ($28.0\text{ units/sec}$).
+  - Added real-time collision detection against the player cylinder ($r = 0.42$) and breakable furniture cover (tables/chairs), damaging cover or player upon impact.
+  - Implemented cinematic near-miss dispersion: inaccurate shots intentionally deviate slightly to the left/right ($0.35$–$0.80$ units), allowing red blaster bolts to whiz visibly past the camera and crash into walls behind the player with multi-colored plasma sparks.
+  - Enabled reactive player dodging: players can actively strafe out of the line of fire to evade incoming enemy blaster bolts.
+  - Integrated tactical impact feedback: hits trigger player damage, camera screen shake ($5\text{px}$), red screen flash, and HUD warning toast (`[-] Hit by Blaster Fire!`).
+
 ## [2026-09-04] - 3D Blaster Laser Projectiles & Weapon Muzzle Integration
 
 ### 1. 3D Laser Projectile Physics & Rendering Engine
