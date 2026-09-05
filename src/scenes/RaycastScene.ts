@@ -1,7 +1,11 @@
 import {
   Container,
   Graphics,
+  Mesh,
+  MeshGeometry,
   Rectangle,
+  SCALE_MODES,
+  Shader,
   Sprite,
   Texture,
   Ticker,
@@ -26,6 +30,8 @@ import { RaycastLaserManager } from "./raycast/RaycastLaserManager";
 import { RaycastWeaponType } from "../enums/RaycastWeaponType";
 import { RaycastPickupType } from "../enums/RaycastPickupType";
 import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
+import floorCeilingVert from "./raycast/shaders/floorCeiling.vert";
+import floorCeilingFrag from "./raycast/shaders/floorCeiling.frag";
 
 interface RayHit {
   wallType: number;
@@ -144,13 +150,16 @@ export class RaycastScene extends BaseScene {
   private backgroundContainer!: Container;
   private wallContainer!: Container;
 
-  private bgCanvas!: HTMLCanvasElement;
-  private bgCtx!: CanvasRenderingContext2D;
-  private bgImageData!: ImageData;
-  private bgBuffer32!: Uint32Array;
-  private bgTexture!: Texture;
-  private bgSprite!: Sprite;
-  private skyBuffer: Uint32Array = new Uint32Array(0);
+
+
+  // GPU Floor & Ceiling rendering
+  private floorCeilingMesh!: Mesh<Shader>;
+  private floorCeilingShader!: Shader;
+  private floorCeilingAtlasTexture: Texture = Texture.WHITE;
+  private floorCeilingMapTexture: Texture = Texture.WHITE;
+  private uPlayerPosUniform = new Float32Array(2);
+  private uDirUniform = new Float32Array(2);
+  private uPlaneUniform = new Float32Array(2);
   private graphicsUsed: boolean = false;
 
   // Reusable zero-allocation arrays and constants (High Priority Fixes)
@@ -216,29 +225,54 @@ export class RaycastScene extends BaseScene {
     this.worldContainer.sortableChildren = true;
     this.addChild(this.worldContainer);
 
-    // Background sprite for floor & ceiling/sky rendering (native 1:1 crisp resolution)
-    this.bgCanvas = document.createElement("canvas");
-    this.bgCanvas.width = gameConfig.width;
-    this.bgCanvas.height = gameConfig.height;
-    this.bgCtx = this.bgCanvas.getContext("2d", { willReadFrequently: true })!;
-    this.bgImageData = this.bgCtx.createImageData(
-      gameConfig.width,
-      gameConfig.height
+    // Background mesh for GPU floor & ceiling/sky rendering (native 1:1 resolution via GLSL shader)
+    const floorCeilingGeom = new MeshGeometry(
+      new Float32Array([
+        0, 0,
+        gameConfig.width, 0,
+        gameConfig.width, gameConfig.height,
+        0, gameConfig.height,
+      ]) as any,
+      new Float32Array([
+        0, 0,
+        1, 0,
+        1, 1,
+        0, 1,
+      ]) as any,
+      new Uint16Array([0, 1, 2, 0, 2, 3]) as any
     );
-    this.bgBuffer32 = new Uint32Array(this.bgImageData.data.buffer);
-    this.bgTexture = Texture.from(this.bgCanvas);
-    this.bgSprite = new Sprite(this.bgTexture);
-    this.bgSprite.width = gameConfig.width;
-    this.bgSprite.height = gameConfig.height;
 
-    this.initSkyGradient();
+    this.uPlayerPosUniform[0] = this.player.x;
+    this.uPlayerPosUniform[1] = this.player.y;
+    this.uDirUniform[0] = this.player.dirX;
+    this.uDirUniform[1] = this.player.dirY;
+    this.uPlaneUniform[0] = this.player.planeX;
+    this.uPlaneUniform[1] = this.player.planeY;
+
+    this.floorCeilingShader = Shader.from(
+      floorCeilingVert,
+      floorCeilingFrag,
+      {
+        uPlayerPos: this.uPlayerPosUniform,
+        uDir: this.uDirUniform,
+        uPlane: this.uPlaneUniform,
+        uMaxDist: this.MAX_RENDER_DISTANCE,
+        uMapSize: [1.0, 1.0],
+        uMapTexture: Texture.WHITE,
+        uAtlas: Texture.WHITE,
+        uAtlasGrid: [4.0, 4.0],
+        uTileSize: 256.0,
+      }
+    );
+
+    this.floorCeilingMesh = new Mesh(floorCeilingGeom, this.floorCeilingShader);
 
     this.graphics = new Graphics();
 
     // Background layer container (floor, ceiling, sky, graphics fallback)
     this.backgroundContainer = new Container();
     this.backgroundContainer.zIndex = 0;
-    this.backgroundContainer.addChild(this.bgSprite);
+    this.backgroundContainer.addChild(this.floorCeilingMesh);
     this.backgroundContainer.addChild(this.graphics);
     this.worldContainer.addChild(this.backgroundContainer);
 
@@ -357,23 +391,6 @@ export class RaycastScene extends BaseScene {
     });
   }
 
-  private initSkyGradient() {
-    const horizon = Math.floor(gameConfig.height / 2);
-    this.skyBuffer = new Uint32Array(gameConfig.width * horizon);
-
-    for (let y = 0; y < horizon; y++) {
-      const t = y / horizon;
-      const r = Math.floor(40 + (135 - 40) * t);
-      const g = Math.floor(70 + (206 - 70) * t);
-      const b = Math.floor(120 + (235 - 120) * t);
-      const color = 0xff000000 | (b << 16) | (g << 8) | r;
-
-      const rowOffset = y * gameConfig.width;
-      for (let x = 0; x < gameConfig.width; x++) {
-        this.skyBuffer[rowOffset + x] = color;
-      }
-    }
-  }
 
   private async loadExternalTileset(tileset: any): Promise<void> {
     const source = tileset.source;
@@ -1134,6 +1151,144 @@ export class RaycastScene extends BaseScene {
     for (let i = 0; i <= maxTileId; i++) {
       this.rawTexArray[i] = this.rawTextureData[i];
     }
+
+    // Build GPU texture atlas and map texture for floor & ceiling GLSL shader
+    this.buildFloorCeilingTextures();
+  }
+
+  private buildFloorCeilingTextures(): void {
+    // 1. Collect all unique tile IDs used in floor and ceiling maps
+    const uniqueTileIds: number[] = [];
+    const tileToSlot = new Map<number, number>();
+    for (let i = 0; i < this.floorMapFlat.length; i++) {
+      const f = this.floorMapFlat[i];
+      if (f >= 0 && !tileToSlot.has(f)) {
+        tileToSlot.set(f, uniqueTileIds.length);
+        uniqueTileIds.push(f);
+      }
+      const c = this.ceilingMapFlat[i];
+      if (c >= 0 && !tileToSlot.has(c)) {
+        tileToSlot.set(c, uniqueTileIds.length);
+        uniqueTileIds.push(c);
+      }
+    }
+
+    const numSlots = Math.max(1, uniqueTileIds.length);
+    const cols = 4;
+    const rows = Math.ceil(numSlots / cols);
+    const tileSize = 256;
+
+    // 2. Build texture atlas canvas
+    const atlasCanvas = document.createElement("canvas");
+    atlasCanvas.width = cols * tileSize;
+    atlasCanvas.height = rows * tileSize;
+    const atlasCtx = atlasCanvas.getContext("2d")!;
+    atlasCtx.fillStyle = "#333333";
+    atlasCtx.fillRect(0, 0, atlasCanvas.width, atlasCanvas.height);
+
+    for (let slot = 0; slot < uniqueTileIds.length; slot++) {
+      const tileId = uniqueTileIds[slot];
+      const col = slot % cols;
+      const row = Math.floor(slot / cols);
+      const tex = this.textures[tileId];
+      let drawn = false;
+
+      if (tex) {
+        const resource = (tex.baseTexture.resource as any);
+        const source = resource?.source || resource;
+        if (source) {
+          try {
+            atlasCtx.drawImage(
+              source,
+              col * tileSize,
+              row * tileSize,
+              tileSize,
+              tileSize
+            );
+            drawn = true;
+          } catch (e) {
+            // fallback below
+          }
+        }
+      }
+
+      if (!drawn) {
+        const raw = this.rawTextureData[tileId];
+        if (raw) {
+          const tempCanvas = document.createElement("canvas");
+          tempCanvas.width = raw.width;
+          tempCanvas.height = raw.height;
+          const tempCtx = tempCanvas.getContext("2d");
+          if (tempCtx) {
+            const imgData = tempCtx.createImageData(raw.width, raw.height);
+            imgData.data.set(new Uint8ClampedArray(raw.pixels.buffer));
+            tempCtx.putImageData(imgData, 0, 0);
+            atlasCtx.drawImage(
+              tempCanvas,
+              col * tileSize,
+              row * tileSize,
+              tileSize,
+              tileSize
+            );
+            drawn = true;
+          }
+        }
+      }
+    }
+
+    if (this.floorCeilingAtlasTexture && this.floorCeilingAtlasTexture !== Texture.WHITE) {
+      this.floorCeilingAtlasTexture.destroy(true);
+    }
+    this.floorCeilingAtlasTexture = Texture.from(atlasCanvas);
+    this.floorCeilingAtlasTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+
+    // 3. Build map lookup texture (R = floor slot + 1, G = ceiling slot + 1)
+    const mapCanvas = document.createElement("canvas");
+    mapCanvas.width = this.mapWidth;
+    mapCanvas.height = this.mapHeight;
+    const mapCtx = mapCanvas.getContext("2d")!;
+    const mapImg = mapCtx.createImageData(this.mapWidth, this.mapHeight);
+    const data = mapImg.data;
+
+    for (let y = 0; y < this.mapHeight; y++) {
+      for (let x = 0; x < this.mapWidth; x++) {
+        const idx = y * this.mapWidth + x;
+        const pxIdx = idx * 4;
+        const floorTile = this.floorMapFlat[idx];
+        const ceilTile = this.ceilingMapFlat[idx];
+
+        if (floorTile >= 0 && tileToSlot.has(floorTile)) {
+          data[pxIdx] = tileToSlot.get(floorTile)! + 1;
+        } else {
+          data[pxIdx] = 0;
+        }
+
+        if (ceilTile >= 0 && tileToSlot.has(ceilTile)) {
+          data[pxIdx + 1] = tileToSlot.get(ceilTile)! + 1;
+        } else {
+          data[pxIdx + 1] = 0;
+        }
+
+        data[pxIdx + 2] = 0;
+        data[pxIdx + 3] = 255;
+      }
+    }
+
+    mapCtx.putImageData(mapImg, 0, 0);
+
+    if (this.floorCeilingMapTexture && this.floorCeilingMapTexture !== Texture.WHITE) {
+      this.floorCeilingMapTexture.destroy(true);
+    }
+    this.floorCeilingMapTexture = Texture.from(mapCanvas);
+    this.floorCeilingMapTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+
+    // 4. Update shader uniforms
+    const uniforms = this.floorCeilingShader.uniforms;
+    uniforms.uMapSize = [this.mapWidth, this.mapHeight];
+    uniforms.uMapTexture = this.floorCeilingMapTexture;
+    uniforms.uAtlas = this.floorCeilingAtlasTexture;
+    uniforms.uAtlasGrid = [cols, rows];
+    uniforms.uTileSize = tileSize;
   }
 
   public getDoorSlideNumericMode(mode: DoorOpen | undefined): number {
@@ -1222,9 +1377,14 @@ export class RaycastScene extends BaseScene {
     try {
       sound.stop("calm_loop");
     } catch {}
-    this.removeChildren();
-    if (this.bgTexture) {
-      this.bgTexture.destroy(true);
+    if (this.floorCeilingAtlasTexture && this.floorCeilingAtlasTexture !== Texture.WHITE) {
+      this.floorCeilingAtlasTexture.destroy(true);
+    }
+    if (this.floorCeilingMapTexture && this.floorCeilingMapTexture !== Texture.WHITE) {
+      this.floorCeilingMapTexture.destroy(true);
+    }
+    if (this.floorCeilingMesh) {
+      this.floorCeilingMesh.destroy({ children: true });
     }
     if (this.mobileControls) {
       this.mobileControls.dispose();
@@ -2218,231 +2378,7 @@ export class RaycastScene extends BaseScene {
     return hitCount;
   }
 
-  private renderFloorAndCeiling() {
-    const screenW = gameConfig.width;
-    const screenH = gameConfig.height;
-    const horizon = screenH >> 1;
-    const posZ = 0.5 * screenH;
-    const maxDist = this.MAX_RENDER_DISTANCE;
-    const invMaxDist = 0.75 / maxDist;
-    const mapW = this.mapWidth;
-    const mapH = this.mapHeight;
-    const buf = this.bgBuffer32;
-    const sky = this.skyBuffer;
-    const floorMap = this.floorMapFlat;
-    const ceilMap = this.ceilingMapFlat;
-    const texArr = this.rawTexArray;
-    const wTop = this.wallTop;
-    const wBot = this.wallBottom;
 
-    const planeX = this.player.planeX;
-    const planeY = this.player.planeY;
-    const dirX = this.player.dirX;
-    const dirY = this.player.dirY;
-    const posX = this.player.x;
-    const posY = this.player.y;
-
-    const rdx0 = dirX - planeX;
-    const rdy0 = dirY - planeY;
-    const rdx1 = dirX + planeX;
-    const rdy1 = dirY + planeY;
-    const drdx = rdx1 - rdx0;
-    const drdy = rdy1 - rdy0;
-
-    const invScreenW = 1.0 / screenW;
-
-    // 1. Ceiling casting for top half (y = 0 to horizon - 1)
-    const gMaxTop = this.globalMaxWallTop;
-    for (let y = 0; y < horizon; y++) {
-      // If this entire screen row is at or below the maximum wall top, it's 100% occluded by walls
-      if (y >= gMaxTop) {
-        continue;
-      }
-
-      const p = horizon - y;
-      if (p <= 0) continue;
-      const rowDist = posZ / p;
-
-      const rowStart = y * screenW;
-      // Early termination: if this row is beyond render distance, fill with sky
-      if (rowDist > maxDist) {
-        for (let x = 0; x < screenW; x++) {
-          buf[rowStart + x] = sky[rowStart + x];
-        }
-        continue;
-      }
-
-      const stepX = rowDist * drdx * invScreenW;
-      const stepY = rowDist * drdy * invScreenW;
-      let ceilX = posX + rowDist * rdx0;
-      let ceilY = posY + rowDist * rdy0;
-
-      const shade = 1.0 - rowDist * invMaxDist;
-      const shadeInt = (Math.max(0.18, Math.min(1.0, shade)) * 256) | 0;
-
-      let bufIdx = rowStart;
-      const isFullBright = shadeInt >= 256;
-
-      for (let x = 0; x < screenW; x++) {
-        // OCCLUSION CULLING: Skip pixels hidden behind walls
-        if (y >= wTop[x]) {
-          bufIdx++;
-          ceilX += stepX;
-          ceilY += stepY;
-          continue;
-        }
-
-        const cellX = ceilX | 0;
-        const cellY = ceilY | 0;
-
-        if (
-          cellX >= 0 && cellX < mapW &&
-          cellY >= 0 && cellY < mapH
-        ) {
-          const tileId = ceilMap[cellY * mapW + cellX];
-          if (tileId >= 0) {
-            const texData = texArr[tileId];
-            if (texData) {
-              const cxFrac = ceilX - cellX;
-              const cyFrac = ceilY - cellY;
-              const safeX = cxFrac < 0 ? cxFrac + 1 : cxFrac;
-              const safeY = cyFrac < 0 ? cyFrac + 1 : cyFrac;
-
-              const tx = texData.isPow2
-                ? ((safeX * texData.width) | 0) & texData.maskX
-                : ((safeX * texData.width) | 0) % texData.width;
-              const ty = texData.isPow2
-                ? ((safeY * texData.height) | 0) & texData.maskY
-                : ((safeY * texData.height) | 0) % texData.height;
-
-              const rawPix = texData.pixels[ty * texData.width + tx];
-              if (isFullBright) {
-                buf[bufIdx] = rawPix | 0xff000000;
-              } else {
-                const r = ((rawPix & 0xff) * shadeInt) >> 8;
-                const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
-                const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
-                buf[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
-              }
-            } else {
-              buf[bufIdx] = sky[bufIdx];
-            }
-          } else {
-            buf[bufIdx] = sky[bufIdx];
-          }
-        } else {
-          buf[bufIdx] = sky[bufIdx];
-        }
-
-        bufIdx++;
-        ceilX += stepX;
-        ceilY += stepY;
-      }
-    }
-
-    // 2. Floor casting for bottom half (y = horizon to screenH - 1)
-    const gMinBot = this.globalMinWallBottom;
-    for (let y = horizon; y < screenH; y++) {
-      // If this entire screen row is above the minimum wall bottom, it's 100% occluded by walls
-      if (y < gMinBot) {
-        continue;
-      }
-
-      const p = y - horizon;
-      if (p <= 0) continue;
-
-      const rowDist = posZ / p;
-      const rowStart = y * screenW;
-
-      // Early termination: if this row is beyond render distance, fill with fog
-      if (rowDist > maxDist) {
-        const fogVal = (0x33 * 46) >> 8; // min shade (0.18) applied to 0x33
-        const fogColor = 0xff000000 | (fogVal << 16) | (fogVal << 8) | fogVal;
-        buf.fill(fogColor, rowStart, rowStart + screenW);
-        continue;
-      }
-
-      const stepX = rowDist * drdx * invScreenW;
-      const stepY = rowDist * drdy * invScreenW;
-      let floorX = posX + rowDist * rdx0;
-      let floorY = posY + rowDist * rdy0;
-
-      const shade = 1.0 - rowDist * invMaxDist;
-      const shadeInt = (Math.max(0.18, Math.min(1.0, shade)) * 256) | 0;
-
-      let bufIdx = rowStart;
-      const isFullBright = shadeInt >= 256;
-
-      for (let x = 0; x < screenW; x++) {
-        // OCCLUSION CULLING: Skip pixels hidden behind walls
-        if (y < wBot[x]) {
-          bufIdx++;
-          floorX += stepX;
-          floorY += stepY;
-          continue;
-        }
-
-        const cellX = floorX | 0;
-        const cellY = floorY | 0;
-
-        if (
-          cellX >= 0 && cellX < mapW &&
-          cellY >= 0 && cellY < mapH
-        ) {
-          const tileId = floorMap[cellY * mapW + cellX];
-          if (tileId >= 0) {
-            const texData = texArr[tileId];
-            if (texData) {
-              const fx = floorX - cellX;
-              const fy = floorY - cellY;
-              const safeX = fx < 0 ? fx + 1 : fx;
-              const safeY = fy < 0 ? fy + 1 : fy;
-
-              const tx = texData.isPow2
-                ? ((safeX * texData.width) | 0) & texData.maskX
-                : ((safeX * texData.width) | 0) % texData.width;
-              const ty = texData.isPow2
-                ? ((safeY * texData.height) | 0) & texData.maskY
-                : ((safeY * texData.height) | 0) % texData.height;
-
-              const rawPix = texData.pixels[ty * texData.width + tx];
-              if (isFullBright) {
-                buf[bufIdx] = rawPix | 0xff000000;
-              } else {
-                const r = ((rawPix & 0xff) * shadeInt) >> 8;
-                const g = (((rawPix >> 8) & 0xff) * shadeInt) >> 8;
-                const b = (((rawPix >> 16) & 0xff) * shadeInt) >> 8;
-                buf[bufIdx] = 0xff000000 | (b << 16) | (g << 8) | r;
-              }
-            } else {
-              const base = 0x33;
-              const val = (base * shadeInt) >> 8;
-              buf[bufIdx] = 0xff000000 | (val << 16) | (val << 8) | val;
-            }
-          } else {
-            const base = 0x33;
-            const val = (base * shadeInt) >> 8;
-            buf[bufIdx] = 0xff000000 | (val << 16) | (val << 8) | val;
-          }
-        } else {
-          const base = 0x33;
-          const val = (base * shadeInt) >> 8;
-          buf[bufIdx] = 0xff000000 | (val << 16) | (val << 8) | val;
-        }
-
-        bufIdx++;
-        floorX += stepX;
-        floorY += stepY;
-      }
-    }
-
-    this.bgCtx.putImageData(this.bgImageData, 0, 0);
-    if ((this.bgTexture as any).source?.update) {
-      (this.bgTexture as any).source.update();
-    } else {
-      this.bgTexture.update();
-    }
-  }
 
   private renderScene() {
     const screenW = gameConfig.width;
@@ -2519,8 +2455,13 @@ export class RaycastScene extends BaseScene {
     this.globalMinWallBottom = gMinBot;
     this.globalMaxWallBottom = gMaxBot;
 
-    // 3. Render floor and ceiling with wall occlusion culling
-    this.renderFloorAndCeiling();
+    // 3. Update GPU floor/ceiling GLSL shader uniforms (rendered natively in background mesh)
+    this.uPlayerPosUniform[0] = this.player.x;
+    this.uPlayerPosUniform[1] = this.player.y;
+    this.uDirUniform[0] = this.player.dirX;
+    this.uDirUniform[1] = this.player.dirY;
+    this.uPlaneUniform[0] = this.player.planeX;
+    this.uPlaneUniform[1] = this.player.planeY;
 
     // 4. Render wall column sprites with viewport culling (back to front order)
     for (let i = 0; i < screenW; i++) {

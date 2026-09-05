@@ -21,12 +21,20 @@ module.exports = () => {
             },
         },
 
+        resolve: {
+            extensions: [".ts", ".tsx", ".js", ".json", ".vert", ".frag", ".glsl"],
+        },
+
         module: {
             rules: [
                 {
                     test: /\.tsx?$/,
                     loader: "ts-loader",
                     exclude: /node_modules/,
+                },
+                {
+                    test: /\.(vert|frag|glsl)$/i,
+                    type: "asset/source",
                 },
             ],
         },

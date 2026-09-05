@@ -1,18 +1,15 @@
-const path = require("path");
-
-const merge = require("webpack-merge").merge;
-
-// plugins
-const HtmlWebpackPlugin = require("html-webpack-plugin");
-const MiniCssExtractPlugin = require("mini-css-extract-plugin");
-const CopyPlugin = require("copy-webpack-plugin");
+import * as path from "path";
+import { merge } from "webpack-merge";
+import HtmlWebpackPlugin from "html-webpack-plugin";
+import MiniCssExtractPlugin from "mini-css-extract-plugin";
+import CopyPlugin from "copy-webpack-plugin";
 
 module.exports = () => {
     const config = {
         entry: "./src/index.ts",
 
         resolve: {
-            extensions: [".ts", ".tsx", ".js", ".json"],
+            extensions: [".ts", ".tsx", ".js", ".json", ".vert", ".frag", ".glsl"],
         },
 
         module: {
@@ -25,6 +22,10 @@ module.exports = () => {
                         },
                         "css-loader",
                     ],
+                },
+                {
+                    test: /\.(vert|frag|glsl)$/i,
+                    type: "asset/source",
                 },
             ],
         },
@@ -47,7 +48,7 @@ module.exports = () => {
                         from: "assets/**",
 
                         // if there are nested subdirectories , keep the hierarchy
-                        to({ absoluteFilename }: { absoluteFilename: string }) {
+                        to({ absoluteFilename }: { absoluteFilename?: string }) {
                             const assetsPath = path.resolve(__dirname, "assets");
 
                             if (!absoluteFilename) {

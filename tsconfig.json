@@ -10,7 +10,9 @@
         "paths": {
             "mini-signals": ["./node_modules/resource-loader/typings/mini-signals.d.ts"]
         },
-        "lib": ["ES2022", "DOM"]
+        "lib": ["ES2022", "DOM"],
+        "types": ["node"],
+        "skipLibCheck": true
     },
     "include": [
         "./src",
