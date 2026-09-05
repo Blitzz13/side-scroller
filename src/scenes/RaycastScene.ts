@@ -18,9 +18,11 @@ import { RaycastBreakableManager } from "./raycast/RaycastBreakableManager";
 import { RaycastWeaponView } from "./raycast/RaycastWeaponView";
 import { RaycastHUD } from "./raycast/RaycastHUD";
 import { RaycastPlayerController } from "./raycast/RaycastPlayerController";
+import { RaycastEnemy } from "./raycast/RaycastEnemy";
 import { RaycastEnemyManager } from "./raycast/RaycastEnemyManager";
 import { DestructableWallManager } from "./raycast/DestructableWallManager";
 import { ThermalDetonatorManager } from "./raycast/ThermalDetonatorManager";
+import { RaycastLaserManager } from "./raycast/RaycastLaserManager";
 import { RaycastWeaponType } from "../enums/RaycastWeaponType";
 import { RaycastPickupType } from "../enums/RaycastPickupType";
 import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
@@ -182,6 +184,8 @@ export class RaycastScene extends BaseScene {
   private destructableWallManager!: DestructableWallManager;
   private detonatorContainer!: Container;
   private detonatorManager!: ThermalDetonatorManager;
+  private laserContainer!: Container;
+  private laserManager!: RaycastLaserManager;
   private shakeIntensity: number = 0;
   private shakeDuration: number = 0;
   private lockedDoors: Record<string, string> = {};
@@ -312,6 +316,13 @@ export class RaycastScene extends BaseScene {
     this.detonatorManager.onDetonate = (x, y, z, radius, damage) => {
       this.handleExplosionDetonation(x, y, z, radius, damage);
     };
+
+    // 3D Laser projectile container (rendered above detonators & enemies, below HUD)
+    this.laserContainer = new Container();
+    this.laserContainer.zIndex = 55;
+    this.worldContainer.addChild(this.laserContainer);
+
+    this.laserManager = new RaycastLaserManager(this.laserContainer);
 
     // First-person equipped weapon view (rendered in front of 3D world, behind HUD)
     this.weaponView = new RaycastWeaponView();
@@ -679,6 +690,7 @@ export class RaycastScene extends BaseScene {
 
     // Initialize thermal detonator manager textures & frames
     await this.detonatorManager.initTextures();
+    await this.laserManager.initTextures();
 
     // Spawn initial thermal detonator pickups for quick player testing
     this.pickupManager.spawnPickup(
@@ -1416,7 +1428,7 @@ export class RaycastScene extends BaseScene {
       return;
     }
 
-    // 2. Direct hitscan firearm (DH-17, E-11, etc.)
+    // 2. Blaster firearm (DH-17, E-11, etc.)
     const didShoot = this.playerController.tryShoot(undefined, isAutoFire);
     if (didShoot) {
       const damage = currentCfg.damage ?? 25;
@@ -1432,30 +1444,76 @@ export class RaycastScene extends BaseScene {
         wallDistance
       );
 
-      const maxEnemyDist = breakableHit ? breakableHit.distance : wallDistance;
+      const maxTargetDist = breakableHit ? breakableHit.distance : wallDistance;
 
-      // Shoot enemy up to the nearest obstacle (breakable or wall)
-      const hitEnemy = this.enemyManager.handlePlayerShot(
+      // Find closest enemy along aiming cone
+      let targetEnemy: RaycastEnemy | null = null;
+      let closestEnemyDist = maxTargetDist;
+      const hitRadius = 0.55;
+
+      for (const enemy of this.enemyManager.activeEnemies) {
+        if (enemy.isDead) continue;
+        const dx = enemy.x - this.player.x;
+        const dy = enemy.y - this.player.y;
+        const t = dx * this.player.dirX + dy * this.player.dirY;
+
+        if (t > 0.1 && t < closestEnemyDist) {
+          const perpDist = Math.abs(dx * -this.player.dirY + dy * this.player.dirX);
+          if (perpDist <= hitRadius) {
+            closestEnemyDist = t;
+            targetEnemy = enemy;
+          }
+        }
+      }
+
+      // Determine 3D target coordinates
+      let targetX: number;
+      let targetY: number;
+      let targetZ: number = 0.5;
+
+      if (targetEnemy) {
+        targetX = targetEnemy.x;
+        targetY = targetEnemy.y;
+        targetZ = 0.5;
+      } else if (breakableHit) {
+        targetX = breakableHit.breakable.x;
+        targetY = breakableHit.breakable.y;
+        targetZ = breakableHit.breakable.z ?? 0.5;
+      } else {
+        targetX = this.player.x + this.player.dirX * wallDistance;
+        targetY = this.player.y + this.player.dirY * wallDistance;
+        targetZ = 0.5;
+      }
+
+      // Get precise weapon barrel muzzle screen position
+      const muzzleScreenPos = this.weaponView.getMuzzlePosition();
+
+      // Fire 3D laser bolt flying from the weapon muzzle towards the target
+      this.laserManager.fireLaser(
         this.player.x,
         this.player.y,
         this.player.dirX,
         this.player.dirY,
+        this.player.planeX,
+        this.player.planeY,
+        muzzleScreenPos,
+        { x: targetX, y: targetY, z: targetZ },
         damage,
-        maxEnemyDist,
-        (enemy) => {
-          this.hud.showToast(`[!] Neutralized ${enemy.config.name} (+${currentCfg.name})`, 0x00ff88);
-        }
-      );
-
-      // If no enemy was in front of the breakable, damage the breakable
-      if (!hitEnemy && breakableHit) {
-        this.breakableManager.damageBreakable(breakableHit.breakable, damage, (broken) => {
+        targetEnemy,
+        breakableHit?.breakable ?? null,
+        (killedEnemy) => {
+          this.hud.showToast(
+            `[!] Neutralized ${killedEnemy.config.name} (+${currentCfg.name})`,
+            0x00ff88
+          );
+        },
+        (broken) => {
           this.hud.showToast(`[!] Smashed ${broken.name}`, 0xffaa00);
           if (this.destructableWallManager) {
             this.destructableWallManager.onBreakableDestroyed(broken);
           }
-        });
-      }
+        }
+      );
     }
   }
 
@@ -1552,6 +1610,15 @@ export class RaycastScene extends BaseScene {
         this.mapHeight,
         this.doorStatesFlat,
         allThinWalls
+      );
+    }
+
+    // Update active laser projectiles, flight, and collisions
+    if (this.laserManager) {
+      this.laserManager.update(
+        delta,
+        this.enemyManager.activeEnemies,
+        this.breakableManager
       );
     }
 
@@ -2582,6 +2649,20 @@ export class RaycastScene extends BaseScene {
         this.player.x,
         this.player.y,
         0,
+        this.player.dirX,
+        this.player.dirY,
+        this.player.planeX,
+        this.player.planeY,
+        this.zBuffer,
+        this.MAX_RENDER_DISTANCE
+      );
+    }
+
+    // 9. Render flying 3D laser bolts with perspective & Z-buffer occlusion
+    if (this.laserManager) {
+      this.laserManager.render(
+        this.player.x,
+        this.player.y,
         this.player.dirX,
         this.player.dirY,
         this.player.planeX,

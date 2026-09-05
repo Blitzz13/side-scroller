@@ -2,6 +2,27 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-04] - 3D Blaster Laser Projectiles & Weapon Muzzle Integration
+
+### 1. 3D Laser Projectile Physics & Rendering Engine
+- **Raycast Laser Manager** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts)):
+  - Built a dedicated 3D laser projectile system using `assets/laser.png` with additive blending (`BLEND_MODES.ADD`) for intense sci-fi blaster glow.
+  - Laser bolts are simulated in full 3D world space at high velocity (38.0 units/sec) towards targeted enemies, breakables, or walls.
+  - Implemented 3D perspective foreshortening: near the weapon muzzle, bolt is elongated (4:1) along its firing trajectory; as it travels outward into the distance, perspective along the line of sight naturally compresses it into a compact, symmetrical rounded plasma pulse (1:1), eliminating awkward directional tilts and mid-air rotation.
+  - Implemented 3D perspective scaling: bolt starts large at the weapon barrel tip and scales inversely with camera depth `transformY`.
+  - Full Z-buffer occlusion testing prevents laser bolts from rendering in front of closer walls.
+
+### 2. Weapon Muzzle Projection Integration
+- **Barrel Origin Calculation** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Added `getMuzzlePosition()` to compute the exact screen coordinates `(muzzleX, muzzleY)` of the weapon's barrel, taking recoil displacement and rotation into account.
+  - Inverted camera projection math maps `(muzzleX, muzzleY)` at near-camera depth `d0 = 0.35` to world space `(startX, startY, startZ)`, guaranteeing the laser shoots directly out of the weapon barrel.
+
+### 3. Target Acquisition & Impact VFX
+- **Aim Cone Targeting & Impact Sparks** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Replaced instant hitscan damage with physical 3D flying laser projectiles.
+  - Automatically targets enemies in the aiming cone, props, or distant walls.
+  - On impact with enemies or obstacles, spawns procedural multi-colored plasma sparks and flash circles, applying damage and notifying the HUD upon kill or destruction.
+
 ## [2026-09-04] - Mobile Weapon Switching & Touch Controls Fix
 
 ### 1. Dedicated Mobile Weapon Switch Virtual Button

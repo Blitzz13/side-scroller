@@ -207,6 +207,32 @@ export class RaycastWeaponView extends Container {
     return this.currentWeapon;
   }
 
+  public getMuzzlePosition(): { x: number; y: number } {
+    if (!this.weaponSprite.visible) {
+      return { x: gameConfig.width * 0.58, y: gameConfig.height * 0.75 };
+    }
+
+    const cfg = this.currentWeapon?.muzzleFlash;
+    const rawOffsetX = (cfg?.offsetX ?? 0) * this.baseScale;
+    const rawOffsetY = (cfg?.offsetY ?? 0) * this.baseScale;
+    const followRotation = cfg?.followRotation ?? true;
+
+    let muzzleX = this.weaponSprite.x;
+    let muzzleY = this.weaponSprite.y;
+
+    if (followRotation && this.weaponSprite.rotation !== 0) {
+      const cos = Math.cos(this.weaponSprite.rotation);
+      const sin = Math.sin(this.weaponSprite.rotation);
+      muzzleX += rawOffsetX * cos - rawOffsetY * sin;
+      muzzleY += rawOffsetX * sin + rawOffsetY * cos;
+    } else {
+      muzzleX += rawOffsetX;
+      muzzleY += rawOffsetY;
+    }
+
+    return { x: muzzleX, y: muzzleY };
+  }
+
   public shoot(): boolean {
     if (!this.currentWeapon || !this.weaponSprite.visible) return false;
 
