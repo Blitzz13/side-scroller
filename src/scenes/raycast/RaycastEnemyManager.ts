@@ -465,13 +465,22 @@ export class RaycastEnemyManager {
       }
     }
 
+    // Check collision against thin walls (preventing walking through them)
+    // We treat the thin wall as a line segment and ensure the enemy's bounding box doesn't cross it
     for (const wall of thinWalls) {
-      const minX = Math.min(wall.x1, wall.x2) - radius;
-      const maxX = Math.max(wall.x1, wall.x2) + radius;
-      const minY = Math.min(wall.y1, wall.y2) - radius;
-      const maxY = Math.max(wall.y1, wall.y2) + radius;
+      // Create a slightly expanded bounding box around the wall segment to act as collision thickness
+      const wallThickness = 0.1; 
+      const minX = Math.min(wall.x1, wall.x2) - wallThickness;
+      const maxX = Math.max(wall.x1, wall.x2) + wallThickness;
+      const minY = Math.min(wall.y1, wall.y2) - wallThickness;
+      const maxY = Math.max(wall.y1, wall.y2) + wallThickness;
 
-      if (newX >= minX && newX <= maxX && newY >= minY && newY <= maxY) {
+      if (
+        newX + radius > minX &&
+        newX - radius < maxX &&
+        newY + radius > minY &&
+        newY - radius < maxY
+      ) {
         return false;
       }
     }
@@ -537,7 +546,7 @@ export class RaycastEnemyManager {
       accuracy: number,
       distance: number
     ) => {
-      // Block enemies from shooting or damaging the player through door protectors / thin walls
+      // Fix: Ray starts from enemy to player, checking if blocked by thin wall
       if (this.isBlockedByDoorProtector(enemy.x, enemy.y, playerX, playerY, thinWalls)) {
         return;
       }
@@ -852,6 +861,7 @@ export class RaycastEnemyManager {
 
     for (const enemy of this.enemies) {
       if (enemy.isDead) continue;
+      // Fixed: player to enemy ray direction
       if (thinWalls && this.isBlockedByDoorProtector(playerX, playerY, enemy.x, enemy.y, thinWalls)) {
         continue;
       }
@@ -897,6 +907,7 @@ export class RaycastEnemyManager {
       const dy = enemy.y - centerY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist <= radius) {
+        // Fixed: center of explosion to enemy coordinate check
         if (thinWalls && this.isBlockedByDoorProtector(centerX, centerY, enemy.x, enemy.y, thinWalls)) {
           continue;
         }

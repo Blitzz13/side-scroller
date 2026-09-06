@@ -14,6 +14,7 @@ export class RaycastEnemy {
   public health: number;
   public maxHealth: number;
   public state: EnemyAIState = "idle";
+  public isMoving: boolean = false;
 
   // Animated sprite
   public animatedSprite!: AnimatedSprite;
@@ -174,6 +175,7 @@ export class RaycastEnemy {
 
     if (this.health <= 0) {
       this.state = "dead";
+      this.isMoving = false;
 
       // Stop any active sounds (voicelines, attacks, pain) immediately
       this.stopActiveSounds();
@@ -258,27 +260,50 @@ export class RaycastEnemy {
 
     // State Machine
     if (this.state === "idle") {
+      this.isMoving = false;
       if (dist <= this.config.sightRange && los) {
         this.state = dist <= this.config.attackRange && lof ? "attack" : "chase";
       }
     } else if (this.state === "chase") {
       if (dist <= this.config.attackRange && los && lof) {
         this.state = "attack";
+        this.isMoving = false;
+      } else if (!lof) {
+        // They can see the player through a thin wall, but can't shoot.
+        // Don't walk into the grid, just face the player and stand still.
+        // (This also stops them from walking into closed doors or solid walls)
+        this.isMoving = false;
       } else {
         // Move towards player
         const speed = this.config.speed * delta;
         const moveX = (dx / dist) * speed;
         const moveY = (dy / dist) * speed;
 
-        const moved = tryMoveEnemy(this, this.x + moveX, this.y + moveY);
-        if (!moved) {
+        const oldX = this.x;
+        const oldY = this.y;
+
+        let actuallyMoved = tryMoveEnemy(this, this.x + moveX, this.y + moveY);
+        if (!actuallyMoved) {
           // Try sliding along walls
-          if (!tryMoveEnemy(this, this.x + moveX, this.y)) {
-            tryMoveEnemy(this, this.x, this.y + moveY);
+          if (tryMoveEnemy(this, this.x + moveX, this.y)) {
+            actuallyMoved = true;
+          } else if (tryMoveEnemy(this, this.x, this.y + moveY)) {
+            actuallyMoved = true;
           }
+        }
+        
+        // Even if the collision check "succeeded" by sliding, if the enemy didn't physically 
+        // change its location significantly, it is effectively blocked (like sliding endlessly into a door hinge).
+        // If distance moved is near zero, force the enemy to stand still.
+        const movedDist = Math.hypot(this.x - oldX, this.y - oldY);
+        if (movedDist < 0.001) {
+          this.isMoving = false;
+        } else {
+          this.isMoving = actuallyMoved;
         }
       }
     } else if (this.state === "attack") {
+      this.isMoving = false;
       if (dist > this.config.attackRange + 1.2 || !los || !lof) {
         this.state = "chase";
       } else {
@@ -287,7 +312,18 @@ export class RaycastEnemy {
           const stepBackSpeed = this.config.speed * 0.7 * delta;
           const backX = -(dx / dist) * stepBackSpeed;
           const backY = -(dy / dist) * stepBackSpeed;
+          
+          const oldX = this.x;
+          const oldY = this.y;
+          
           tryMoveEnemy(this, this.x + backX, this.y + backY);
+          
+          const movedDist = Math.hypot(this.x - oldX, this.y - oldY);
+          if (movedDist < 0.001) {
+             this.isMoving = false;
+          } else {
+             this.isMoving = true; // Technically moving backwards here
+          }
         }
 
         // Fire at player on cooldown
@@ -373,7 +409,7 @@ export class RaycastEnemy {
 
     this.isFlipped = flipX;
 
-    if (this.state === "chase") {
+    if (this.state === "chase" && this.isMoving) {
       this.playAnimation(`walking_${dirName}`, true, 0.16);
     } else {
       this.playAnimation(`standing_${dirName}`, false);
