@@ -38,12 +38,24 @@ export class DestructableWallManager {
       const layerName = (layer.name || "").toLowerCase();
       const objType = (obj.type || "").toLowerCase();
 
+      // Skip solid DestructableWalls layers (handled as solid blocks by RaycastBreakableManager)
+      if (
+        (layerName.includes("destructablewall") ||
+          layerName.includes("destructiblewall") ||
+          layerName.includes("destructable wall") ||
+          layerName.includes("destructible wall")) &&
+        !layerName.includes("door") &&
+        !layerName.includes("protector") &&
+        !layerName.includes("barrier")
+      ) {
+        return;
+      }
+
       const isDestructable =
         objType === "destructablewall" ||
         obj.type === "DestructableWall" ||
         layerName.includes("doorprotector") ||
         layerName.includes("protector") ||
-        layerName.includes("destructablewall") ||
         layerName.includes("barrier");
 
       if (!isDestructable) return;

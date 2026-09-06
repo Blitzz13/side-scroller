@@ -16,7 +16,8 @@ import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
 import { gameConfig } from "../configs/GameConfig";
 import { MobileControls } from "../ui/MobileControls";
-import { MapObject, TileMeta } from "./raycast/types";
+import { MapObject, RaycastBreakable, TileMeta } from "./raycast/types";
+import { defaultDestructibleWallConfig } from "../configs/DestructableWallConfig";
 import { RaycastPickupManager } from "./raycast/RaycastPickupManager";
 import { RaycastBreakableManager } from "./raycast/RaycastBreakableManager";
 import { RaycastWeaponView } from "./raycast/RaycastWeaponView";
@@ -201,6 +202,7 @@ export class RaycastScene extends BaseScene {
   private isLeftMouseDown: boolean = false;
   private isRightMouseDown: boolean = false;
   private bgMusicInstance: any = null;
+  private firstgid: number = 1;
 
   constructor(stage: Container, scale: number, level: string = "test_level") {
     super(stage, scale);
@@ -527,6 +529,8 @@ export class RaycastScene extends BaseScene {
         { id: 17, image: "thermal_detonator_belt.png", type: "PickupItem", properties: [{ name: "amount", value: 5 }, { name: "type", value: "ammo" }, { name: "weaponType", value: "thermal_detonator" }] },
         { id: 18, image: "thermal_detonator_pickup.png", type: "PickupItem", properties: [{ name: "amount", value: 1 }, { name: "type", value: "ammo" }, { name: "weaponType", value: "thermal_detonator" }] },
         { id: 19, image: "shield_unit.png", type: "PickupItem", properties: [{ name: "amount", value: 25 }, { name: "type", value: "shield" }] },
+        { id: 20, image: "assets/raycast/textures/computer_panel_destroyed.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 21, image: "assets/raycast/textures/computer_panel.jpg", type: "DestructableWall", properties: [{ name: "tileType", value: "thickWall" }] },
       ];
     }
   }
@@ -597,10 +601,7 @@ export class RaycastScene extends BaseScene {
     // 3. AOE damage to breakable objects
     if (this.breakableManager) {
       this.breakableManager.applyAreaDamage(x, y, radius, damage, (broken) => {
-        this.hud.showToast(`[!] Smashed ${broken.name} (Explosion)`, 0xffaa00);
-        if (this.destructableWallManager) {
-          this.destructableWallManager.onBreakableDestroyed(broken);
-        }
+        this.handleBreakableDestroyed(broken, "Explosion");
       });
     }
 
@@ -617,6 +618,69 @@ export class RaycastScene extends BaseScene {
   public triggerScreenShake(intensity: number = 8, duration: number = 0.35): void {
     this.shakeIntensity = intensity;
     this.shakeDuration = duration;
+  }
+
+  private handleBreakableDestroyed(broken: RaycastBreakable, context: string = ""): void {
+    if (broken.isWallBlock) {
+      this.handleWallBlockDestroyed(broken);
+    } else {
+      const toastText = context ? `[!] Smashed ${broken.name} (${context})` : `[!] Smashed ${broken.name}`;
+      this.hud.showToast(toastText, 0xffaa00);
+      if (this.destructableWallManager) {
+        this.destructableWallManager.onBreakableDestroyed(broken);
+      }
+    }
+  }
+
+  private handleWallBlockDestroyed(broken: RaycastBreakable): void {
+    const gx = broken.gridX !== undefined ? broken.gridX : Math.floor(broken.x);
+    const gy = broken.gridY !== undefined ? broken.gridY : Math.floor(broken.y);
+    const destroyedTileId = broken.destroyedTextureId !== undefined ? broken.destroyedTextureId : 20;
+    const destroyedGid = destroyedTileId + this.firstgid;
+
+    // 1. Swap texture in map and flat arrays so raycaster renders computer_panel_destroyed
+    if (gy >= 0 && gy < this.mapHeight && gx >= 0 && gx < this.mapWidth) {
+      this.map[gy][gx] = destroyedGid;
+      const flatIdx = gy * this.mapWidth + gx;
+      this.mapFlat[flatIdx] = destroyedGid;
+      this.tileTypeFlags[flatIdx] = RaycastScene.TILE_WALL;
+    }
+
+    // 2. Determine facing normal towards the player to spawn explosions in front of the wall
+    const wallCenterX = gx + 0.5;
+    const wallCenterY = gy + 0.5;
+    const dx = this.player.x - wallCenterX;
+    const dy = this.player.y - wallCenterY;
+    let normX = 0;
+    let normY = 0;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      normX = Math.sign(dx);
+    } else {
+      normY = Math.sign(dy);
+    }
+
+    // Position explosion sequence slightly off the front face of the block towards player
+    const expX = wallCenterX + normX * 0.55;
+    const expY = wallCenterY + normY * 0.55;
+    const expZ = 0.5;
+
+    if (this.detonatorManager) {
+      this.detonatorManager.spawnExplosionSequence(
+        expX,
+        expY,
+        expZ,
+        defaultDestructibleWallConfig.explosion
+      );
+    }
+
+    // 3. Screen shake & toast
+    this.triggerScreenShake(8, 0.45);
+    this.hud.showToast(`[!] Destroyed ${broken.name}!`, 0xff5533);
+
+    // 4. Deactivate linked security barrier (door protector)
+    if (this.destructableWallManager) {
+      this.destructableWallManager.onBreakableDestroyed(broken);
+    }
   }
 
   private async loadLevel(levelName: string) {
@@ -684,7 +748,8 @@ export class RaycastScene extends BaseScene {
     this.parseTiledMap(mapData);
     await this.pickupManager.initTextures();
     await this.breakableManager.initTextures();
-    const firstgid = mapData.tilesets?.[0]?.firstgid ?? 1;
+    this.firstgid = mapData.tilesets?.[0]?.firstgid ?? 1;
+    const firstgid = this.firstgid;
     this.breakableManager.parseMapBreakables(
       mapData,
       this.tileMeta,
@@ -769,7 +834,8 @@ export class RaycastScene extends BaseScene {
     this.mapWidth = mapData.width;
     this.mapHeight = mapData.height;
 
-    const firstgid = mapData.tilesets[0]?.firstgid ?? 1;
+    this.firstgid = mapData.tilesets?.[0]?.firstgid ?? 1;
+    const firstgid = this.firstgid;
 
     this.tileMeta = {};
     if (mapData.tilesets) {
@@ -787,6 +853,10 @@ export class RaycastScene extends BaseScene {
                 meta.tileType = TileType.DOOR;
                 meta.open = DoorOpen.UP;
                 this.tileTypes[gid] = TileType.DOOR;
+              } else if (tile.type === "DestructableWall") {
+                meta.type = TileType.THICK_WALL;
+                meta.tileType = TileType.THICK_WALL;
+                this.tileTypes[gid] = TileType.THICK_WALL;
               }
             }
             if (tile.properties) {
@@ -843,6 +913,11 @@ export class RaycastScene extends BaseScene {
             }
             const imgPath = tile.image || "";
             meta.image = imgPath.split(/[\\/]/).pop() || "";
+            if (imgPath.toLowerCase().includes("computer_panel")) {
+              meta.type = TileType.THICK_WALL;
+              meta.tileType = TileType.THICK_WALL;
+              this.tileTypes[gid] = TileType.THICK_WALL;
+            }
             this.tileMeta[tile.id] = meta;
           });
         }
@@ -915,6 +990,50 @@ export class RaycastScene extends BaseScene {
               if (tileType === "door" || tileType === TileType.DOOR) {
                 this.doorStates[`${x},${y}`] = 0;
               }
+            }
+          }
+        });
+      }
+    }
+
+    const destructableWallLayers = allLayers.filter(
+      (layer: any) =>
+        layer.name &&
+        (layer.name.toLowerCase().includes("destructablewall") ||
+          layer.name.toLowerCase().includes("destructiblewall") ||
+          layer.name.toLowerCase().includes("destructable wall") ||
+          layer.name.toLowerCase().includes("destructible wall")) &&
+        !layer.name.toLowerCase().includes("door") &&
+        !layer.name.toLowerCase().includes("protector") &&
+        !layer.name.toLowerCase().includes("barrier")
+    );
+    for (const dwLayer of destructableWallLayers) {
+      if (dwLayer.objects) {
+        const tileW = mapData.tilewidth || 64;
+        const tileH = mapData.tileheight || 64;
+        dwLayer.objects.forEach((obj: any) => {
+          const gid = obj.gid ?? 0;
+          if (gid !== 0) {
+            const objW = obj.width || tileW;
+            const objH = obj.height || tileH;
+            const centerX = obj.x + objW * 0.5;
+            const centerY = gid !== 0 ? obj.y - objH * 0.5 : obj.y + objH * 0.5;
+            const gridX = Math.floor(centerX / tileW);
+            const gridY = Math.floor(centerY / tileH);
+            if (gridX >= 0 && gridX < this.mapWidth && gridY >= 0 && gridY < this.mapHeight) {
+              this.map[gridY][gridX] = gid;
+              this.tileTypes[gid] = TileType.THICK_WALL;
+            }
+          }
+        });
+      } else if (dwLayer.data) {
+        dwLayer.data.forEach((tileGid: number, index: number) => {
+          if (tileGid !== 0) {
+            const x = index % dwLayer.width;
+            const y = Math.floor(index / dwLayer.width);
+            if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+              this.map[y][x] = tileGid;
+              this.tileTypes[tileGid] = TileType.THICK_WALL;
             }
           }
         });
@@ -1604,14 +1723,28 @@ export class RaycastScene extends BaseScene {
       const centerCol = Math.floor(gameConfig.width / 2);
       const wallDistance = this.zBuffer[centerCol] || this.MAX_RENDER_DISTANCE;
 
-      // Find closest breakable furniture hit along aiming vector
-      const breakableHit = this.breakableManager.findClosestHit(
+      // Find closest breakable furniture or destructible wall hit along aiming vector
+      let breakableHit = this.breakableManager.findClosestHit(
         this.player.x,
         this.player.y,
         this.player.dirX,
         this.player.dirY,
         wallDistance
       );
+
+      // Check if center screen ray directly struck an unbroken destructible wall block
+      const centerHits = this.hitCounts[centerCol] || 0;
+      const centerPool = this.hitPool[centerCol];
+      for (let j = 0; j < centerHits; j++) {
+        const ray = centerPool[j];
+        const b = this.breakableManager.getBreakableAtGrid(ray.mapX, ray.mapY);
+        if (b && !b.isBroken) {
+          if (!breakableHit || ray.distance < breakableHit.distance) {
+            breakableHit = { breakable: b, distance: ray.distance };
+          }
+          break;
+        }
+      }
 
       const maxTargetDist = breakableHit ? breakableHit.distance : wallDistance;
 
@@ -1645,9 +1778,15 @@ export class RaycastScene extends BaseScene {
         targetY = targetEnemy.y;
         targetZ = 0.5;
       } else if (breakableHit) {
-        targetX = breakableHit.breakable.x;
-        targetY = breakableHit.breakable.y;
-        targetZ = breakableHit.breakable.z ?? 0.5;
+        if (breakableHit.breakable.isWallBlock) {
+          targetX = this.player.x + this.player.dirX * breakableHit.distance;
+          targetY = this.player.y + this.player.dirY * breakableHit.distance;
+          targetZ = 0.5;
+        } else {
+          targetX = breakableHit.breakable.x;
+          targetY = breakableHit.breakable.y;
+          targetZ = breakableHit.breakable.z ?? 0.5;
+        }
       } else {
         targetX = this.player.x + this.player.dirX * wallDistance;
         targetY = this.player.y + this.player.dirY * wallDistance;
@@ -1677,10 +1816,7 @@ export class RaycastScene extends BaseScene {
           );
         },
         (broken) => {
-          this.hud.showToast(`[!] Smashed ${broken.name}`, 0xffaa00);
-          if (this.destructableWallManager) {
-            this.destructableWallManager.onBreakableDestroyed(broken);
-          }
+          this.handleBreakableDestroyed(broken);
         }
       );
     }

@@ -185,6 +185,10 @@ export interface RaycastBreakable {
   anchor?: string;
   hitRadius: number;
   blocksMovement: boolean;
+  isWallBlock?: boolean;
+  gridX?: number;
+  gridY?: number;
+  destroyedTextureId?: number;
 }
 
 export interface ThinWallDescriptor {
@@ -212,4 +216,5 @@ export interface DestructableWallConfig {
 export * from "../../configs/interfaces/IEnemyVoicelineConfig";
 export * from "../../configs/EnemyVoicelineConfig";
 export * from "./EnemyVoicelineManager";
+export * from "../../configs/DestructableWallConfig";
 

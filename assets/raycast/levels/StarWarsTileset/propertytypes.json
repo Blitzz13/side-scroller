@@ -1,0 +1,309 @@
+[
+    {
+        "id": 10,
+        "name": "Align",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "-",
+            "left",
+            "right",
+            "top",
+            "bottom",
+            "center"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "id": 4,
+        "name": "Anchor",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "ceiling",
+            "floor",
+            "center",
+            "-"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 8,
+        "members": [
+            {
+                "name": "align",
+                "propertyType": "Align",
+                "type": "string",
+                "value": "-"
+            },
+            {
+                "name": "linkIds",
+                "type": "list",
+                "value": [
+                ]
+            },
+            {
+                "name": "offset",
+                "type": "float",
+                "value": 0
+            },
+            {
+                "name": "rotation",
+                "propertyType": "FlatWallRotation",
+                "type": "string",
+                "value": "-"
+            },
+            {
+                "name": "wall",
+                "propertyType": "Tile",
+                "type": "class",
+                "value": {
+                    "open": "-",
+                    "tileType": "thickWall"
+                }
+            }
+        ],
+        "name": "DestructableWall",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 12,
+        "name": "DoorOpen",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "Up",
+            "Left",
+            "Right",
+            "-"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "id": 9,
+        "name": "FlatWallRotation",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "-",
+            "vertical",
+            "horizontal"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 3,
+        "members": [
+            {
+                "name": "anchor",
+                "propertyType": "Anchor",
+                "type": "string",
+                "value": "ceiling"
+            },
+            {
+                "name": "scale",
+                "type": "float",
+                "value": 1
+            },
+            {
+                "name": "vOffset",
+                "type": "float",
+                "value": 0
+            }
+        ],
+        "name": "Object",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 1,
+        "members": [
+            {
+                "name": "amount",
+                "type": "int",
+                "value": 0
+            },
+            {
+                "name": "itemId",
+                "type": "string",
+                "value": ""
+            },
+            {
+                "name": "object",
+                "propertyType": "Object",
+                "type": "class",
+                "value": {
+                    "anchor": "floor"
+                }
+            },
+            {
+                "name": "sprite",
+                "type": "string",
+                "value": ""
+            },
+            {
+                "name": "type",
+                "propertyType": "PickupType",
+                "type": "string",
+                "value": "-"
+            },
+            {
+                "name": "weaponType",
+                "propertyType": "Weapons",
+                "type": "string",
+                "value": "-"
+            }
+        ],
+        "name": "PickupItem",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 2,
+        "name": "PickupType",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "weapon",
+            "ammo",
+            "health",
+            "shield",
+            "-",
+            "blue_keycard",
+            "red_keycard",
+            "green_keycard"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 13,
+        "members": [
+            {
+                "name": "open",
+                "propertyType": "DoorOpen",
+                "type": "string",
+                "value": "Up"
+            },
+            {
+                "name": "tileType",
+                "propertyType": "TileType",
+                "type": "string",
+                "value": "door"
+            }
+        ],
+        "name": "Tile",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 14,
+        "name": "TileType",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "door",
+            "thinWall",
+            "thickWall",
+            "ceiling",
+            "floor",
+            "stairs"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 5,
+        "members": [
+            {
+                "name": "pickup",
+                "propertyType": "PickupItem",
+                "type": "class",
+                "value": {
+                    "type": "weapon"
+                }
+            },
+            {
+                "name": "type",
+                "propertyType": "Weapons",
+                "type": "string",
+                "value": "-"
+            }
+        ],
+        "name": "Weapon",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 7,
+        "name": "Weapons",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "e_11",
+            "-",
+            "thermal_detonator",
+            "dh_17"
+        ],
+        "valuesAsFlags": false
+    }
+]

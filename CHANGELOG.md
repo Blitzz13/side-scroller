@@ -2,6 +2,40 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-06] - Destructible Computer Panel Wall & Sequential Explosion Effects
+
+### 1. Destructible Computer Panel Wall & Grid Snapping
+- **Environmental Textures & Tileset Integration** ([`assets/raycast/textures/computer_panel.jpg`](file:///D:/Projects/side-scroller/assets/raycast/textures/computer_panel.jpg), [`assets/raycast/textures/computer_panel_destroyed.jpg`](file:///D:/Projects/side-scroller/assets/raycast/textures/computer_panel_destroyed.jpg), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Added new intact (`computer_panel.jpg`) and destroyed (`computer_panel_destroyed.jpg`) computer terminal wall textures.
+  - Updated `StarWarsTileset.tsx` with tile 20 (`computer_panel_destroyed.jpg`) and tile 21 (`computer_panel.jpg`, type `DestructableWall`), including updated class definitions in [`propertytypes.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/propertytypes.json).
+  - Registered texture entries in [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) and fallback tileset arrays in [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts).
+- **Grid Snapping for Object Layers** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Parsed the new `DestructableWalls` object layer in [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json) (object 22 at `x: 1153, y: 320`).
+  - Implemented automatic coordinate snapping from Tiled object space (bottom-left origin) to the raycasting map grid cell `(gridX: 18, gridY: 4)`.
+  - Populated the snapped cell into `this.map` and `this.mapFlat` with `TILE_WALL` flag so the raycaster renders it as a solid 3D textured wall block and checks standard wall movement collision.
+
+### 2. Interactive Weapon Targeting & Dynamic Texture Replacement
+- **Breakable Manager Solid Wall Architecture** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Created wall breakable entries with `isWallBlock: true`, `gridX`, `gridY`, `intactTextureId: 21`, `destroyedTextureId: 20`, and `health: 50`.
+  - Filtered wall blocks out of `getVisibleMapObjects()` to prevent redundant billboard sprite instantiation, letting raycast column rendering handle 3D visuals.
+  - Implemented Ray-AABB bounding box intersection in `findClosestHit()` and crosshair hit pool lookup in `RaycastScene.tryShoot()` to calculate exact laser impact coordinates on the surface of the wall block.
+- **Dynamic Wall Texture Replacement** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added `handleWallBlockDestroyed()`: upon destruction, updates `this.map[gy][gx]` and `this.mapFlat` to the destroyed texture ID (`computer_panel_destroyed.jpg`), instantly updating raycasted column slices in real time while maintaining movement collision.
+
+### 3. Linked Security Barrier Deactivation (Door Protectors)
+- **Breakable-to-Barrier Binding** ([`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/raycast/DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts)):
+  - Filtered `DestructableWallManager` to only parse thin wall barriers (e.g. in `DoorProtectors` layer), leaving solid wall blocks to `RaycastBreakableManager`.
+  - Barrier object 20 in `DoorProtectors` defines `linkIds: ["22"]`, linking it directly to wall block 22.
+  - When wall block 22 is destroyed, `destructableWallManager.onBreakableDestroyed()` deactivates barrier 20, clearing its collision and rendering, playing the deactivation sound (`door_1`), and displaying a toast notification (`[!] Security Barrier Deactivated!`).
+
+### 4. Configurable Sequential Explosions & Screen Shake
+- **Centralized Destructible Wall Configuration** ([`src/configs/DestructableWallConfig.ts`](file:///D:/Projects/side-scroller/src/configs/DestructableWallConfig.ts)):
+  - Created configurable explosion parameters: `count` (4 explosions), `intervalMs` (110ms delay between starts), `scale` (0.42), `spreadX`/`spreadY`/`spreadZ` spatial jitter, `soundVolume` (0.38), and wall `health` (50 HP).
+- **Sequential Explosion Animation** ([`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added `spawnExplosion()` and `spawnExplosionSequence()` to `ThermalDetonatorManager` to trigger staggered 3D explosion sprites from [`assets/common/explosion.json`](file:///D:/Projects/side-scroller/assets/common/explosion.json) with random spatial and scale jitter.
+  - Calculated the wall face normal towards the player to position the explosion sequence directly in front of the wall block without visual clipping.
+  - Triggered camera screen shake (`intensity: 8`, `duration: 0.45s`) on destruction.
+
 ## [2026-09-06] - Asset Structure Modularization & Path Resolution Refactor
 
 ### 1. Domain-Driven Asset Directory Hierarchy

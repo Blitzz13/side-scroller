@@ -11,6 +11,7 @@ import {
 import { sound } from "@pixi/sound";
 import { gameConfig } from "../../configs/GameConfig";
 import { raycastThermalDetonatorPickupConfig } from "../../configs/RaycastPickupConfigs";
+import { IDestructibleWallExplosionConfig } from "../../configs/DestructableWallConfig";
 import { MapObject } from "./types";
 
 export interface ActiveDetonator {
@@ -334,18 +335,48 @@ export class ThermalDetonatorManager {
   }
 
   public explode(det: ActiveDetonator): void {
-    // 1. Play explosion sound
-    try {
-      sound.play("explosion_sound", { volume: 0.85 });
-    } catch (e) {
-      console.warn("Failed to play explosion sound:", e);
+    // 1. Spawn main detonator explosion sprite and play sound
+    this.spawnExplosion(det.x, det.y, Math.max(0, det.z), {
+      scale: 0.85,
+      soundVolume: 0.85,
+      animationSpeed: 0.42,
+    });
+
+    // 2. Trigger AOE callback (damages enemies, props, and player)
+    if (this.onDetonate) {
+      this.onDetonate(det.x, det.y, det.z, det.radius, det.damage);
+    }
+  }
+
+  /**
+   * Spawns an individual 3D animated explosion sprite at the specified world position.
+   */
+  public spawnExplosion(
+    x: number,
+    y: number,
+    z: number = 0.5,
+    options?: {
+      scale?: number;
+      soundVolume?: number;
+      animationSpeed?: number;
+    }
+  ): ActiveExplosion | null {
+    const scale = options?.scale ?? 0.85;
+    const soundVolume = options?.soundVolume ?? 0.85;
+    const animSpeed = options?.animationSpeed ?? 0.42;
+
+    if (soundVolume > 0) {
+      try {
+        sound.play("explosion_sound", { volume: soundVolume });
+      } catch (e) {
+        console.warn("Failed to play explosion sound:", e);
+      }
     }
 
-    // 2. Spawn 3D animated explosion sprite
     if (this.explosionFrames.length > 0) {
       const sprite = new AnimatedSprite(this.explosionFrames);
       sprite.anchor.set(0.5, 0.75); // Centered horizontally, anchored slightly below middle
-      sprite.animationSpeed = 0.42;
+      sprite.animationSpeed = animSpeed;
       sprite.loop = false;
       sprite.roundPixels = true;
       sprite.visible = false;
@@ -358,12 +389,12 @@ export class ThermalDetonatorManager {
 
       const expObj: ActiveExplosion = {
         id: this.nextId++,
-        x: det.x,
-        y: det.y,
-        z: Math.max(0, det.z),
+        x,
+        y,
+        z: Math.max(0, z),
         sprite,
         mask,
-        scale: 0.85,
+        scale,
       };
 
       sprite.onComplete = () => {
@@ -372,11 +403,40 @@ export class ThermalDetonatorManager {
 
       sprite.play();
       this.explosions.push(expObj);
+      return expObj;
     }
 
-    // 3. Trigger AOE callback (damages enemies, props, and player)
-    if (this.onDetonate) {
-      this.onDetonate(det.x, det.y, det.z, det.radius, det.damage);
+    return null;
+  }
+
+  /**
+   * Plays a configurable sequence of scaled-down explosions with a slight delay between each.
+   */
+  public spawnExplosionSequence(
+    x: number,
+    y: number,
+    z: number = 0.5,
+    config?: Partial<IDestructibleWallExplosionConfig>
+  ): void {
+    const count = config?.count ?? 4;
+    const intervalMs = config?.intervalMs ?? 110;
+    const scale = config?.scale ?? 0.42;
+    const spreadX = config?.spreadX ?? 0.28;
+    const spreadY = config?.spreadY ?? 0.28;
+    const spreadZ = config?.spreadZ ?? 0.18;
+    const soundVolume = config?.soundVolume ?? 0.38;
+
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        const jx = (Math.random() * 2 - 1) * spreadX;
+        const jy = (Math.random() * 2 - 1) * spreadY;
+        const jz = (Math.random() * 2 - 1) * spreadZ;
+        this.spawnExplosion(x + jx, y + jy, z + jz, {
+          scale: scale * (0.85 + Math.random() * 0.3),
+          soundVolume: soundVolume * (0.8 + Math.random() * 0.4),
+          animationSpeed: 0.45 + Math.random() * 0.1,
+        });
+      }, i * intervalMs);
     }
   }
 

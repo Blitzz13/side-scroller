@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="20" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="22" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -71,7 +71,7 @@
    <property name="amount" type="int" value="20"/>
    <property name="type" propertytype="PickupType" value="health"/>
   </properties>
-  <image source="assets/raycast/pickups/health.png" width="613" height="569"/>
+  <image source="assets/raycast/pickups/health.png" width="28" height="19"/>
  </tile>
  <tile id="11">
   <image source="assets/raycast/enemies/storm_trooper.png" width="480" height="1000"/>
@@ -131,5 +131,11 @@
    <property name="type" propertytype="PickupType" value="shield"/>
   </properties>
   <image source="assets/raycast/pickups/shield_unit.png" width="38" height="17"/>
+ </tile>
+ <tile id="20">
+  <image source="assets/raycast/textures/computer_panel_destroyed.jpg" width="124" height="124"/>
+ </tile>
+ <tile id="21" type="DestructableWall">
+  <image source="assets/raycast/textures/computer_panel.jpg" width="124" height="124"/>
  </tile>
 </tileset>

@@ -1,6 +1,7 @@
 import { Assets, Rectangle, SCALE_MODES, Texture } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { MapObject, RaycastBreakable, TileMeta } from "./types";
+import { defaultDestructibleWallConfig } from "../../configs/DestructableWallConfig";
 
 export class RaycastBreakableManager {
   private breakables: RaycastBreakable[] = [];
@@ -105,7 +106,9 @@ export class RaycastBreakableManager {
               layer.name.toLowerCase().includes("item")))) &&
         !(layer.name &&
           (layer.name.toLowerCase().includes("doorprotector") ||
-            layer.name.toLowerCase().includes("destructablewall")))
+            layer.name.toLowerCase().includes("destructablewall") ||
+            layer.name.toLowerCase().includes("destructiblewall") ||
+            layer.name.toLowerCase().includes("barrier")))
     );
 
     for (const layer of objectLayers) {
@@ -284,6 +287,92 @@ export class RaycastBreakableManager {
         });
       }
     }
+
+    // Parse DestructableWalls object layers (solid grid-snapped destructible wall blocks)
+    let destroyedTileId = 20; // Default for computer_panel_destroyed
+    if (mapData.tilesets) {
+      for (const ts of mapData.tilesets) {
+        if (ts.tiles) {
+          for (const t of ts.tiles) {
+            const img = (t.image || "").toLowerCase();
+            if (img.includes("computer_panel_destroyed") || (img.includes("destroyed") && img.includes("panel"))) {
+              destroyedTileId = t.id;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    const destructableWallLayers = allLayers.filter(
+      (layer: any) =>
+        layer.name &&
+        (layer.name.toLowerCase().includes("destructablewall") ||
+          layer.name.toLowerCase().includes("destructiblewall") ||
+          layer.name.toLowerCase().includes("destructable wall") ||
+          layer.name.toLowerCase().includes("destructible wall")) &&
+        !layer.name.toLowerCase().includes("door") &&
+        !layer.name.toLowerCase().includes("protector") &&
+        !layer.name.toLowerCase().includes("barrier")
+    );
+
+    const tileW = mapData.tilewidth || 64;
+    const tileH = mapData.tileheight || 64;
+
+    for (const dwLayer of destructableWallLayers) {
+      if (dwLayer.objects) {
+        dwLayer.objects.forEach((obj: any) => {
+          const gid = obj.gid ?? 0;
+          if (gid !== 0) {
+            const adjustedTileId = gid - firstgid;
+            const objW = obj.width || tileW;
+            const objH = obj.height || tileH;
+            const centerX = obj.x + objW * 0.5;
+            const centerY = gid !== 0 ? obj.y - objH * 0.5 : obj.y + objH * 0.5;
+            const gridX = Math.floor(centerX / tileW);
+            const gridY = Math.floor(centerY / tileH);
+            const worldX = gridX + 0.5;
+            const worldY = gridY + 0.5;
+
+            let health = defaultDestructibleWallConfig.health;
+            let linkId = String(obj.id);
+            if (obj.properties) {
+              obj.properties.forEach((prop: any) => {
+                const pName = (prop.name || "").toLowerCase();
+                if (pName === "health" || pName === "hp") {
+                  health = parseFloat(prop.value);
+                } else if (pName === "linkid" || pName === "link" || pName === "id") {
+                  linkId = String(prop.value);
+                }
+              });
+            }
+
+            const breakable: RaycastBreakable = {
+              id: this.nextId++,
+              objId: obj.id,
+              tileId: adjustedTileId,
+              linkId: linkId,
+              x: worldX,
+              y: worldY,
+              gridX: gridX,
+              gridY: gridY,
+              isWallBlock: true,
+              type: "destructible_wall",
+              name: obj.name || "Computer Panel Wall",
+              health: health,
+              maxHealth: health,
+              isBroken: false,
+              intactTextureId: adjustedTileId,
+              destroyedTextureId: destroyedTileId,
+              scale: 1.0,
+              hitRadius: 0.65,
+              blocksMovement: false,
+            };
+            this.breakables.push(breakable);
+          }
+        });
+      }
+    }
   }
 
   public spawnBreakable(
@@ -344,6 +433,8 @@ export class RaycastBreakableManager {
   public getVisibleMapObjects(): MapObject[] {
     const list: MapObject[] = [];
     for (const b of this.breakables) {
+      if (b.isWallBlock) continue; // Solid wall blocks are rendered by raycaster from mapFlat
+
       if (b.isBroken) {
         const customTex = this.brokenTextures[b.type];
         const customSlices = this.brokenColumnTextures[b.type];
@@ -381,8 +472,16 @@ export class RaycastBreakableManager {
     return this.breakables;
   }
 
+  public getBreakableAtGrid(gridX: number, gridY: number): RaycastBreakable | undefined {
+    return this.breakables.find(
+      (b) => b.isWallBlock && b.gridX === gridX && b.gridY === gridY
+    );
+  }
+
   public checkCollision(newX: number, newY: number, playerRadius: number = 0.25): boolean {
     for (const b of this.breakables) {
+      if (b.isWallBlock) continue; // Movement collision handled by mapFlat solid wall
+
       if (!b.isBroken && b.blocksMovement) {
         const dx = newX - b.x;
         const dy = newY - b.y;
@@ -408,6 +507,44 @@ export class RaycastBreakableManager {
 
     for (const b of this.breakables) {
       if (b.isBroken) continue; // Bullets pass through broken debris
+
+      if (b.isWallBlock && b.gridX !== undefined && b.gridY !== undefined) {
+        // Ray vs Grid Cell AABB [gx, gx + 1] x [gy, gy + 1]
+        const gx = b.gridX;
+        const gy = b.gridY;
+        let tmin = -Infinity;
+        let tmax = Infinity;
+
+        if (Math.abs(dirX) > 1e-6) {
+          let t1 = (gx - playerX) / dirX;
+          let t2 = (gx + 1 - playerX) / dirX;
+          if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+          tmin = Math.max(tmin, t1);
+          tmax = Math.min(tmax, t2);
+        } else {
+          if (playerX < gx || playerX > gx + 1) continue;
+        }
+
+        if (Math.abs(dirY) > 1e-6) {
+          let t1 = (gy - playerY) / dirY;
+          let t2 = (gy + 1 - playerY) / dirY;
+          if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+          tmin = Math.max(tmin, t1);
+          tmax = Math.min(tmax, t2);
+        } else {
+          if (playerY < gy || playerY > gy + 1) continue;
+        }
+
+        if (tmax < tmin || tmax < 0.1) continue;
+
+        // tmin is the distance where ray enters the wall block face
+        const hitDist = tmin > 0.1 ? tmin : tmax;
+        if (hitDist > 0.1 && hitDist <= closestDist + 0.05) {
+          closestDist = Math.min(closestDist, hitDist);
+          closestBreakable = b;
+        }
+        continue;
+      }
 
       const dx = b.x - playerX;
       const dy = b.y - playerY;
