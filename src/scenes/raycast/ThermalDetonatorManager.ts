@@ -100,6 +100,8 @@ export class ThermalDetonatorManager {
       let sheet: Spritesheet | null = null;
       const sheetKeys = [
         "explosion",
+        "./assets/common/explosion.json",
+        "assets/common/explosion.json",
         "./assets/explosion.json",
         "assets/explosion.json",
       ];
@@ -110,7 +112,11 @@ export class ThermalDetonatorManager {
         }
       }
       if (!sheet) {
-        sheet = await Assets.load("./assets/explosion.json");
+        try {
+          sheet = await Assets.load("./assets/common/explosion.json");
+        } catch {
+          sheet = await Assets.load("./assets/explosion.json");
+        }
       }
 
       if (sheet) {

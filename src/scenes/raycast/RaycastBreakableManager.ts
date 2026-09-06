@@ -10,9 +10,9 @@ export class RaycastBreakableManager {
 
   public async initTextures(): Promise<void> {
     const assetsToLoad = [
-      { key: "chair", path: "assets/chair_broken.png" },
-      { key: "table", path: "assets/table_broken.png" },
-      { key: "power_cell", path: "assets/power_cell_broken.PNG" },
+      { key: "chair", path: "assets/raycast/decorations/chair_broken.png" },
+      { key: "table", path: "assets/raycast/decorations/table_broken.png" },
+      { key: "power_cell", path: "assets/raycast/decorations/power_cell_broken.png" },
     ];
 
     await Promise.all(

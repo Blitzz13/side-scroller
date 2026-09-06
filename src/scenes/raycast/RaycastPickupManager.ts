@@ -96,12 +96,18 @@ export class RaycastPickupManager {
       let sheet: any = null;
       if (Assets.cache.has("keycards")) {
         sheet = Assets.get("keycards");
+      } else if (Assets.cache.has("./assets/raycast/pickups/keycards.json")) {
+        sheet = Assets.get("./assets/raycast/pickups/keycards.json");
+      } else if (Assets.cache.has("assets/raycast/pickups/keycards.json")) {
+        sheet = Assets.get("assets/raycast/pickups/keycards.json");
       } else if (Assets.cache.has("./assets/keycards.json")) {
         sheet = Assets.get("./assets/keycards.json");
-      } else if (Assets.cache.has("assets/keycards.json")) {
-        sheet = Assets.get("assets/keycards.json");
       } else {
-        sheet = await Assets.load("./assets/keycards.json");
+        try {
+          sheet = await Assets.load("./assets/raycast/pickups/keycards.json");
+        } catch {
+          sheet = await Assets.load("./assets/keycards.json");
+        }
       }
 
       if (sheet) {

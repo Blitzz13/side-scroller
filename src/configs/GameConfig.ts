@@ -103,11 +103,11 @@ export const manifest: AssetsManifest = {
           },
           {
             alias: "stormtrooper_pain_1",
-            src: "./assets/stormtrooper_pain_1.mp3"
+            src: "./assets/raycast/voicelines/storm_trooper/stormtrooper_pain_1.mp3"
           },
           {
             alias: "stormtrooper_death_1",
-            src: "./assets/stormtrooper_death_1.mp3"
+            src: "./assets/raycast/voicelines/storm_trooper/stormtrooper_death_1.mp3"
           },
           {
             alias: "stormtrooper_grenade",
@@ -140,39 +140,39 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "imperial_grilled_wall",
-            src: "./assets/imperial_grilled_wall.jpg",
+            src: "./assets/raycast/textures/imperial_grilled_wall.jpg",
           },
           {
             name: "basic_imperial_wall",
-            src: "./assets/basic_imperial_wall.jpg",
+            src: "./assets/raycast/textures/basic_imperial_wall.jpg",
           },
           {
             name: "inside_floor",
-            src: "./assets/inside_floor.jpg",
+            src: "./assets/raycast/textures/inside_floor.jpg",
           },
           {
             name: "metal_door",
-            src: "./assets/metal_door.jpg",
+            src: "./assets/raycast/textures/metal_door.jpg",
           },
           {
             name: "fence",
-            src: "./assets/fence.png",
+            src: "./assets/raycast/textures/fence.png",
           },
           {
             name: "floor",
-            src: "./assets/floor.png",
+            src: "./assets/raycast/textures/floor.png",
           },
           {
             name: "ceiling_1",
-            src: "./assets/ceiling_1.jpg",
+            src: "./assets/raycast/textures/ceiling_1.jpg",
           },
           {
             name: "ceiling_2",
-            src: "./assets/ceiling_2.jpg",
+            src: "./assets/raycast/textures/ceiling_2.jpg",
           },
           {
             name: "ceiling_3",
-            src: "./assets/ceiling_3.jpg",
+            src: "./assets/raycast/textures/ceiling_3.jpg",
           },
           {
             name: "level2",
@@ -246,27 +246,27 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "chair",
-            src: "./assets/chair.png",
+            src: "./assets/raycast/decorations/chair.png",
           },
           {
             name: "chair_broken",
-            src: "./assets/chair_broken.png",
+            src: "./assets/raycast/decorations/chair_broken.png",
           },
           {
             name: "table",
-            src: "./assets/table.png",
+            src: "./assets/raycast/decorations/table.png",
           },
           {
             name: "table_broken",
-            src: "./assets/table_broken.png",
+            src: "./assets/raycast/decorations/table_broken.png",
           },
           {
             name: "keycards",
-            src: "./assets/keycards.json",
+            src: "./assets/raycast/pickups/keycards.json",
           },
           {
             name: "explosion",
-            src: "./assets/explosion.json"
+            src: "./assets/common/explosion.json"
           },
           {
             name: "thermal_detonator",

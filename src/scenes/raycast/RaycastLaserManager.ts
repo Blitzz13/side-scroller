@@ -64,8 +64,8 @@ export class RaycastLaserManager {
   public async initTextures(): Promise<void> {
     const candidateKeys = [
       "laser",
-      "./assets/laser.png",
-      "assets/laser.png",
+      "./assets/common/laser.png",
+      "assets/common/laser.png",
     ];
 
     for (const k of candidateKeys) {
@@ -77,10 +77,10 @@ export class RaycastLaserManager {
 
     if (!this.laserTexture) {
       try {
-        this.laserTexture = await Assets.load("./assets/laser.png");
+        this.laserTexture = await Assets.load("./assets/common/laser.png");
       } catch {
         try {
-          this.laserTexture = await Assets.load("assets/laser.png");
+          this.laserTexture = await Assets.load("assets/common/laser.png");
         } catch (e) {
           console.warn("Failed to load laser.png:", e);
         }

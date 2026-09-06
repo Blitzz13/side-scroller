@@ -523,7 +523,7 @@ export class RaycastScene extends BaseScene {
         { id: 13, image: "chair.png", type: "Object", properties: [{ name: "anchor", value: "floor" }] },
         { id: 14, image: "key_card_blue_1.png", type: "PickupItem", properties: [{ name: "object", value: { anchor: "center", scale: 0.4 } }, { name: "type", value: "blue_keycard" }] },
         { id: 15, image: "stairs.png", type: "Tile", properties: [{ name: "tileType", value: "stairs" }] },
-        { id: 16, image: "power_cell.PNG", type: "Object", properties: [{ name: "anchor", value: "floor" }] },
+        { id: 16, image: "power_cell.png", type: "Object", properties: [{ name: "anchor", value: "floor" }] },
         { id: 17, image: "thermal_detonator_belt.png", type: "PickupItem", properties: [{ name: "amount", value: 5 }, { name: "type", value: "ammo" }, { name: "weaponType", value: "thermal_detonator" }] },
         { id: 18, image: "thermal_detonator_pickup.png", type: "PickupItem", properties: [{ name: "amount", value: 1 }, { name: "type", value: "ammo" }, { name: "weaponType", value: "thermal_detonator" }] },
         { id: 19, image: "shield_unit.png", type: "PickupItem", properties: [{ name: "amount", value: 25 }, { name: "type", value: "shield" }] },
@@ -647,7 +647,7 @@ export class RaycastScene extends BaseScene {
             const tileId = tile.id;
             const imagePath = tile.image;
             const fileName = imagePath.split(/[\\/]/).pop();
-            textureMap[tileId] = fileName;
+            textureMap[tileId] = imagePath;
           });
         }
       });
@@ -655,10 +655,7 @@ export class RaycastScene extends BaseScene {
 
     const texturePromises = Object.entries(textureMap).map(
       ([tileId, fileName]) => {
-        const assetPath =
-          fileName === "health.png"
-            ? "assets/raycast/pickups/health.png"
-            : `assets/${fileName}`;
+        const assetPath = `${fileName}`;
         return Assets.load(assetPath)
           .then((texture) => {
             this.textures[parseInt(tileId)] = texture;

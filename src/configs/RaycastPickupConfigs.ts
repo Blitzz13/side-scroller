@@ -66,7 +66,7 @@ export const raycastBlueKeycardConfig: IRaycastPickupConfig = {
   amount: 1,
   texture: "keycard/key_card_blue_1.png",
   keyColor: "blue",
-  spritesheet: "assets/keycards.json",
+  spritesheet: "assets/raycast/pickups/keycards.json",
   pickUpSound: {
     src: "reload_sound",
     loop: false,
@@ -83,7 +83,7 @@ export const raycastGreenKeycardConfig: IRaycastPickupConfig = {
   amount: 1,
   texture: "keycard/key_card_green_1.png",
   keyColor: "green",
-  spritesheet: "assets/keycards.json",
+  spritesheet: "assets/raycast/pickups/keycards.json",
   pickUpSound: {
     src: "reload_sound",
     loop: false,
@@ -100,7 +100,7 @@ export const raycastRedKeycardConfig: IRaycastPickupConfig = {
   amount: 1,
   texture: "keycard/key_card_red_1.png",
   keyColor: "red",
-  spritesheet: "assets/keycards.json",
+  spritesheet: "assets/raycast/pickups/keycards.json",
   pickUpSound: {
     src: "reload_sound",
     loop: false,

@@ -2,6 +2,34 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-06] - Asset Structure Modularization & Path Resolution Refactor
+
+### 1. Domain-Driven Asset Directory Hierarchy
+- **Modular Directory Organization**:
+  - Reorganized project assets from the flat `assets/` root folder into categorized, domain-driven subdirectories for cleaner maintainability and asset discovery:
+    - `assets/common/`: Shared projectiles and multi-purpose visual effects ([`laser.png`](file:///D:/Projects/side-scroller/assets/common/laser.png), [`green_ball.png`](file:///D:/Projects/side-scroller/assets/common/green_ball.png), [`explosion.json`](file:///D:/Projects/side-scroller/assets/common/explosion.json), [`explosion.png`](file:///D:/Projects/side-scroller/assets/common/explosion.png)).
+    - `assets/raycast/textures/`: Raycaster 3D environment surfaces including walls, floors, ceilings, doors, and fences (`basic_imperial_wall.jpg`, `imperial_grilled_wall.jpg`, `ceiling_1-3.jpg`, `floor.png`, `inside_floor.jpg`, `metal_door.jpg`, `stairs.png`, `fence.png`/`fence.webp`).
+    - `assets/raycast/decorations/`: Interactive and destructible props ([`chair.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/chair.png), [`chair_broken.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/chair_broken.png), [`table.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/table.png), [`table_broken.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/table_broken.png), [`power_cell.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/power_cell.png), [`power_cell_broken.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/power_cell_broken.png)). Standardized uppercase `.PNG` file extensions to lowercase `.png`.
+    - `assets/raycast/pickups/`: Gameplay pickups and animated prop spritesheets ([`keycards.json`](file:///D:/Projects/side-scroller/assets/raycast/pickups/keycards.json), [`keycards.png`](file:///D:/Projects/side-scroller/assets/raycast/pickups/keycards.png), [`shield_unit.json`](file:///D:/Projects/side-scroller/assets/raycast/pickups/shield_unit.json), [`shield_unit.png`](file:///D:/Projects/side-scroller/assets/raycast/pickups/shield_unit.png), ammo, etc.).
+    - `assets/raycast/voicelines/storm_trooper/`: Enemy trooper combat audio and vocal clips (`stormtrooper_death_1.mp3`, `stormtrooper_pain_1.mp3`).
+
+### 2. Dynamic Tileset & Level Texture Resolution
+- **Scene Texture Loader Modernization** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Refactored `loadLevelTextures()`: Replaced rigid filename stripping (`split(/[\\/]/).pop()`) and hardcoded single-file fallback checks with dynamic path preservation, ensuring full relative asset paths from TMX tilesets resolve directly and reliably.
+  - Updated tile definitions for `power_cell.png`.
+- **Tileset Source Path Updates** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Updated tile image source paths to reference the new modular pickup location (`assets/raycast/pickups/shield_unit.png`).
+
+### 3. Engine Managers & Asset Manifest Synchronization
+- **Asset Manifest Alignment** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Synchronized asset bundle manifest entries with their respective new subdirectories (`textures`, `decorations`, `pickups`, `voicelines`, and `common`).
+- **Pickup & Weapon Configurations** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts)):
+  - Updated spritesheet source paths for Blue, Green, and Red keycards to point to [`assets/raycast/pickups/keycards.json`](file:///D:/Projects/side-scroller/assets/raycast/pickups/keycards.json).
+- **Subsystem Managers** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - Updated breakable debris loading paths to `assets/raycast/decorations/`.
+  - Updated laser bolt texture references to `assets/common/laser.png`.
+  - Updated keycard and explosion spritesheet cache checks and async loaders to prioritize the new paths while preserving backward-compatible cache lookups.
+
 ## [2026-09-06] - Player Energy Shield System & Animated Shield Pickups
 
 ### 1. Dynamic Energy Shield Mechanics & Partial Damage Absorption
@@ -76,7 +104,7 @@ This document logs recent development changes and enhancements made to the Rayca
 
 ### 1. 3D Laser Projectile Physics & Rendering Engine
 - **Raycast Laser Manager** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts)):
-  - Built a dedicated 3D laser projectile system using `assets/laser.png` with additive blending (`BLEND_MODES.ADD`) for intense sci-fi blaster glow.
+  - Built a dedicated 3D laser projectile system using `assets/common/laser.png` with additive blending (`BLEND_MODES.ADD`) for intense sci-fi blaster glow.
   - Laser bolts are simulated in full 3D world space at high velocity (38.0 units/sec) towards targeted enemies, breakables, or walls.
   - Implemented 3D perspective foreshortening: near the weapon muzzle, bolt is elongated (4:1) along its firing trajectory; as it travels outward into the distance, perspective along the line of sight naturally compresses it into a compact, symmetrical rounded plasma pulse (1:1), eliminating awkward directional tilts and mid-air rotation.
   - Implemented 3D perspective scaling: bolt starts large at the weapon barrel tip and scales inversely with camera depth `transformY`.
