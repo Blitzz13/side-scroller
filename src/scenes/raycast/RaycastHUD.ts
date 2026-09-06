@@ -196,7 +196,8 @@ export class RaycastHUD extends Container {
       letterSpacing: 0.5,
     });
     this.switchHint.resolution = dpr;
-    this.switchHint.position.set(170, 36);
+    this.switchHint.anchor.set(1, 1);
+    this.switchHint.position.set(228, 64);
     this.weaponContainer.addChild(this.switchHint);
 
     this.addChild(this.weaponContainer);
@@ -354,12 +355,15 @@ export class RaycastHUD extends Container {
       this.weaponNameText.text = weaponName.toUpperCase();
       if (weaponName.toLowerCase().includes("detonator")) {
         this.ammoText.text = `${ammo} REMAINING`;
+        (this.ammoText.style as TextStyle).fontSize = 16;
       } else {
         this.ammoText.text = `${ammo} AMMO`;
+        (this.ammoText.style as TextStyle).fontSize = 20;
       }
     } else {
       this.weaponNameText.text = "UNARMED";
       this.ammoText.text = "--";
+      (this.ammoText.style as TextStyle).fontSize = 20;
     }
   }
 
