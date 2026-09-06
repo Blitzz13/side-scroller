@@ -2,6 +2,61 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-06] - Transparent Thin Wall Depth Separation & Sprite Visibility Fix
+
+### 1. Opaque Z-Buffer Occlusion Separation
+- **Solid Wall Distance Resolution** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Fixed an issue where `this.zBuffer[i]` recorded the closest hit in the column (which was often a transparent thin wall or door protector barrier, `side === 2`).
+  - Because billboard objects (enemies, pickups, keys, breakable props, laser bolts) compare their view-space depth `transformY < zBuffer[col]` to determine visibility, any sprite standing behind a transparent barrier was falsely occluded and hidden completely.
+  - Updated `renderScene()` to scan ray hits in reverse (from `hitCount - 1` down to `0`) so `zBuffer[i]` correctly captures the closest opaque solid wall or door (`side !== 2`), rather than the farthest hit (since `hitPool` is sorted descending by distance).
+  - Fixed wall slice sprite assignment loop to iterate back-to-front (`j = 0` to `hitCount - 1`) so that closer walls and opening doors properly render on top of farther walls in Pixi's display list instead of being occluded by them.
+  - Implemented progressive door opening uncover for enemies, animated pickups (keycards/shields), and world props: as vertical doors slide upward, `doorBottomBuffer` tracks the rising door panel, allowing `RaycastEnemyManager`, `RaycastPickupManager`, and `renderObjects` to dynamically unmask and reveal sprites from the floor up beneath the rising door panel just like a real door, while remaining occluded above the door panel line.
+
+### 2. Dedicated Thin Wall Layering & Zero-Allocation Sprite Pooling
+- **Layer Sorting & Container Stacking** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added `thinWallContainer` assigned to `zIndex: 45` within `this.worldContainer`.
+  - Display list hierarchy now correctly renders:
+    1. Background ceiling/floor (`zIndex: 0`)
+    2. Solid walls & doors (`wallContainer`, `zIndex: 10`)
+    3. Billboard objects, pickups & breakables (`objectContainer`, `zIndex: 20`)
+    4. Animated pickups (`animatedPickupContainer`, `zIndex: 30`)
+    5. Enemies (`enemyContainer`, `zIndex: 40`)
+    6. Transparent thin walls & door protectors (`thinWallContainer`, `zIndex: 45`)
+  - Added pre-allocated `this.thinWallSpritePool` (4 sprites per column) and `prevThinHitCounts` tracking to maintain zero GC allocations per frame during rendering.
+  - Slices for thin walls (`ray.side === 2`) render into `thinWallContainer` while solid wall slices continue rendering into `wallContainer`, cleanly displaying enemies and pickup items through transparent barrier textures (fences, energy fields) with proper alpha blending.
+  - Added thin wall occlusion checking against closer solid walls and doors in `renderScene()`: thin walls behind closed or opening doors have their upper boundary dynamically clipped to the bottom edge of the descending/ascending door panel (`doorPanelBottom`) using pre-allocated `this.thinWallColumnTextures` for zero-allocation UV cropping, preventing thin walls from being visible through solid door panels while doors open or close.
+  - Added full cleanup for `thinWallContainer`, `thinWallSpritePool`, and `thinWallColumnTextures` in `dispose()`.
+
+## [2026-09-06] - Door Protector Line of Fire & Projectile Collision Fix
+
+### 1. Line of Sight vs. Line of Fire Separation
+- **Enemy Combat AI Decoupling** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Distinguished visual awareness (**Line of Sight / LOS**) from attack capability (**Line of Fire / LOF**).
+  - Added `hasLineOfFire` and `isBlockedByDoorProtector` in `RaycastEnemyManager` using 2D line segment-segment intersection against active door protectors and thin wall barriers (`allThinWalls`).
+  - Passed `lofChecker` to `RaycastEnemy.update()`. Enemies now only transition to `"attack"` state if they have an unobstructed Line of Fire (`dist <= attackRange && los && lof`).
+  - If Line of Fire is obstructed by a door protector or thin wall barrier, enemies remain in `"chase"` mode (moving up to the barrier where they are stopped by collision) and will not enter the shooting state, play firing animations, or emit weapon sounds.
+  - Added a defensive barrier check in `onShootPlayer` to immediately abort any damage or projectile instantiation if blocked by a door protector.
+
+### 2. Line of Sight Voiceline Retention Across Barriers
+- **Stormtrooper Vocal Audio Preservation** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Continued providing `los` (thick wall / closed door check only) to `this.voicelineManager.onEnemyUpdate(enemy, playerX, playerY, los, dist)`.
+  - Stormtroopers can see the player through transparent door protector force fields, allowing ambient spotted lines ("Rebel scum!", "There he is!") to trigger normally even while weapons remain locked.
+
+### 3. In-Flight Laser Projectile Collision Against Thin Walls
+- **Laser Interception & Impact FX** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Updated `RaycastLaserManager.update()` to accept `thinWalls` and passed `allThinWalls` from `RaycastScene`.
+  - Added step-segment intersection checking for moving 3D laser bolts against active thin walls and door protectors.
+  - Any laser bolt (enemy or player) intersecting a door protector spawns impact sparks (`spawnImpact`), terminates immediately, and is removed from the active projectile pool without delivering damage or penetrating the barrier.
+  - Updated `findRayWallDistance` in `RaycastEnemyManager` to include thin wall barriers, properly truncating enemy laser aiming traces at the barrier plane.
+
+### 4. Player Targeting & Damage Blocking Across Door Protectors
+- **Bidirectional Barrier Enforcement** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - **Player Aim Vector & Targeting**: In `RaycastScene.tryShoot()`, traced `aimBarrierDist` along the center screen aim vector using `findRayWallDistance`. If a door protector or thin wall is in front of the player, target distance is clamped to the barrier plane.
+  - **Auto-Aim Filtering**: Prohibited targeting or locking onto enemies across door protectors in `tryShoot()` via `isBlockedByDoorProtector`.
+  - **Muzzle Spawn Position Clamping**: In `RaycastLaserManager.fireLaser()`, checked if the near-camera barrel offset `(startX, startY)` would clip past a barrier when standing up close, clamping the spawn point to the player's side of the barrier.
+  - **In-Flight Laser Path Guarding**: Verified line of fire from laser origin and current flight position to candidate enemies before registering player laser hits, preventing projectile damage through barriers.
+  - **Area of Effect Blast Shielding**: Updated `applyAreaDamage()` in `RaycastEnemyManager` and `RaycastBreakableManager` (and player detonator damage in `RaycastScene`) to pass `allThinWalls` and block blast wave damage through door protectors.
+
 ## [2026-09-06] - Destructible Computer Panel Wall & Sequential Explosion Effects
 
 ### 1. Destructible Computer Panel Wall & Grid Snapping

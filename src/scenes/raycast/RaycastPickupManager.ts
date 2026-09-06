@@ -769,7 +769,9 @@ export class RaycastPickupManager {
     planeX: number,
     planeY: number,
     zBuffer: Float64Array,
-    maxRenderDistance: number
+    maxRenderDistance: number,
+    doorDistBuffer?: Float64Array,
+    doorBottomBuffer?: Float64Array
   ): void {
     const screenW = gameConfig.width;
     const screenH = gameConfig.height;
@@ -868,28 +870,57 @@ export class RaycastPickupManager {
       if (mask) {
         mask.clear();
         let runStart = -1;
-        let anyVisible = false;
+        let runTopY = -1;
+        let hasDrawnAnyRun = false;
 
         for (let col = drawStartX; col <= drawEndX; col++) {
           if (transformY < zBuffer[col]) {
-            if (runStart < 0) runStart = col;
-            anyVisible = true;
+            let topY = 0;
+            if (doorDistBuffer && doorBottomBuffer && doorDistBuffer[col] < transformY) {
+              topY = Math.max(0, Math.floor(doorBottomBuffer[col]));
+            }
+            if (topY < screenH) {
+              if (runStart >= 0 && topY === runTopY) {
+                // Continue current horizontal run
+              } else {
+                if (runStart >= 0) {
+                  mask.beginFill(0xffffff);
+                  mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
+                  mask.endFill();
+                  hasDrawnAnyRun = true;
+                }
+                runStart = col;
+                runTopY = topY;
+              }
+            } else {
+              // topY >= screenH: door panel covers column down to floor
+              if (runStart >= 0) {
+                mask.beginFill(0xffffff);
+                mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
+                mask.endFill();
+                hasDrawnAnyRun = true;
+                runStart = -1;
+              }
+            }
           } else {
+            // Occluded by solid wall
             if (runStart >= 0) {
               mask.beginFill(0xffffff);
-              mask.drawRect(runStart, 0, col - runStart, screenH);
+              mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
               mask.endFill();
+              hasDrawnAnyRun = true;
               runStart = -1;
             }
           }
         }
         if (runStart >= 0) {
           mask.beginFill(0xffffff);
-          mask.drawRect(runStart, 0, drawEndX - runStart + 1, screenH);
+          mask.drawRect(runStart, runTopY, drawEndX - runStart + 1, screenH - runTopY);
           mask.endFill();
+          hasDrawnAnyRun = true;
         }
 
-        if (!anyVisible && drawStartX <= drawEndX) {
+        if (!hasDrawnAnyRun && drawStartX <= drawEndX) {
           sprite.visible = false;
           continue;
         }

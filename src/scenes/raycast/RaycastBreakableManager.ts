@@ -592,12 +592,46 @@ export class RaycastBreakableManager {
     return false;
   }
 
+  public isBlockedByThinWall(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
+  ): boolean {
+    if (!thinWalls || thinWalls.length === 0) return false;
+
+    const dxA = x2 - x1;
+    const dyA = y2 - y1;
+    if (Math.hypot(dxA, dyA) < 0.001) return false;
+
+    for (let i = 0; i < thinWalls.length; i++) {
+      const wall = thinWalls[i];
+      const dxB = wall.x2 - wall.x1;
+      const dyB = wall.y2 - wall.y1;
+      const denom = dxA * dyB - dyA * dxB;
+      if (Math.abs(denom) < 1e-6) continue;
+
+      const deltaX = wall.x1 - x1;
+      const deltaY = wall.y1 - y1;
+      const s = (deltaX * dyB - deltaY * dxB) / denom;
+      const t = (deltaX * dyA - deltaY * dxA) / denom;
+
+      if (s >= 0.001 && s <= 0.999 && t >= -0.05 && t <= 1.05) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   public applyAreaDamage(
     centerX: number,
     centerY: number,
     radius: number,
     maxDamage: number,
-    onBroken?: (b: RaycastBreakable) => void
+    onBroken?: (b: RaycastBreakable) => void,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
   ): RaycastBreakable[] {
     const brokenList: RaycastBreakable[] = [];
     for (const b of this.breakables) {
@@ -606,6 +640,9 @@ export class RaycastBreakableManager {
       const dy = b.y - centerY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist <= radius) {
+        if (thinWalls && this.isBlockedByThinWall(centerX, centerY, b.x, b.y, thinWalls)) {
+          continue;
+        }
         const falloff = 1 - dist / radius;
         const damage = Math.max(20, Math.round(maxDamage * falloff));
         const broke = this.damageBreakable(b, damage, onBroken);

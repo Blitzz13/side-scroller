@@ -102,6 +102,9 @@ export class RaycastScene extends BaseScene {
     orientation: "vertical" | "horizontal";
   }> = [];
   private spritePool: Sprite[][] = [];
+  private thinWallContainer!: Container;
+  private thinWallSpritePool: Sprite[][] = [];
+  private prevThinHitCounts: Int32Array = new Int32Array(gameConfig.width);
   private hitPool: RayHit[][] = [];
   private readonly MAX_HITS_PER_COLUMN: number = 6;
   private readonly MAX_RENDER_DISTANCE: number = 30;
@@ -120,6 +123,7 @@ export class RaycastScene extends BaseScene {
   private doorSlideModes: Record<string, DoorOpen> = {};
   public defaultDoorSlide: DoorOpen = gameConfig.defaultDoorSlide || DoorOpen.UP;
   private doorColumnTextures: Texture[] = [];
+  private thinWallColumnTextures: Texture[] = [];
 
   // Numeric tile type flags (0=empty, 1=thickWall, 2=door, 3=thinWall)
   private static readonly TILE_EMPTY = 0;
@@ -140,6 +144,8 @@ export class RaycastScene extends BaseScene {
   private hitCounts: Int32Array = new Int32Array(gameConfig.width);
   private prevHitCounts: Int32Array = new Int32Array(gameConfig.width);
   private zBuffer: Float64Array = new Float64Array(gameConfig.width);
+  private doorDistBuffer: Float64Array = new Float64Array(gameConfig.width);
+  private doorBottomBuffer: Float64Array = new Float64Array(gameConfig.width);
 
   private mapObjects: MapObject[] = [];
   private objectContainer!: Container;
@@ -278,10 +284,15 @@ export class RaycastScene extends BaseScene {
     this.backgroundContainer.addChild(this.graphics);
     this.worldContainer.addChild(this.backgroundContainer);
 
-    // Wall layer container (isolates the 7,680 wall column slice sprites)
+    // Wall layer container (isolates the solid wall column slice sprites)
     this.wallContainer = new Container();
     this.wallContainer.zIndex = 10;
     this.worldContainer.addChild(this.wallContainer);
+
+    // Thin wall layer container (transparent barriers, fences, door protectors rendered in front of enemies/pickups)
+    this.thinWallContainer = new Container();
+    this.thinWallContainer.zIndex = 45;
+    this.worldContainer.addChild(this.thinWallContainer);
 
     for (let i = 0; i < gameConfig.width; i++) {
       const columnSprites: Sprite[] = [];
@@ -294,7 +305,21 @@ export class RaycastScene extends BaseScene {
         columnSprites.push(sprite);
       }
       this.spritePool.push(columnSprites);
+
+      const thinSprites: Sprite[] = [];
+      for (let j = 0; j < 4; j++) {
+        const sprite = new Sprite();
+        sprite.width = 1;
+        sprite.x = i;
+        sprite.visible = false;
+        this.thinWallContainer.addChild(sprite);
+        thinSprites.push(sprite);
+      }
+      this.thinWallSpritePool.push(thinSprites);
       this.doorColumnTextures.push(
+        new Texture(Texture.WHITE.baseTexture, new Rectangle(0, 0, 1, 1))
+      );
+      this.thinWallColumnTextures.push(
         new Texture(Texture.WHITE.baseTexture, new Rectangle(0, 0, 1, 1))
       );
 
@@ -593,25 +618,41 @@ export class RaycastScene extends BaseScene {
       this.triggerScreenShake(intensity, 0.35);
     }
 
-    // 2. AOE damage to enemies in blast radius
-    this.enemyManager.applyAreaDamage(x, y, radius, damage, (enemy) => {
-      this.hud.showToast(`[!] Neutralized ${enemy.config.name} (Explosion)`, 0x00ff88);
-    });
+    // 2. AOE damage to enemies in blast radius (blocked by door protectors / thin walls)
+    this.enemyManager.applyAreaDamage(
+      x,
+      y,
+      radius,
+      damage,
+      (enemy) => {
+        this.hud.showToast(`[!] Neutralized ${enemy.config.name} (Explosion)`, 0x00ff88);
+      },
+      this.allThinWalls
+    );
 
-    // 3. AOE damage to breakable objects
+    // 3. AOE damage to breakable objects (blocked by door protectors / thin walls)
     if (this.breakableManager) {
-      this.breakableManager.applyAreaDamage(x, y, radius, damage, (broken) => {
-        this.handleBreakableDestroyed(broken, "Explosion");
-      });
+      this.breakableManager.applyAreaDamage(
+        x,
+        y,
+        radius,
+        damage,
+        (broken) => {
+          this.handleBreakableDestroyed(broken, "Explosion");
+        },
+        this.allThinWalls
+      );
     }
 
-    // 4. Damage player if caught in the explosion
+    // 4. Damage player if caught in the explosion (blocked by door protectors / thin walls)
     if (distToPlayer <= radius) {
-      const falloff = 1 - distToPlayer / radius;
-      const playerDmg = Math.max(10, Math.round(damage * 0.6 * falloff));
-      this.playerController.takeDamage(playerDmg);
-      this.hud.showToast(`[-] Caught in Thermal Blast! (-${playerDmg} HP)`, 0xff3333);
-      this.hud.flashScreen(0xff5500, 0.4);
+      if (!this.enemyManager.isBlockedByDoorProtector(x, y, this.player.x, this.player.y, this.allThinWalls)) {
+        const falloff = 1 - distToPlayer / radius;
+        const playerDmg = Math.max(10, Math.round(damage * 0.6 * falloff));
+        this.playerController.takeDamage(playerDmg);
+        this.hud.showToast(`[-] Caught in Thermal Blast! (-${playerDmg} HP)`, 0xff3333);
+        this.hud.flashScreen(0xff5500, 0.4);
+      }
     }
   }
 
@@ -1546,6 +1587,11 @@ export class RaycastScene extends BaseScene {
       this.enemyContainer.removeChildren();
       this.enemyContainer.destroy({ children: true });
     }
+    if (this.thinWallContainer) {
+      this.thinWallContainer.removeChildren();
+      this.thinWallContainer.destroy({ children: true });
+    }
+    this.thinWallSpritePool = [];
     this.objectSpritePool = [];
     this.objectSpritePoolIndex = 0;
     for (const slices of Object.values(this.columnTextures)) {
@@ -1557,6 +1603,10 @@ export class RaycastScene extends BaseScene {
       t.destroy(false);
     }
     this.doorColumnTextures = [];
+    for (const t of this.thinWallColumnTextures) {
+      t.destroy(false);
+    }
+    this.thinWallColumnTextures = [];
     this.columnTextures = {};
     window.removeEventListener("keydown", this.keyDownHandler);
     window.removeEventListener("keyup", this.keyUpHandler);
@@ -1723,13 +1773,28 @@ export class RaycastScene extends BaseScene {
       const centerCol = Math.floor(gameConfig.width / 2);
       const wallDistance = this.zBuffer[centerCol] || this.MAX_RENDER_DISTANCE;
 
+      // Find distance to obstacle (solid wall, door, or door protector) along aim vector
+      const aimBarrierDist = this.enemyManager.findRayWallDistance(
+        this.player.x,
+        this.player.y,
+        this.player.dirX,
+        this.player.dirY,
+        wallDistance,
+        this.mapFlat,
+        this.mapWidth,
+        this.mapHeight,
+        this.doorStatesFlat,
+        this.allThinWalls
+      );
+      const effectiveWallDist = Math.min(wallDistance, aimBarrierDist);
+
       // Find closest breakable furniture or destructible wall hit along aiming vector
       let breakableHit = this.breakableManager.findClosestHit(
         this.player.x,
         this.player.y,
         this.player.dirX,
         this.player.dirY,
-        wallDistance
+        effectiveWallDist
       );
 
       // Check if center screen ray directly struck an unbroken destructible wall block
@@ -1746,7 +1811,7 @@ export class RaycastScene extends BaseScene {
         }
       }
 
-      const maxTargetDist = breakableHit ? breakableHit.distance : wallDistance;
+      const maxTargetDist = breakableHit ? breakableHit.distance : effectiveWallDist;
 
       // Find closest enemy along aiming cone
       let targetEnemy: RaycastEnemy | null = null;
@@ -1755,6 +1820,20 @@ export class RaycastScene extends BaseScene {
 
       for (const enemy of this.enemyManager.activeEnemies) {
         if (enemy.isDead) continue;
+
+        // Block targeting enemies through door protectors or thin wall barriers
+        if (
+          this.enemyManager.isBlockedByDoorProtector(
+            this.player.x,
+            this.player.y,
+            enemy.x,
+            enemy.y,
+            this.allThinWalls
+          )
+        ) {
+          continue;
+        }
+
         const dx = enemy.x - this.player.x;
         const dy = enemy.y - this.player.y;
         const t = dx * this.player.dirX + dy * this.player.dirY;
@@ -1788,8 +1867,8 @@ export class RaycastScene extends BaseScene {
           targetZ = breakableHit.breakable.z ?? 0.5;
         }
       } else {
-        targetX = this.player.x + this.player.dirX * wallDistance;
-        targetY = this.player.y + this.player.dirY * wallDistance;
+        targetX = this.player.x + this.player.dirX * effectiveWallDist;
+        targetY = this.player.y + this.player.dirY * effectiveWallDist;
         targetZ = 0.5;
       }
 
@@ -1817,7 +1896,8 @@ export class RaycastScene extends BaseScene {
         },
         (broken) => {
           this.handleBreakableDestroyed(broken);
-        }
+        },
+        this.allThinWalls
       );
     }
   }
@@ -1929,7 +2009,8 @@ export class RaycastScene extends BaseScene {
           this.playerController.takeDamage(dmg);
           this.triggerScreenShake(5, 0.22);
           this.hud.showToast(`[-] Hit by Blaster Fire! (-${dmg} HP)`, 0xff4444);
-        }
+        },
+        allThinWalls
       );
     }
 
@@ -2549,8 +2630,71 @@ export class RaycastScene extends BaseScene {
       const hitCount = this.castRay(i);
       this.hitCounts[i] = hitCount;
       const pool = this.hitPool[i];
-      this.zBuffer[i] =
-        hitCount > 0 ? pool[hitCount - 1].distance : this.MAX_RENDER_DISTANCE;
+
+      let solidDist = this.MAX_RENDER_DISTANCE;
+      let doorDist = this.MAX_RENDER_DISTANCE;
+      let doorBottom = screenH;
+
+      // Find any door in the column
+      let activeDoor: RayHit | null = null;
+      let doorIdx = -1;
+      for (let j = 0; j < hitCount; j++) {
+        const ray = pool[j];
+        if (ray.isDoor && ray.side !== 2) {
+          const tileType = this.tileTypes[ray.wallType + 1];
+          if (tileType === "door" && ray.doorSlide === DoorOpen.UP) {
+            activeDoor = ray;
+            doorIdx = j;
+            break;
+          }
+        }
+      }
+
+      // If any solid wall is closer than activeDoor (index > doorIdx), the solid wall blocks the door
+      let hasCloserSolidWall = false;
+      if (doorIdx >= 0) {
+        for (let j = doorIdx + 1; j < hitCount; j++) {
+          if (pool[j].side !== 2 && !pool[j].isDoor) {
+            hasCloserSolidWall = true;
+            break;
+          }
+        }
+      }
+
+      if (activeDoor && !hasCloserSolidWall && activeDoor.doorOpen !== undefined && activeDoor.doorOpen > 0.01) {
+        // Vertical sliding door is opening/open: uncovering from bottom up!
+        const dOpen = activeDoor.doorOpen;
+        const dLineH = screenH / activeDoor.distance;
+        const dFloorY = dLineH / 2 + screenH / 2;
+        const dTop = -dLineH / 2 + screenH / 2;
+        const doorPanelBottom = Math.max(dTop, dFloorY - dOpen * dLineH);
+
+        doorDist = activeDoor.distance;
+        doorBottom = doorPanelBottom;
+
+        // Beyond the door opening, rays can see through to the back wall behind the door
+        let backWallDist = this.MAX_RENDER_DISTANCE;
+        for (let j = 0; j < hitCount; j++) {
+          const ray = pool[j];
+          if (ray.side !== 2 && !ray.isDoor && ray.distance > activeDoor.distance) {
+            backWallDist = ray.distance;
+            break; // pool[0] is the farthest
+          }
+        }
+        solidDist = backWallDist;
+      } else {
+        // Standard closest opaque obstacle (solid wall or closed door)
+        for (let j = hitCount - 1; j >= 0; j--) {
+          if (pool[j].side !== 2) {
+            solidDist = pool[j].distance;
+            break;
+          }
+        }
+      }
+
+      this.zBuffer[i] = solidDist;
+      this.doorDistBuffer[i] = doorDist;
+      this.doorBottomBuffer[i] = doorBottom;
 
       let minDrawStart = screenH;
       let maxDrawEnd = 0;
@@ -2620,17 +2764,15 @@ export class RaycastScene extends BaseScene {
       const hitCount = this.hitCounts[i];
       const pool = this.hitPool[i];
       const colSprites = this.spritePool[i];
-      const prevCount = this.prevHitCounts[i];
+      const thinSprites = this.thinWallSpritePool[i];
+      const prevSolidCount = this.prevHitCounts[i];
+      const prevThinCount = this.prevThinHitCounts[i];
 
-      // Only hide sprites that were visible previously and are no longer used
-      if (hitCount < prevCount) {
-        for (let s = hitCount; s < prevCount; s++) {
-          colSprites[s].visible = false;
-        }
-      }
-      this.prevHitCounts[i] = hitCount;
+      let solidIdx = 0;
+      let thinIdx = 0;
 
-      for (let j = hitCount - 1; j >= 0; j--) {
+      // Render wall column slices back-to-front (j = 0 is farthest hit, hitCount - 1 is closest)
+      for (let j = 0; j < hitCount; j++) {
         const ray = pool[j];
         const lineHeight = screenH / ray.distance;
         let drawStart = -lineHeight / 2 + screenH / 2;
@@ -2646,10 +2788,68 @@ export class RaycastScene extends BaseScene {
           }
         }
 
+        const isThinWall = ray.side === 2;
+        const origDrawStart = drawStart;
+        const origLineHeight = lineHeight;
+
+        if (isThinWall) {
+          // Check if any opaque wall or door in front of this thin wall occludes it
+          let occluded = false;
+          for (let k = j + 1; k < hitCount; k++) {
+            const closer = pool[k];
+            if (closer.side === 2) continue; // Another thin wall doesn't fully occlude
+
+            const closerTileType = this.tileTypes[closer.wallType + 1];
+            const isCloserDoor = closer.isDoor === true && closer.side !== 2 && closerTileType === "door";
+
+            if (!isCloserDoor) {
+              // Solid wall in front of this thin wall -> completely occluded!
+              occluded = true;
+              break;
+            } else {
+              // Door in front of this thin wall
+              const dFlatIdx = closer.mapY * this.mapWidth + closer.mapX;
+              const dOpen = closer.doorOpen !== undefined
+                ? closer.doorOpen
+                : Math.abs(this.doorStatesFlat[dFlatIdx]);
+
+              if (closer.doorSlide === DoorOpen.UP) {
+                // Vertical sliding door: metal panel covers top down to doorPanelBottom
+                const dLineH = screenH / closer.distance;
+                const dFloorY = dLineH / 2 + screenH / 2;
+                const dTop = -dLineH / 2 + screenH / 2;
+                const doorPanelBottom = Math.max(dTop, dFloorY - dOpen * dLineH);
+
+                drawStart = Math.max(drawStart, doorPanelBottom);
+                if (drawStart >= drawEnd) {
+                  occluded = true;
+                  break;
+                }
+              } else {
+                // Horizontal sliding door: solid panel blocks completely
+                occluded = true;
+                break;
+              }
+            }
+          }
+          if (occluded || drawEnd <= drawStart) continue;
+        }
+
         // Viewport culling: skip drawing if wall slice is outside the screen bounds
         if (drawEnd <= 0 || drawStart >= screenH || drawEnd <= drawStart) continue;
 
-        const sprite = colSprites[j];
+        let sprite: Sprite | null = null;
+        if (isThinWall) {
+          if (thinIdx < thinSprites.length) {
+            sprite = thinSprites[thinIdx++];
+          }
+        } else {
+          if (solidIdx < colSprites.length) {
+            sprite = colSprites[solidIdx++];
+          }
+        }
+        if (!sprite) continue;
+
         const slices = this.columnTextures[ray.wallType];
 
         if (slices && slices.length > 0) {
@@ -2658,7 +2858,24 @@ export class RaycastScene extends BaseScene {
             slices.length - 1
           );
 
-          if (isActualDoor && ray.doorSlide === DoorOpen.UP) {
+          if (isThinWall && drawStart > origDrawStart) {
+            const texH = slices[clampedTexX].baseTexture.height || 64;
+            const clipRatio = Math.max(0, Math.min(1, (drawStart - origDrawStart) / origLineHeight));
+            const thinTex = this.thinWallColumnTextures[i];
+            thinTex.baseTexture = slices[clampedTexX].baseTexture;
+
+            const srcY = Math.min(texH - 1, Math.floor(clipRatio * texH));
+            const srcH = Math.max(1, texH - srcY);
+
+            const origFrame = slices[clampedTexX].frame;
+            thinTex.frame.x = origFrame.x;
+            thinTex.frame.y = origFrame.y + srcY;
+            thinTex.frame.width = 1;
+            thinTex.frame.height = srcH;
+            thinTex.updateUvs();
+
+            sprite.texture = thinTex;
+          } else if (isActualDoor && ray.doorSlide === DoorOpen.UP) {
             const texH = slices[clampedTexX].baseTexture.height || 64;
             const open = ray.doorOpen ?? 0;
             const doorTex = this.doorColumnTextures[i];
@@ -2696,6 +2913,16 @@ export class RaycastScene extends BaseScene {
           this.graphics.endFill();
         }
       }
+
+      // Hide unused sprites
+      for (let s = solidIdx; s < prevSolidCount; s++) {
+        colSprites[s].visible = false;
+      }
+      for (let s = thinIdx; s < prevThinCount; s++) {
+        thinSprites[s].visible = false;
+      }
+      this.prevHitCounts[i] = solidIdx;
+      this.prevThinHitCounts[i] = thinIdx;
     }
 
     // 5. Render billboard pickups, breakables & detonators with Z-buffer occlusion
@@ -2721,7 +2948,9 @@ export class RaycastScene extends BaseScene {
       this.player.planeX,
       this.player.planeY,
       this.zBuffer,
-      this.MAX_RENDER_DISTANCE
+      this.MAX_RENDER_DISTANCE,
+      this.doorDistBuffer,
+      this.doorBottomBuffer
     );
 
     // 7. Render animated enemy sprites with hardware rotation & Z-buffer occlusion
@@ -2733,7 +2962,9 @@ export class RaycastScene extends BaseScene {
       this.player.planeX,
       this.player.planeY,
       this.zBuffer,
-      this.MAX_RENDER_DISTANCE
+      this.MAX_RENDER_DISTANCE,
+      this.doorDistBuffer,
+      this.doorBottomBuffer
     );
 
     // 8. Render animated 3D explosions with perspective & Z-buffer occlusion
@@ -2955,6 +3186,12 @@ export class RaycastScene extends BaseScene {
       for (let stripe = clipStartX; stripe < clipEndX; stripe++) {
         // Check Z-Buffer: only draw stripe if it is closer than the wall in this column
         if (transformY < this.zBuffer[stripe]) {
+          let stripeStartY = drawStartY;
+          if (this.doorDistBuffer[stripe] < transformY) {
+            stripeStartY = Math.max(drawStartY, Math.floor(this.doorBottomBuffer[stripe]));
+          }
+          if (stripeStartY >= drawEndY) continue;
+
           const texX = Math.floor(
             ((stripe - drawStartX) * texW) / spriteWidth
           );
@@ -2974,9 +3211,9 @@ export class RaycastScene extends BaseScene {
 
           sprite.texture = slices[sliceIndex];
           sprite.x = stripe;
-          sprite.y = drawStartY;
+          sprite.y = stripeStartY;
           sprite.width = 1;
-          sprite.height = actualHeight;
+          sprite.height = drawEndY - stripeStartY;
           sprite.tint = obj.tint ?? tint;
           sprite.visible = true;
         }

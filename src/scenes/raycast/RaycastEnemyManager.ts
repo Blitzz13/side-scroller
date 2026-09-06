@@ -263,8 +263,70 @@ export class RaycastEnemyManager {
   }
 
   /**
+   * Checks if any active thin wall or door protector barrier intersects the line segment
+   * between (x1, y1) and (x2, y2).
+   */
+  public isBlockedByDoorProtector(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
+  ): boolean {
+    if (!thinWalls || thinWalls.length === 0) return false;
+
+    const dxA = x2 - x1;
+    const dyA = y2 - y1;
+    if (Math.hypot(dxA, dyA) < 0.001) return false;
+
+    for (let i = 0; i < thinWalls.length; i++) {
+      const wall = thinWalls[i];
+      const dxB = wall.x2 - wall.x1;
+      const dyB = wall.y2 - wall.y1;
+      const denom = dxA * dyB - dyA * dxB;
+      if (Math.abs(denom) < 1e-6) continue;
+
+      const deltaX = wall.x1 - x1;
+      const deltaY = wall.y1 - y1;
+      const s = (deltaX * dyB - deltaY * dxB) / denom;
+      const t = (deltaX * dyA - deltaY * dxA) / denom;
+
+      // s is progress from (x1, y1) to (x2, y2), t is along the wall segment
+      if (s >= 0.001 && s <= 0.999 && t >= -0.05 && t <= 1.05) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Determines if the enemy has an unobstructed line of fire to the target.
+   * Requires clear line of sight (no solid walls or closed doors) AND no door protectors / thin walls.
+   */
+  public hasLineOfFire(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    mapFlat: Int32Array,
+    mapWidth: number,
+    mapHeight: number,
+    doorStatesFlat: Float64Array,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
+  ): boolean {
+    if (!this.checkLineOfSight(x1, y1, x2, y2, mapFlat, mapWidth, mapHeight, doorStatesFlat)) {
+      return false;
+    }
+    if (this.isBlockedByDoorProtector(x1, y1, x2, y2, thinWalls)) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Traces a ray from start position along dirX, dirY using DDA to find the distance
-   * to the first solid wall or closed door, up to maxRange.
+   * to the first solid wall, closed door, or thin wall / door protector barrier, up to maxRange.
    */
   public findRayWallDistance(
     startX: number,
@@ -275,7 +337,8 @@ export class RaycastEnemyManager {
     mapFlat: Int32Array,
     mapWidth: number,
     mapHeight: number,
-    doorStatesFlat: Float64Array
+    doorStatesFlat: Float64Array,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
   ): number {
     const rayDirX = dirX;
     const rayDirY = dirY;
@@ -308,6 +371,7 @@ export class RaycastEnemyManager {
     }
 
     let currentDist = 0;
+    let solidWallDist = maxRange;
 
     while (currentDist < maxRange) {
       if (sideDistX < sideDistY) {
@@ -323,7 +387,8 @@ export class RaycastEnemyManager {
       if (currentDist >= maxRange) break;
 
       if (mapX < 0 || mapX >= mapWidth || mapY < 0 || mapY >= mapHeight) {
-        return currentDist;
+        solidWallDist = currentDist;
+        break;
       }
 
       const flatIdx = mapY * mapWidth + mapX;
@@ -334,11 +399,33 @@ export class RaycastEnemyManager {
         if (doorState !== undefined && Math.abs(doorState) >= 0.8) {
           continue; // Open door
         }
-        return currentDist; // Solid wall or closed door
+        solidWallDist = currentDist; // Solid wall or closed door
+        break;
       }
     }
 
-    return maxRange;
+    let closestDist = solidWallDist;
+
+    // Check intersection with active thin walls / door protectors along the ray
+    if (thinWalls && thinWalls.length > 0) {
+      for (let i = 0; i < thinWalls.length; i++) {
+        const wall = thinWalls[i];
+        const dxW = wall.x2 - wall.x1;
+        const dyW = wall.y2 - wall.y1;
+        const denom = dxW * rayDirY - dyW * rayDirX;
+        if (Math.abs(denom) < 1e-6) continue;
+
+        const u = ((startX - wall.x1) * dyW - (startY - wall.y1) * dxW) / denom;
+        if (u < 0.01 || u >= closestDist) continue;
+
+        const t = ((startX - wall.x1) * rayDirY - (startY - wall.y1) * rayDirX) / denom;
+        if (t >= -0.05 && t <= 1.05) {
+          closestDist = u;
+        }
+      }
+    }
+
+    return closestDist;
   }
 
   public tryMoveEnemy(
@@ -419,6 +506,19 @@ export class RaycastEnemyManager {
         doorStatesFlat
       );
 
+    const lofChecker = (x1: number, y1: number, x2: number, y2: number) =>
+      this.hasLineOfFire(
+        x1,
+        y1,
+        x2,
+        y2,
+        mapFlat,
+        mapWidth,
+        mapHeight,
+        doorStatesFlat,
+        thinWalls
+      );
+
     const moveChecker = (enemy: RaycastEnemy, nx: number, ny: number) =>
       this.tryMoveEnemy(
         enemy,
@@ -437,6 +537,11 @@ export class RaycastEnemyManager {
       accuracy: number,
       distance: number
     ) => {
+      // Block enemies from shooting or damaging the player through door protectors / thin walls
+      if (this.isBlockedByDoorProtector(enemy.x, enemy.y, playerX, playerY, thinWalls)) {
+        return;
+      }
+
       if (!laserManager) {
         // Fallback hitscan if no laser manager
         const effectiveAccuracy = Math.max(
@@ -487,7 +592,7 @@ export class RaycastEnemyManager {
       aimDirX /= aimLen;
       aimDirY /= aimLen;
 
-      // Find where this laser will hit a wall/door behind the player (or max range)
+      // Find where this laser will hit a wall, door, or door protector (or max range)
       const maxTraceDist = dist + 16.0;
       const wallDist = this.findRayWallDistance(
         enemy.x,
@@ -498,7 +603,8 @@ export class RaycastEnemyManager {
         mapFlat,
         mapWidth,
         mapHeight,
-        doorStatesFlat
+        doorStatesFlat,
+        thinWalls
       );
 
       const targetDist = Math.max(0.5, wallDist);
@@ -532,7 +638,8 @@ export class RaycastEnemyManager {
         playerY,
         losChecker,
         moveChecker,
-        onShootPlayer
+        onShootPlayer,
+        lofChecker
       );
 
       // Trigger stormtrooper voicelines based on visibility & proximity
@@ -577,7 +684,9 @@ export class RaycastEnemyManager {
     planeX: number,
     planeY: number,
     zBuffer: Float64Array,
-    maxRenderDistance: number
+    maxRenderDistance: number,
+    doorDistBuffer?: Float64Array,
+    doorBottomBuffer?: Float64Array
   ): void {
     const screenW = gameConfig.width;
     const screenH = gameConfig.height;
@@ -634,22 +743,49 @@ export class RaycastEnemyManager {
         continue;
       }
 
-      // Per-column occlusion mask: draw only columns where enemy is in front of wall
+      // Per-column occlusion mask: draw only columns where enemy is in front of wall or under opening door
       const mask = enemy.occlusionMask;
       if (mask) {
         mask.clear();
 
         let runStart = -1;
+        let runTopY = -1;
         let hasDrawnAnyRun = false;
+
         for (let col = drawStartX; col <= drawEndX; col++) {
           if (transformY < zBuffer[col]) {
-            // This column is visible
-            if (runStart < 0) runStart = col;
+            let topY = 0;
+            if (doorDistBuffer && doorBottomBuffer && doorDistBuffer[col] < transformY) {
+              topY = Math.max(0, Math.floor(doorBottomBuffer[col]));
+            }
+            if (topY < screenH) {
+              if (runStart >= 0 && topY === runTopY) {
+                // Continue current horizontal run
+              } else {
+                if (runStart >= 0) {
+                  mask.beginFill(0xffffff);
+                  mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
+                  mask.endFill();
+                  hasDrawnAnyRun = true;
+                }
+                runStart = col;
+                runTopY = topY;
+              }
+            } else {
+              // topY >= screenH: door panel completely covers column down to floor
+              if (runStart >= 0) {
+                mask.beginFill(0xffffff);
+                mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
+                mask.endFill();
+                hasDrawnAnyRun = true;
+                runStart = -1;
+              }
+            }
           } else {
-            // This column is occluded; flush any open run
+            // Occluded by wall
             if (runStart >= 0) {
               mask.beginFill(0xffffff);
-              mask.drawRect(runStart, 0, col - runStart, screenH);
+              mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
               mask.endFill();
               hasDrawnAnyRun = true;
               runStart = -1;
@@ -659,25 +795,14 @@ export class RaycastEnemyManager {
         // Flush last open run
         if (runStart >= 0) {
           mask.beginFill(0xffffff);
-          mask.drawRect(runStart, 0, drawEndX - runStart + 1, screenH);
+          mask.drawRect(runStart, runTopY, drawEndX - runStart + 1, screenH - runTopY);
           mask.endFill();
           hasDrawnAnyRun = true;
         }
 
-        // If mask is completely empty, sprite is fully occluded
-        if (runStart < 0 && drawStartX <= drawEndX) {
-          // Check if we ever drew anything
-          let anyVisible = false;
-          for (let col = drawStartX; col <= drawEndX; col++) {
-            if (transformY < zBuffer[col]) {
-              anyVisible = true;
-              break;
-            }
-          }
-          if (!anyVisible) {
-            sprite.visible = false;
-            continue;
-          }
+        if (!hasDrawnAnyRun && drawStartX <= drawEndX) {
+          sprite.visible = false;
+          continue;
         }
       }
 
@@ -718,7 +843,8 @@ export class RaycastEnemyManager {
     dirY: number,
     damage: number,
     wallDistance: number,
-    onEnemyKilled?: (enemy: RaycastEnemy) => void
+    onEnemyKilled?: (enemy: RaycastEnemy) => void,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
   ): RaycastEnemy | null {
     let closestEnemy: RaycastEnemy | null = null;
     let closestDist = wallDistance;
@@ -726,6 +852,9 @@ export class RaycastEnemyManager {
 
     for (const enemy of this.enemies) {
       if (enemy.isDead) continue;
+      if (thinWalls && this.isBlockedByDoorProtector(playerX, playerY, enemy.x, enemy.y, thinWalls)) {
+        continue;
+      }
 
       const dx = enemy.x - playerX;
       const dy = enemy.y - playerY;
@@ -758,7 +887,8 @@ export class RaycastEnemyManager {
     centerY: number,
     radius: number,
     maxDamage: number,
-    onEnemyKilled?: (enemy: RaycastEnemy) => void
+    onEnemyKilled?: (enemy: RaycastEnemy) => void,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
   ): RaycastEnemy[] {
     const hitEnemies: RaycastEnemy[] = [];
     for (const enemy of this.enemies) {
@@ -767,6 +897,9 @@ export class RaycastEnemyManager {
       const dy = enemy.y - centerY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist <= radius) {
+        if (thinWalls && this.isBlockedByDoorProtector(centerX, centerY, enemy.x, enemy.y, thinWalls)) {
+          continue;
+        }
         const falloff = 1 - dist / radius;
         const damage = Math.max(15, Math.round(maxDamage * falloff));
         enemy.takeDamage(damage, onEnemyKilled);

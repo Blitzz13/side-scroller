@@ -226,7 +226,8 @@ export class RaycastEnemy {
     playerY: number,
     hasLineOfSight: (x1: number, y1: number, x2: number, y2: number) => boolean,
     tryMoveEnemy: (enemy: RaycastEnemy, newX: number, newY: number) => boolean,
-    onShootPlayer: (enemy: RaycastEnemy, damage: number, accuracy: number, distance: number) => void
+    onShootPlayer: (enemy: RaycastEnemy, damage: number, accuracy: number, distance: number) => void,
+    hasLineOfFire?: (x1: number, y1: number, x2: number, y2: number) => boolean
   ): void {
     if (this.painTimer > 0) {
       this.painTimer = Math.max(0, this.painTimer - delta);
@@ -253,14 +254,15 @@ export class RaycastEnemy {
     }
 
     const los = hasLineOfSight(this.x, this.y, playerX, playerY);
+    const lof = hasLineOfFire ? hasLineOfFire(this.x, this.y, playerX, playerY) : los;
 
     // State Machine
     if (this.state === "idle") {
       if (dist <= this.config.sightRange && los) {
-        this.state = dist <= this.config.attackRange ? "attack" : "chase";
+        this.state = dist <= this.config.attackRange && lof ? "attack" : "chase";
       }
     } else if (this.state === "chase") {
-      if (dist <= this.config.attackRange && los) {
+      if (dist <= this.config.attackRange && los && lof) {
         this.state = "attack";
       } else {
         // Move towards player
@@ -277,7 +279,7 @@ export class RaycastEnemy {
         }
       }
     } else if (this.state === "attack") {
-      if (dist > this.config.attackRange + 1.2 || !los) {
+      if (dist > this.config.attackRange + 1.2 || !los || !lof) {
         this.state = "chase";
       } else {
         // Maintain stopping distance

@@ -97,6 +97,40 @@ export class RaycastLaserManager {
     }
   }
 
+  public isBlockedByThinWall(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
+  ): boolean {
+    if (!thinWalls || thinWalls.length === 0) return false;
+
+    const dxA = x2 - x1;
+    const dyA = y2 - y1;
+    if (Math.hypot(dxA, dyA) < 0.001) return false;
+
+    for (let i = 0; i < thinWalls.length; i++) {
+      const wall = thinWalls[i];
+      const dxB = wall.x2 - wall.x1;
+      const dyB = wall.y2 - wall.y1;
+      const denom = dxA * dyB - dyA * dxB;
+      if (Math.abs(denom) < 1e-6) continue;
+
+      const deltaX = wall.x1 - x1;
+      const deltaY = wall.y1 - y1;
+      const s = (deltaX * dyB - deltaY * dxB) / denom;
+      const t = (deltaX * dyA - deltaY * dxA) / denom;
+
+      // s is progress from (x1, y1) to (x2, y2), t is along the wall segment
+      if (s >= 0.001 && s <= 0.999 && t >= -0.05 && t <= 1.05) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   /**
    * Fires a 3D laser bolt originating at the weapon muzzle in screen space and
    * flying along the aim trajectory towards the targeted enemy or obstacle.
@@ -114,7 +148,8 @@ export class RaycastLaserManager {
     targetEnemy: RaycastEnemy | null = null,
     targetBreakable: any | null = null,
     onEnemyKilled?: (enemy: RaycastEnemy) => void,
-    onBreakableDestroyed?: (b: any) => void
+    onBreakableDestroyed?: (b: any) => void,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
   ): void {
     const screenW = gameConfig.width;
     const screenH = gameConfig.height;
@@ -128,9 +163,20 @@ export class RaycastLaserManager {
     const transformX = d0 * ((2 * muzzleX) / screenW - 1);
 
     // World space start position derived mathematically from inverse camera transformation
-    const startX = playerX + dirX * d0 + planeX * transformX;
-    const startY = playerY + dirY * d0 + planeY * transformX;
-    const startZ = 0.5 - ((muzzleY - screenH / 2) / (screenH / 2)) * (d0 * 0.5);
+    let startX = playerX + dirX * d0 + planeX * transformX;
+    let startY = playerY + dirY * d0 + planeY * transformX;
+    let startZ = 0.5 - ((muzzleY - screenH / 2) / (screenH / 2)) * (d0 * 0.5);
+
+    // Prevent muzzle spawn position from clipping through a door protector / thin wall directly in front
+    if (thinWalls && this.isBlockedByThinWall(playerX, playerY, startX, startY, thinWalls)) {
+      startX = playerX + dirX * 0.05;
+      startY = playerY + dirY * 0.05;
+    }
+
+    // Double check: if target enemy is behind a door protector, do not lock onto it
+    if (targetEnemy && thinWalls && this.isBlockedByThinWall(playerX, playerY, targetEnemy.x, targetEnemy.y, thinWalls)) {
+      targetEnemy = null;
+    }
 
     const targetX = target.x;
     const targetY = target.y;
@@ -266,7 +312,8 @@ export class RaycastLaserManager {
     activeEnemies: RaycastEnemy[] = [],
     breakableManager?: any,
     player?: { x: number; y: number; z?: number },
-    onPlayerHit?: (damage: number) => void
+    onPlayerHit?: (damage: number) => void,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
   ): void {
     const dt = delta / 60;
 
@@ -278,6 +325,10 @@ export class RaycastLaserManager {
         continue;
       }
 
+      const prevX = laser.currentX;
+      const prevY = laser.currentY;
+      const prevZ = laser.currentZ;
+
       const stepDist = laser.speed * dt;
       laser.distanceTraveled += stepDist;
       const progress = Math.min(1.0, laser.distanceTraveled / laser.totalDistance);
@@ -286,22 +337,84 @@ export class RaycastLaserManager {
       laser.currentY = laser.startY + (laser.targetY - laser.startY) * progress;
       laser.currentZ = laser.startZ + (laser.targetZ - laser.startZ) * progress;
 
+      // Check collision with thin walls / door protectors along this step
+      if (thinWalls && thinWalls.length > 0) {
+        const dxA = laser.currentX - prevX;
+        const dyA = laser.currentY - prevY;
+        const moveDist = Math.hypot(dxA, dyA);
+
+        if (moveDist > 1e-6) {
+          let earliestS = 2.0;
+          let hitX = 0;
+          let hitY = 0;
+          let hitZ = 0;
+
+          for (let w = 0; w < thinWalls.length; w++) {
+            const wall = thinWalls[w];
+            const dxB = wall.x2 - wall.x1;
+            const dyB = wall.y2 - wall.y1;
+            const denom = dxA * dyB - dyA * dxB;
+            if (Math.abs(denom) < 1e-6) continue;
+
+            const deltaX = wall.x1 - prevX;
+            const deltaY = wall.y1 - prevY;
+            const s = (deltaX * dyB - deltaY * dxB) / denom;
+            const t = (deltaX * dyA - deltaY * dxA) / denom;
+
+            // s is progress along current step [0, 1]
+            // t is position along thin wall segment [0, 1] with margin
+            if (s >= 0.0 && s <= 1.0 && t >= -0.05 && t <= 1.05) {
+              if (s < earliestS) {
+                earliestS = s;
+                hitX = prevX + s * dxA;
+                hitY = prevY + s * dyA;
+                hitZ = prevZ + s * (laser.currentZ - prevZ);
+              }
+            }
+          }
+
+          if (earliestS <= 1.0) {
+            this.spawnImpact(hitX, hitY, hitZ);
+            laser.alive = false;
+            this.destroyLaser(laser, i);
+            continue;
+          }
+        }
+      }
+
       if (laser.source === "player") {
         // Player laser: check collision with targeted enemy or any other enemy in flight path
         let hitEnemy: RaycastEnemy | null = null;
         if (laser.targetEnemy && !laser.targetEnemy.isDead) {
-          const distToTarget = Math.hypot(
-            laser.targetEnemy.x - laser.currentX,
-            laser.targetEnemy.y - laser.currentY
-          );
-          if (distToTarget < 0.55 || progress >= 0.98) {
-            hitEnemy = laser.targetEnemy;
+          // Verify no door protector / thin wall blocks path from laser origin or current position to enemy
+          if (
+            thinWalls &&
+            (this.isBlockedByThinWall(laser.startX, laser.startY, laser.targetEnemy.x, laser.targetEnemy.y, thinWalls) ||
+             this.isBlockedByThinWall(laser.currentX, laser.currentY, laser.targetEnemy.x, laser.targetEnemy.y, thinWalls))
+          ) {
+            // Blocked by barrier
+          } else {
+            const distToTarget = Math.hypot(
+              laser.targetEnemy.x - laser.currentX,
+              laser.targetEnemy.y - laser.currentY
+            );
+            if (distToTarget < 0.55 || progress >= 0.98) {
+              hitEnemy = laser.targetEnemy;
+            }
           }
         }
 
         if (!hitEnemy) {
           for (const enemy of activeEnemies) {
             if (enemy.isDead) continue;
+            // Verify no door protector / thin wall blocks path to this enemy
+            if (
+              thinWalls &&
+              (this.isBlockedByThinWall(laser.startX, laser.startY, enemy.x, enemy.y, thinWalls) ||
+               this.isBlockedByThinWall(laser.currentX, laser.currentY, enemy.x, enemy.y, thinWalls))
+            ) {
+              continue;
+            }
             const dist = Math.hypot(
               enemy.x - laser.currentX,
               enemy.y - laser.currentY
