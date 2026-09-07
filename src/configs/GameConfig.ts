@@ -201,7 +201,7 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "laser",
-            src: "./assets/laser.png",
+            src: "./assets/common/laser.png",
           },
           {
             name: "at_st",
@@ -230,7 +230,7 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "green_ball",
-            src: "./assets/green_ball.png",
+            src: "./assets/common/green_ball.png",
           },
           {
             name: "ammo",
