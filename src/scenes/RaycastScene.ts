@@ -106,7 +106,7 @@ export class RaycastScene extends BaseScene {
   private thinWallSpritePool: Sprite[][] = [];
   private prevThinHitCounts: Int32Array = new Int32Array(gameConfig.width);
   private hitPool: RayHit[][] = [];
-  private readonly MAX_HITS_PER_COLUMN: number = 6;
+  private readonly MAX_HITS_PER_COLUMN: number = 16;
   private readonly MAX_RENDER_DISTANCE: number = 30;
   private tileTypes: Record<number, string> = {};
   private tileMeta: Record<number, TileMeta> = {};
@@ -122,8 +122,8 @@ export class RaycastScene extends BaseScene {
   private doorSlideModesFlat!: Uint8Array; // 0 = DoorOpen.LEFT, 1 = DoorOpen.UP, 3 = DoorOpen.RIGHT
   private doorSlideModes: Record<string, DoorOpen> = {};
   public defaultDoorSlide: DoorOpen = gameConfig.defaultDoorSlide || DoorOpen.UP;
-  private doorColumnTextures: Texture[] = [];
-  private thinWallColumnTextures: Texture[] = [];
+  private doorColumnTextures: Texture[][] = [];
+  private thinWallColumnTextures: Texture[][] = [];
 
   // Numeric tile type flags (0=empty, 1=thickWall, 2=door, 3=thinWall)
   private static readonly TILE_EMPTY = 0;
@@ -316,12 +316,15 @@ export class RaycastScene extends BaseScene {
         thinSprites.push(sprite);
       }
       this.thinWallSpritePool.push(thinSprites);
-      this.doorColumnTextures.push(
-        new Texture(Texture.WHITE.baseTexture, new Rectangle(0, 0, 1, 1))
-      );
-      this.thinWallColumnTextures.push(
-        new Texture(Texture.WHITE.baseTexture, new Rectangle(0, 0, 1, 1))
-      );
+
+      const colDoorTex: Texture[] = [];
+      const colThinTex: Texture[] = [];
+      for (let j = 0; j < 16; j++) {
+        colDoorTex.push(new Texture(Texture.WHITE.baseTexture, new Rectangle(0, 0, 1, 1)));
+        colThinTex.push(new Texture(Texture.WHITE.baseTexture, new Rectangle(0, 0, 1, 1)));
+      }
+      this.doorColumnTextures.push(colDoorTex);
+      this.thinWallColumnTextures.push(colThinTex);
 
       // Pre-allocate ray hit pool for zero-allocation raycasting
       const colHits: RayHit[] = [];
@@ -1599,12 +1602,16 @@ export class RaycastScene extends BaseScene {
         tex.destroy(false);
       }
     }
-    for (const t of this.doorColumnTextures) {
-      t.destroy(false);
+    for (const arr of this.doorColumnTextures) {
+      for (const t of arr) {
+        t.destroy(false);
+      }
     }
     this.doorColumnTextures = [];
-    for (const t of this.thinWallColumnTextures) {
-      t.destroy(false);
+    for (const arr of this.thinWallColumnTextures) {
+      for (const t of arr) {
+        t.destroy(false);
+      }
     }
     this.thinWallColumnTextures = [];
     this.columnTextures = {};
@@ -2317,13 +2324,16 @@ export class RaycastScene extends BaseScene {
       pool[k].doorOpen = undefined;
     }
     let solidWallDist = this.MAX_RENDER_DISTANCE;
+    let currentDist = 0;
 
     while (true) {
       if (sideDistX < sideDistY) {
+        currentDist = sideDistX;
         sideDistX += deltaDistX;
         mapX += stepX;
         side = 0;
       } else {
+        currentDist = sideDistY;
         sideDistY += deltaDistY;
         mapY += stepY;
         side = 1;
@@ -2355,7 +2365,10 @@ export class RaycastScene extends BaseScene {
 
         if (tileFlag === RaycastScene.TILE_DOOR) {
           const orientation = this.doorOrientationsFlat[flatIdx]; // 0 = NS (plane at x + 0.5), 1 = EW (plane at y + 0.5)
+          
+          // Fix: Read the explicit door state at THIS cell, not just relying on external assignments
           const open = Math.abs(this.doorStatesFlat[flatIdx]); // 0.0 to 1.0
+          
           const slideMode = this.doorSlideModesFlat[flatIdx]; // 0 = sideways, 1 = up, 2 = down
 
           if (orientation === 0) {
@@ -2635,67 +2648,6 @@ export class RaycastScene extends BaseScene {
       let doorDist = this.MAX_RENDER_DISTANCE;
       let doorBottom = screenH;
 
-      // Find any door in the column
-      let activeDoor: RayHit | null = null;
-      let doorIdx = -1;
-      for (let j = 0; j < hitCount; j++) {
-        const ray = pool[j];
-        if (ray.isDoor && ray.side !== 2) {
-          const tileType = this.tileTypes[ray.wallType + 1];
-          if (tileType === "door" && ray.doorSlide === DoorOpen.UP) {
-            activeDoor = ray;
-            doorIdx = j;
-            break;
-          }
-        }
-      }
-
-      // If any solid wall is closer than activeDoor (index > doorIdx), the solid wall blocks the door
-      let hasCloserSolidWall = false;
-      if (doorIdx >= 0) {
-        for (let j = doorIdx + 1; j < hitCount; j++) {
-          if (pool[j].side !== 2 && !pool[j].isDoor) {
-            hasCloserSolidWall = true;
-            break;
-          }
-        }
-      }
-
-      if (activeDoor && !hasCloserSolidWall && activeDoor.doorOpen !== undefined && activeDoor.doorOpen > 0.01) {
-        // Vertical sliding door is opening/open: uncovering from bottom up!
-        const dOpen = activeDoor.doorOpen;
-        const dLineH = screenH / activeDoor.distance;
-        const dFloorY = dLineH / 2 + screenH / 2;
-        const dTop = -dLineH / 2 + screenH / 2;
-        const doorPanelBottom = Math.max(dTop, dFloorY - dOpen * dLineH);
-
-        doorDist = activeDoor.distance;
-        doorBottom = doorPanelBottom;
-
-        // Beyond the door opening, rays can see through to the back wall behind the door
-        let backWallDist = this.MAX_RENDER_DISTANCE;
-        for (let j = 0; j < hitCount; j++) {
-          const ray = pool[j];
-          if (ray.side !== 2 && !ray.isDoor && ray.distance > activeDoor.distance) {
-            backWallDist = ray.distance;
-            break; // pool[0] is the farthest
-          }
-        }
-        solidDist = backWallDist;
-      } else {
-        // Standard closest opaque obstacle (solid wall or closed door)
-        for (let j = hitCount - 1; j >= 0; j--) {
-          if (pool[j].side !== 2) {
-            solidDist = pool[j].distance;
-            break;
-          }
-        }
-      }
-
-      this.zBuffer[i] = solidDist;
-      this.doorDistBuffer[i] = doorDist;
-      this.doorBottomBuffer[i] = doorBottom;
-
       let minDrawStart = screenH;
       let maxDrawEnd = 0;
 
@@ -2711,16 +2663,47 @@ export class RaycastScene extends BaseScene {
         const tileFlag = this.tileTypeFlags[flatIdx];
 
         if (ray.isDoor && tileFlag === RaycastScene.TILE_DOOR) {
-          const open = Math.abs(this.doorStatesFlat[flatIdx]);
-          // When a door is closed (< 0.05 open), it occludes floor and ceiling like a wall
-          if (open < 0.05) {
-            const lineHeight = screenH / ray.distance;
-            const drawStart = -lineHeight / 2 + screenH / 2;
-            const drawEnd = lineHeight / 2 + screenH / 2;
-            minDrawStart = Math.min(minDrawStart, drawStart);
-            maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
+          // Fix: Use the specific doorOpen state attached to THIS ray hit, 
+          // not just the global flat map, so multiple doors in the same view render their own individual states independently.
+          const open = ray.doorOpen !== undefined ? ray.doorOpen : Math.abs(this.doorStatesFlat[flatIdx]);
+          
+          if (ray.doorSlide === DoorOpen.UP) {
+            // Vertical sliding door is opening/open: uncovering from bottom up!
+            if (open > 0.01) {
+              const dLineH = screenH / ray.distance;
+              const dFloorY = dLineH / 2 + screenH / 2;
+              const dTop = -dLineH / 2 + screenH / 2;
+              const doorPanelBottom = Math.max(dTop, dFloorY - open * dLineH);
+
+              // Update the closest door bounds buffer for entity culling (only if this door is closer)
+              if (ray.distance < doorDist) {
+                doorDist = ray.distance;
+                doorBottom = doorPanelBottom;
+              }
+              
+              // Only push draw bounds for the visible top portion of the sliding door
+              minDrawStart = Math.min(minDrawStart, dTop);
+              maxDrawEnd = Math.max(maxDrawEnd, doorPanelBottom);
+            } else {
+              // Door is fully closed, it acts exactly like a solid wall
+              const lineHeight = screenH / ray.distance;
+              const drawStart = -lineHeight / 2 + screenH / 2;
+              const drawEnd = lineHeight / 2 + screenH / 2;
+              minDrawStart = Math.min(minDrawStart, drawStart);
+              maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
+            }
+          } else {
+            // Horizontal door handling
+            if (open < 0.05) {
+              const lineHeight = screenH / ray.distance;
+              const drawStart = -lineHeight / 2 + screenH / 2;
+              const drawEnd = lineHeight / 2 + screenH / 2;
+              minDrawStart = Math.min(minDrawStart, drawStart);
+              maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
+            }
           }
         } else if (tileFlag !== RaycastScene.TILE_THIN && !ray.isDoor) {
+          // Standard solid wall block
           const lineHeight = screenH / ray.distance;
           const drawStart = -lineHeight / 2 + screenH / 2;
           const drawEnd = lineHeight / 2 + screenH / 2;
@@ -2728,6 +2711,28 @@ export class RaycastScene extends BaseScene {
           maxDrawEnd = Math.max(maxDrawEnd, drawEnd);
         }
       }
+
+      // To find the closest fully opaque thing that blocks sprites behind it (for zBuffer)
+      for (let j = hitCount - 1; j >= 0; j--) {
+        const ray = pool[j];
+        if (ray.side !== 2) { // Not a thin wall
+          if (ray.isDoor) {
+             const open = ray.doorOpen !== undefined ? ray.doorOpen : 0;
+             if (open <= 0.01) { // Fully closed door blocks everything behind it
+               solidDist = ray.distance;
+               break;
+             }
+             // If open, we look THROUGH it to the next solid thing, so don't break yet
+          } else {
+             solidDist = ray.distance; // Solid wall block
+             break;
+          }
+        }
+      }
+
+      this.zBuffer[i] = solidDist;
+      this.doorDistBuffer[i] = doorDist;
+      this.doorBottomBuffer[i] = doorBottom;
 
       this.wallTop[i] = Math.max(0, Math.floor(minDrawStart));
       this.wallBottom[i] = Math.min(screenH, Math.ceil(maxDrawEnd));
@@ -2861,7 +2866,7 @@ export class RaycastScene extends BaseScene {
           if (isThinWall && drawStart > origDrawStart) {
             const texH = slices[clampedTexX].baseTexture.height || 64;
             const clipRatio = Math.max(0, Math.min(1, (drawStart - origDrawStart) / origLineHeight));
-            const thinTex = this.thinWallColumnTextures[i];
+            const thinTex = this.thinWallColumnTextures[i][j];
             thinTex.baseTexture = slices[clampedTexX].baseTexture;
 
             const srcY = Math.min(texH - 1, Math.floor(clipRatio * texH));
@@ -2878,7 +2883,7 @@ export class RaycastScene extends BaseScene {
           } else if (isActualDoor && ray.doorSlide === DoorOpen.UP) {
             const texH = slices[clampedTexX].baseTexture.height || 64;
             const open = ray.doorOpen ?? 0;
-            const doorTex = this.doorColumnTextures[i];
+            const doorTex = this.doorColumnTextures[i][j];
             doorTex.baseTexture = slices[clampedTexX].baseTexture;
 
             const srcY = Math.min(texH - 1, Math.floor(open * texH));
