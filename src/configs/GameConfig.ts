@@ -103,27 +103,27 @@ export const manifest: AssetsManifest = {
           },
           {
             alias: "stormtrooper_pain_1",
-            src: "./assets/raycast/voicelines/storm_trooper/stormtrooper_pain_1.mp3"
+            src: "./assets/raycast/sfx/storm_trooper/stormtrooper_pain_1.mp3"
           },
           {
             alias: "stormtrooper_death_1",
-            src: "./assets/raycast/voicelines/storm_trooper/stormtrooper_death_1.mp3"
+            src: "./assets/raycast/sfx/storm_trooper/stormtrooper_death_1.mp3"
           },
           {
             alias: "stormtrooper_grenade",
-            src: "./assets/raycast/voicelines/storm_trooper/grenade_grenade.mp3"
+            src: "./assets/raycast/sfx/storm_trooper/grenade_grenade.mp3"
           },
           {
             alias: "stormtrooper_hear_something",
-            src: "./assets/raycast/voicelines/storm_trooper/i_hear_something.mp3"
+            src: "./assets/raycast/sfx/storm_trooper/i_hear_something.mp3"
           },
           {
             alias: "stormtrooper_rebel_scum",
-            src: "./assets/raycast/voicelines/storm_trooper/rebel_scum.mp3"
+            src: "./assets/raycast/sfx/storm_trooper/rebel_scum.mp3"
           },
           {
             alias: "stormtrooper_there_he_is",
-            src: "./assets/raycast/voicelines/storm_trooper/there_he_is.mp3"
+            src: "./assets/raycast/sfx/storm_trooper/there_he_is.mp3"
           },
         ]
       },

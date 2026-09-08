@@ -100,7 +100,7 @@ This document logs recent development changes and enhancements made to the Rayca
     - `assets/raycast/textures/`: Raycaster 3D environment surfaces including walls, floors, ceilings, doors, and fences (`basic_imperial_wall.jpg`, `imperial_grilled_wall.jpg`, `ceiling_1-3.jpg`, `floor.png`, `inside_floor.jpg`, `metal_door.jpg`, `stairs.png`, `fence.png`/`fence.webp`).
     - `assets/raycast/decorations/`: Interactive and destructible props ([`chair.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/chair.png), [`chair_broken.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/chair_broken.png), [`table.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/table.png), [`table_broken.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/table_broken.png), [`power_cell.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/power_cell.png), [`power_cell_broken.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/power_cell_broken.png)). Standardized uppercase `.PNG` file extensions to lowercase `.png`.
     - `assets/raycast/pickups/`: Gameplay pickups and animated prop spritesheets ([`keycards.json`](file:///D:/Projects/side-scroller/assets/raycast/pickups/keycards.json), [`keycards.png`](file:///D:/Projects/side-scroller/assets/raycast/pickups/keycards.png), [`shield_unit.json`](file:///D:/Projects/side-scroller/assets/raycast/pickups/shield_unit.json), [`shield_unit.png`](file:///D:/Projects/side-scroller/assets/raycast/pickups/shield_unit.png), ammo, etc.).
-    - `assets/raycast/voicelines/storm_trooper/`: Enemy trooper combat audio and vocal clips (`stormtrooper_death_1.mp3`, `stormtrooper_pain_1.mp3`).
+    - `assets/raycast/sfx/storm_trooper/`: Enemy trooper combat audio and vocal clips (`stormtrooper_death_1.mp3`, `stormtrooper_pain_1.mp3`).
 
 ### 2. Dynamic Tileset & Level Texture Resolution
 - **Scene Texture Loader Modernization** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
@@ -291,10 +291,10 @@ This document logs recent development changes and enhancements made to the Rayca
 ### 2. Situational Audio Triggers & Asset Integration
 - **Sound Asset Registration** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts)):
   - Registered authentic Stormtrooper audio assets in the PixiJS sound manifest:
-    - `"stormtrooper_grenade"`: [`assets/raycast/voicelines/storm_trooper/grenade_grenade.mp3`](file:///D:/Projects/side-scroller/assets/raycast/voicelines/storm_trooper/grenade_grenade.mp3)
-    - `"stormtrooper_hear_something"`: [`assets/raycast/voicelines/storm_trooper/i_hear_something.mp3`](file:///D:/Projects/side-scroller/assets/raycast/voicelines/storm_trooper/i_hear_something.mp3)
-    - `"stormtrooper_rebel_scum"`: [`assets/raycast/voicelines/storm_trooper/rebel_scum.mp3`](file:///D:/Projects/side-scroller/assets/raycast/voicelines/storm_trooper/rebel_scum.mp3)
-    - `"stormtrooper_there_he_is"`: [`assets/raycast/voicelines/storm_trooper/there_he_is.mp3`](file:///D:/Projects/side-scroller/assets/raycast/voicelines/storm_trooper/there_he_is.mp3)
+    - `"stormtrooper_grenade"`: [`assets/raycast/sfx/storm_trooper/grenade_grenade.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/storm_trooper/grenade_grenade.mp3)
+    - `"stormtrooper_hear_something"`: [`assets/raycast/sfx/storm_trooper/i_hear_something.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/storm_trooper/i_hear_something.mp3)
+    - `"stormtrooper_rebel_scum"`: [`assets/raycast/sfx/storm_trooper/rebel_scum.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/storm_trooper/rebel_scum.mp3)
+    - `"stormtrooper_there_he_is"`: [`assets/raycast/sfx/storm_trooper/there_he_is.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/storm_trooper/there_he_is.mp3)
 - **Contextual State Triggers** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
   - **Player Spotted Callouts**: When an enemy gains line of sight to the player (`hasLOS = true`), randomly selects between `"stormtrooper_rebel_scum"` and `"stormtrooper_there_he_is"`.
   - **Suspicious Proximity Callouts**: When the player is close ($dist \le hearingRange$, default $7.0$ grid units) but out of sight (`hasLOS = false`, e.g. behind walls or closed doors), triggers `"stormtrooper_hear_something"`.

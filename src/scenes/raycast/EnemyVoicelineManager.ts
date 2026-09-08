@@ -54,13 +54,13 @@ export class EnemyVoicelineManager {
 
   private static readonly DEFAULT_SOUND_PATHS: Record<string, string> = {
     [EnemyVoicelineManager.DEFAULT_SOUND_GRENADE]:
-      "assets/raycast/voicelines/storm_trooper/grenade_grenade.mp3",
+      "assets/raycast/sfx/storm_trooper/grenade_grenade.mp3",
     [EnemyVoicelineManager.DEFAULT_SOUND_HEAR_SOMETHING]:
-      "assets/raycast/voicelines/storm_trooper/i_hear_something.mp3",
+      "assets/raycast/sfx/storm_trooper/i_hear_something.mp3",
     [EnemyVoicelineManager.DEFAULT_SOUND_REBEL_SCUM]:
-      "assets/raycast/voicelines/storm_trooper/rebel_scum.mp3",
+      "assets/raycast/sfx/storm_trooper/rebel_scum.mp3",
     [EnemyVoicelineManager.DEFAULT_SOUND_THERE_HE_IS]:
-      "assets/raycast/voicelines/storm_trooper/there_he_is.mp3",
+      "assets/raycast/sfx/storm_trooper/there_he_is.mp3",
   };
 
   constructor(customConfig?: Partial<IEnemyVoicelineConfig>) {

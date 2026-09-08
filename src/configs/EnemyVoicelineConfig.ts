@@ -22,10 +22,10 @@ export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
   minSpatialVolume: 0.5,
 
   soundRegistry: {
-    stormtrooper_grenade: "assets/raycast/voicelines/storm_trooper/grenade_grenade.mp3",
-    stormtrooper_hear_something: "assets/raycast/voicelines/storm_trooper/i_hear_something.mp3",
-    stormtrooper_rebel_scum: "assets/raycast/voicelines/storm_trooper/rebel_scum.mp3",
-    stormtrooper_there_he_is: "assets/raycast/voicelines/storm_trooper/there_he_is.mp3",
+    stormtrooper_grenade: "assets/raycast/sfx/storm_trooper/grenade_grenade.mp3",
+    stormtrooper_hear_something: "assets/raycast/sfx/storm_trooper/i_hear_something.mp3",
+    stormtrooper_rebel_scum: "assets/raycast/sfx/storm_trooper/rebel_scum.mp3",
+    stormtrooper_there_he_is: "assets/raycast/sfx/storm_trooper/there_he_is.mp3",
   },
 
   voicePools: {
