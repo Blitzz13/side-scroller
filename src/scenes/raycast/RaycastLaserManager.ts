@@ -427,7 +427,12 @@ export class RaycastLaserManager {
         }
 
         if (hitEnemy) {
-          hitEnemy.takeDamage(laser.damage, laser.onEnemyKilled);
+          hitEnemy.takeDamage(
+            laser.damage,
+            laser.onEnemyKilled,
+            laser.startX,
+            laser.startY
+          );
           this.spawnImpact(laser.currentX, laser.currentY, laser.currentZ);
           laser.alive = false;
           this.destroyLaser(laser, i);

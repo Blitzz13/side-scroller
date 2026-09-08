@@ -941,7 +941,10 @@ export class RaycastPickupManager {
       sprite.tint = (shadeInt << 16) | (shadeInt << 8) | shadeInt;
 
       // Depth sorting
-      sprite.zIndex = 1000 - Math.floor(transformY * 10);
+      sprite.zIndex = Math.floor((maxRenderDistance - transformY) * 1000);
+      if (pickup.occlusionMask) {
+        pickup.occlusionMask.zIndex = sprite.zIndex;
+      }
     }
   }
 

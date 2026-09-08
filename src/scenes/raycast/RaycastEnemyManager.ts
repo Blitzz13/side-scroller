@@ -1,4 +1,5 @@
 import { Assets, Container, Graphics, SCALE_MODES, Spritesheet } from "pixi.js";
+import { sound } from "@pixi/sound";
 import { RaycastEnemy } from "./RaycastEnemy";
 import {
   IRaycastEnemyConfig,
@@ -6,6 +7,8 @@ import {
   RaycastPickupType,
   RaycastWeaponType,
   getRaycastEnemyConfig,
+  raycastEnemyConfigs,
+  TileMeta,
 } from "./types";
 import { RaycastPickupManager } from "./RaycastPickupManager";
 import { RaycastPlayerController } from "./RaycastPlayerController";
@@ -20,9 +23,48 @@ export class RaycastEnemyManager {
   private nextEnemyId: number = 1;
   private voicelineManager: EnemyVoicelineManager;
 
+  private static readonly ENEMY_SFX_REGISTRY: Record<string, string> = {
+    probe_droid_hovering: "assets/raycast/sfx/viper_droid/probe_droid_hovering.mp3",
+    probe_droid_shot_1: "assets/raycast/sfx/viper_droid/probe_droid_shot_1.mp3",
+    probe_droid_shot_2: "assets/raycast/sfx/viper_droid/probe_droid_shot_2.mp3",
+    probe_droid_shot_3: "assets/raycast/sfx/viper_droid/probe_droid_shot_3.mp3",
+    probe_droid_shot_4: "assets/raycast/sfx/viper_droid/probe_droid_shot_4.mp3",
+    probe_droid_shot_5: "assets/raycast/sfx/viper_droid/probe_droid_shot_5.mp3",
+    probe_droid_shot_6: "assets/raycast/sfx/viper_droid/probe_droid_shot_6.mp3",
+    probe_droid_voice_1: "assets/raycast/sfx/viper_droid/probe_droid_voice_1.mp3",
+    probe_droid_voice_2: "assets/raycast/sfx/viper_droid/probe_droid_voice_2.mp3",
+    probe_droid_voice_3: "assets/raycast/sfx/viper_droid/probe_droid_voice_3.mp3",
+    probe_droid_voice_4: "assets/raycast/sfx/viper_droid/probe_droid_voice_4.mp3",
+    probe_droid_voice_5: "assets/raycast/sfx/viper_droid/probe_droid_voice_5.mp3",
+    probe_droid_voice_6: "assets/raycast/sfx/viper_droid/probe_droid_voice_6.mp3",
+    probe_droid_voice_7: "assets/raycast/sfx/viper_droid/probe_droid_voice_7.mp3",
+    probe_droid_voice_8: "assets/raycast/sfx/viper_droid/probe_droid_voice_8.mp3",
+    stormtrooper_pain_1: "assets/raycast/sfx/storm_trooper/stormtrooper_pain_1.mp3",
+    stormtrooper_death_1: "assets/raycast/sfx/storm_trooper/stormtrooper_death_1.mp3",
+    stormtrooper_grenade: "assets/raycast/sfx/storm_trooper/grenade_grenade.mp3",
+    stormtrooper_hear_something: "assets/raycast/sfx/storm_trooper/i_hear_something.mp3",
+    stormtrooper_rebel_scum: "assets/raycast/sfx/storm_trooper/rebel_scum.mp3",
+    stormtrooper_there_he_is: "assets/raycast/sfx/storm_trooper/there_he_is.mp3",
+  };
+
   constructor(container: Container) {
     this.container = container;
     this.voicelineManager = new EnemyVoicelineManager();
+    this.ensureSoundsRegistered();
+  }
+
+  public ensureSoundsRegistered(): void {
+    for (const [alias, src] of Object.entries(RaycastEnemyManager.ENEMY_SFX_REGISTRY)) {
+      if (!sound.exists(alias)) {
+        try {
+          sound.add(alias, { url: src, preload: true });
+        } catch {
+          try {
+            sound.add(alias, src);
+          } catch {}
+        }
+      }
+    }
   }
 
   public getVoicelineManager(): EnemyVoicelineManager {
@@ -38,13 +80,24 @@ export class RaycastEnemyManager {
   }
 
   public async initSpritesheets(): Promise<void> {
-    const candidateKeys = [
-      "storm_trooper",
-      "./assets/raycast/enemies/storm_trooper.json",
-      "assets/raycast/enemies/storm_trooper.json",
-    ];
+    this.ensureSoundsRegistered();
 
-    let sheet: any = null;
+    for (const enemyConfig of Object.values(raycastEnemyConfigs)) {
+      if (enemyConfig.spritesheet) {
+        await this.loadEnemySpritesheet(enemyConfig.spritesheet, enemyConfig.type);
+      }
+    }
+  }
+
+  private async loadEnemySpritesheet(path: string, enemyType?: string): Promise<void> {
+    const candidateKeys = [
+      path,
+      path.startsWith("./") ? path.substring(2) : `./${path}`,
+      path.replace(/^assets\//, "./assets/"),
+      enemyType || "",
+    ].filter(Boolean);
+
+    let sheet: Spritesheet | null = null;
     for (const k of candidateKeys) {
       if (this.spritesheets[k]) {
         sheet = this.spritesheets[k];
@@ -57,14 +110,11 @@ export class RaycastEnemyManager {
     }
 
     if (!sheet) {
-      try {
-        sheet = await Assets.load("./assets/raycast/enemies/storm_trooper.json");
-      } catch (err) {
+      for (const p of [path, `./${path}`, path.replace(/^\.\//, "")]) {
         try {
-          sheet = await Assets.load("assets/raycast/enemies/storm_trooper.json");
-        } catch (e) {
-          console.warn("Failed to load storm_trooper spritesheet:", e);
-        }
+          sheet = await Assets.load(p);
+          if (sheet) break;
+        } catch {}
       }
     }
 
@@ -72,30 +122,176 @@ export class RaycastEnemyManager {
       if (sheet.baseTexture) {
         sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
       }
-      this.spritesheets["storm_trooper"] = sheet;
-      this.spritesheets["./assets/raycast/enemies/storm_trooper.json"] = sheet;
-      this.spritesheets["assets/raycast/enemies/storm_trooper.json"] = sheet;
-      this.spritesheets["assets/storm_trooper.json"] = sheet;
+      for (const k of candidateKeys) {
+        this.spritesheets[k] = sheet;
+      }
+      // Also register bare alias if available
+      if (enemyType) {
+        this.spritesheets[enemyType] = sheet;
+      }
     }
   }
 
+  public resolveEnemyConfigForTile(
+    tileGid: number,
+    firstgid: number = 1,
+    tileMeta?: Record<number, TileMeta>,
+    mapData?: {
+      tilesets?: Array<{
+        firstgid?: number;
+        name?: string;
+        tilecount?: number;
+        tiles?: Array<{
+          id: number;
+          image?: string;
+          type?: string;
+          class?: string;
+          properties?: Array<{ name: string; value: unknown }>;
+        }>;
+      }>;
+    }
+  ): IRaycastEnemyConfig {
+    const localTileId = tileGid - firstgid;
+
+    // 1. Check tileMeta if available
+    if (tileMeta) {
+      const meta = tileMeta[localTileId] || tileMeta[tileGid];
+      if (meta) {
+        if (meta.tileClass) {
+          const cfg = getRaycastEnemyConfig(meta.tileClass);
+          if (cfg && cfg.type !== RaycastEnemyType.STORMTROOPER) return cfg;
+        }
+        if (meta.type) {
+          const cfg = getRaycastEnemyConfig(meta.type);
+          if (cfg && cfg.type !== RaycastEnemyType.STORMTROOPER) return cfg;
+        }
+        if (meta.image) {
+          const imgLower = meta.image.toLowerCase();
+          if (imgLower.includes("viper") || imgLower.includes("probe") || imgLower.includes("droid")) {
+            return raycastEnemyConfigs[RaycastEnemyType.VIPER_DROID];
+          }
+          if (imgLower.includes("storm") || imgLower.includes("trooper")) {
+            return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
+          }
+          const baseName = meta.image.replace(/\.[^/.]+$/, "");
+          const cfg = getRaycastEnemyConfig(baseName);
+          if (cfg) return cfg;
+        }
+      }
+    }
+
+    // 2. Check mapData.tilesets
+    if (mapData?.tilesets) {
+      for (const tileset of mapData.tilesets) {
+        const fgid = tileset.firstgid ?? firstgid;
+        const count = tileset.tilecount ?? Infinity;
+        if (tileGid >= fgid && tileGid < fgid + count && tileset.tiles) {
+          const tId = tileGid - fgid;
+          const tileDef = tileset.tiles.find((t) => t.id === tId);
+          if (tileDef) {
+            if (tileDef.type || tileDef.class) {
+              const cfg = getRaycastEnemyConfig((tileDef.type || tileDef.class)!);
+              if (cfg) return cfg;
+            }
+            if (tileDef.properties) {
+              for (const prop of tileDef.properties) {
+                const pName = prop.name.toLowerCase();
+                if (pName === "enemytype" || pName === "type" || pName === "name") {
+                  const cfg = getRaycastEnemyConfig(String(prop.value));
+                  if (cfg) return cfg;
+                }
+              }
+            }
+            if (tileDef.image) {
+              const imgLower = tileDef.image.toLowerCase();
+              if (imgLower.includes("viper") || imgLower.includes("probe") || imgLower.includes("droid")) {
+                return raycastEnemyConfigs[RaycastEnemyType.VIPER_DROID];
+              }
+              if (imgLower.includes("storm") || imgLower.includes("trooper")) {
+                return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
+              }
+              const baseName = tileDef.image.split(/[\\/]/).pop()?.replace(/\.[^/.]+$/, "");
+              if (baseName) {
+                const cfg = getRaycastEnemyConfig(baseName);
+                if (cfg) return cfg;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Fallback tile ID mappings from StarWarsTileset
+    if (localTileId === 22) {
+      return raycastEnemyConfigs[RaycastEnemyType.VIPER_DROID];
+    }
+    if (localTileId === 11) {
+      return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
+    }
+
+    return (
+      raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER] ||
+      getRaycastEnemyConfig(RaycastEnemyType.STORMTROOPER)!
+    );
+  }
+
   public parseMapEnemies(
-    mapData: any,
-    firstgid: number = 1
+    mapData: {
+      layers?: Array<{
+        name?: string;
+        data?: number[];
+        objects?: Array<{
+          x: number;
+          y: number;
+          gid?: number;
+          type?: string;
+          name?: string;
+          properties?: Array<{ name: string; value: unknown }>;
+        }>;
+        layers?: Array<Record<string, unknown>>;
+        width?: number;
+        height?: number;
+      }>;
+      tilesets?: Array<{
+        firstgid?: number;
+        name?: string;
+        tilecount?: number;
+        tiles?: Array<{
+          id: number;
+          image?: string;
+          type?: string;
+          class?: string;
+          properties?: Array<{ name: string; value: unknown }>;
+        }>;
+      }>;
+    },
+    firstgid: number = 1,
+    tileMeta?: Record<number, TileMeta>
   ): void {
     // Clean up any existing enemies
     this.disposeEnemies();
     this.enemies = [];
     this.nextEnemyId = 1;
 
-    const sheet =
-      this.spritesheets["assets/raycast/enemies/storm_trooper.json"] ||
-      this.spritesheets["storm_trooper"] ||
-      this.spritesheets["assets/storm_trooper.json"];
-
     // Flatten any layer groups recursively (e.g. Elevation groups)
-    const collectLayers = (layers: any[]): any[] => {
-      let flat: any[] = [];
+    interface TiledLayerNode {
+      name?: string;
+      data?: number[];
+      objects?: Array<{
+        x: number;
+        y: number;
+        gid?: number;
+        type?: string;
+        name?: string;
+        properties?: Array<{ name: string; value: unknown }>;
+      }>;
+      layers?: TiledLayerNode[];
+      width?: number;
+      height?: number;
+    }
+
+    const collectLayers = (layers: TiledLayerNode[]): TiledLayerNode[] => {
+      let flat: TiledLayerNode[] = [];
       for (const l of layers) {
         if (l.layers && Array.isArray(l.layers)) {
           flat = flat.concat(collectLayers(l.layers));
@@ -106,11 +302,11 @@ export class RaycastEnemyManager {
       return flat;
     };
 
-    const allLayers = collectLayers(mapData.layers || []);
+    const allLayers = collectLayers((mapData.layers || []) as TiledLayerNode[]);
 
     // Check for "Enemies" tile layers or object layers
     const enemyLayers = allLayers.filter(
-      (layer: any) =>
+      (layer: TiledLayerNode) =>
         layer.name &&
         (layer.name.toLowerCase().includes("enem") ||
           layer.name.toLowerCase().includes("monster") ||
@@ -119,14 +315,20 @@ export class RaycastEnemyManager {
     );
 
     for (const layer of enemyLayers) {
-      if (layer.data) {
+      if (layer.data && layer.width) {
+        const layerWidth = layer.width;
         // Tile Layer
         layer.data.forEach((tileGid: number, index: number) => {
           if (tileGid !== 0) {
-            const x = (index % layer.width) + 0.5;
-            const y = Math.floor(index / layer.width) + 0.5;
-            const config = getRaycastEnemyConfig(RaycastEnemyType.STORMTROOPER)!;
-            this.spawnEnemy(config, x, y, sheet);
+            const x = (index % layerWidth) + 0.5;
+            const y = Math.floor(index / layerWidth) + 0.5;
+            const config = this.resolveEnemyConfigForTile(
+              tileGid,
+              firstgid,
+              tileMeta,
+              mapData
+            );
+            this.spawnEnemy(config, x, y);
           }
         });
       } else if (layer.objects) {
@@ -134,25 +336,26 @@ export class RaycastEnemyManager {
         for (const obj of layer.objects) {
           const x = obj.x / 64;
           const y = obj.y / 64;
-          const typeName = obj.type || obj.name || "stormtrooper";
-          const config =
-            getRaycastEnemyConfig(typeName) ||
-            getRaycastEnemyConfig(RaycastEnemyType.STORMTROOPER)!;
-          this.spawnEnemy(config, x, y, sheet);
+          let config: IRaycastEnemyConfig | undefined;
+          if (obj.gid !== undefined && obj.gid > 0) {
+            config = this.resolveEnemyConfigForTile(
+              obj.gid,
+              firstgid,
+              tileMeta,
+              mapData
+            );
+          } else {
+            const typeName = obj.type || obj.name || "stormtrooper";
+            config =
+              getRaycastEnemyConfig(typeName) ||
+              raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
+          }
+          if (config) {
+            this.spawnEnemy(config, x, y);
+          }
         }
       }
     }
-
-    // // Ensure at least one Stormtrooper is spawned in the starting area / corridor
-    // // so the player can immediately encounter enemies without having to search the entire map
-    // const hasNearbyEnemy = this.enemies.some(
-    //   (e) => Math.sqrt((e.x - 2) ** 2 + (e.y - 5) ** 2) < 8
-    // );
-    // if (!hasNearbyEnemy) {
-    //   const config = getRaycastEnemyConfig(RaycastEnemyType.STORMTROOPER)!;
-    //   // Position at (5.5, 5.0) in clear line of sight of the player's room
-    //   this.spawnEnemy(config, 5.5, 5.0, sheet);
-    // }
   }
 
   public spawnEnemy(
@@ -164,9 +367,12 @@ export class RaycastEnemyManager {
     const sheet =
       spritesheet ||
       this.spritesheets[config.spritesheet] ||
+      this.spritesheets[`./${config.spritesheet}`] ||
+      this.spritesheets[config.spritesheet.replace(/^\.\//, "")] ||
+      this.spritesheets[config.type] ||
+      (Assets.cache.has(config.spritesheet) ? Assets.get(config.spritesheet) : undefined) ||
       this.spritesheets["assets/raycast/enemies/storm_trooper.json"] ||
-      this.spritesheets["storm_trooper"] ||
-      this.spritesheets["assets/storm_trooper.json"];
+      this.spritesheets["storm_trooper"];
     const enemy = new RaycastEnemy(this.nextEnemyId++, config, x, y, sheet);
 
     if (enemy.animatedSprite) {
@@ -624,7 +830,7 @@ export class RaycastEnemyManager {
       laserManager.fireEnemyLaser(
         enemy.x,
         enemy.y,
-        0.55, // Stormtrooper standing rifle height
+        enemy.config.shootHeight ?? 0.55,
         targetX,
         targetY,
         targetZ,
@@ -817,7 +1023,15 @@ export class RaycastEnemyManager {
 
       sprite.visible = true;
       sprite.x = spriteScreenX;
-      sprite.y = floorY;
+      let renderY = floorY;
+      const vOffset = enemy.currentVOffset !== undefined ? enemy.currentVOffset : (enemy.isDead ? 0 : (enemy.config.vOffset ?? 0));
+      if (vOffset > 0) {
+        renderY -= vOffset * baseHeight;
+      }
+      if (enemy.config.floatingBob && !enemy.isDead) {
+        renderY -= Math.sin((Date.now() + enemy.id * 500) / 350) * 0.03 * baseHeight;
+      }
+      sprite.y = Math.floor(renderY);
       sprite.width = spriteWidth;
       sprite.height = spriteHeight;
 
@@ -842,6 +1056,9 @@ export class RaycastEnemyManager {
 
       // Depth sorting
       sprite.zIndex = Math.floor((maxRenderDistance - transformY) * 1000);
+      if (enemy.occlusionMask) {
+        enemy.occlusionMask.zIndex = sprite.zIndex;
+      }
     }
   }
 
@@ -881,7 +1098,7 @@ export class RaycastEnemyManager {
     }
 
     if (closestEnemy) {
-      closestEnemy.takeDamage(damage, onEnemyKilled);
+      closestEnemy.takeDamage(damage, onEnemyKilled, playerX, playerY);
       return closestEnemy;
     }
 
@@ -913,7 +1130,7 @@ export class RaycastEnemyManager {
         }
         const falloff = 1 - dist / radius;
         const damage = Math.max(15, Math.round(maxDamage * falloff));
-        enemy.takeDamage(damage, onEnemyKilled);
+        enemy.takeDamage(damage, onEnemyKilled, centerX, centerY);
         hitEnemies.push(enemy);
       }
     }

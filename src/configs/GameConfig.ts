@@ -125,6 +125,66 @@ export const manifest: AssetsManifest = {
             alias: "stormtrooper_there_he_is",
             src: "./assets/raycast/sfx/storm_trooper/there_he_is.mp3"
           },
+          {
+            alias: "probe_droid_hovering",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_hovering.mp3"
+          },
+          {
+            alias: "probe_droid_shot_1",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_1.mp3"
+          },
+          {
+            alias: "probe_droid_shot_2",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_2.mp3"
+          },
+          {
+            alias: "probe_droid_shot_3",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_3.mp3"
+          },
+          {
+            alias: "probe_droid_shot_4",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_4.mp3"
+          },
+          {
+            alias: "probe_droid_shot_5",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_5.mp3"
+          },
+          {
+            alias: "probe_droid_shot_6",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_6.mp3"
+          },
+          {
+            alias: "probe_droid_voice_1",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_1.mp3"
+          },
+          {
+            alias: "probe_droid_voice_2",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_2.mp3"
+          },
+          {
+            alias: "probe_droid_voice_3",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_3.mp3"
+          },
+          {
+            alias: "probe_droid_voice_4",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_4.mp3"
+          },
+          {
+            alias: "probe_droid_voice_5",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_5.mp3"
+          },
+          {
+            alias: "probe_droid_voice_6",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_6.mp3"
+          },
+          {
+            alias: "probe_droid_voice_7",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_7.mp3"
+          },
+          {
+            alias: "probe_droid_voice_8",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_8.mp3"
+          },
         ]
       },
       {
@@ -218,6 +278,10 @@ export const manifest: AssetsManifest = {
           {
             name: "storm_trooper",
             src: "./assets/raycast/enemies/storm_trooper.json",
+          },
+          {
+            name: "viper_droid_raycast",
+            src: "./assets/raycast/enemies/viper_droid.json",
           }
         ],
       },

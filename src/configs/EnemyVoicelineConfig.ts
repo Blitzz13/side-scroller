@@ -1,4 +1,4 @@
-﻿import {
+import {
   IEnemyVoicePool,
   IEnemyVoicelineConfig,
 } from "./interfaces/IEnemyVoicelineConfig";
@@ -7,6 +7,24 @@ export const defaultVoicePool: IEnemyVoicePool = {
   spotted: ["stormtrooper_rebel_scum", "stormtrooper_there_he_is"],
   suspicious: ["stormtrooper_hear_something"],
   grenade: ["stormtrooper_grenade"],
+};
+
+export const defaultViperDroidVoicePool: IEnemyVoicePool = {
+  spotted: [
+    "probe_droid_voice_1",
+    "probe_droid_voice_2",
+    "probe_droid_voice_3",
+    "probe_droid_voice_4",
+    "probe_droid_voice_5",
+    "probe_droid_voice_6",
+    "probe_droid_voice_7",
+    "probe_droid_voice_8",
+  ],
+  suspicious: [
+    "probe_droid_voice_1",
+    "probe_droid_voice_2",
+    "probe_droid_voice_3",
+  ],
 };
 
 export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
@@ -26,10 +44,20 @@ export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
     stormtrooper_hear_something: "assets/raycast/sfx/storm_trooper/i_hear_something.mp3",
     stormtrooper_rebel_scum: "assets/raycast/sfx/storm_trooper/rebel_scum.mp3",
     stormtrooper_there_he_is: "assets/raycast/sfx/storm_trooper/there_he_is.mp3",
+    probe_droid_voice_1: "assets/raycast/sfx/viper_droid/probe_droid_voice_1.mp3",
+    probe_droid_voice_2: "assets/raycast/sfx/viper_droid/probe_droid_voice_2.mp3",
+    probe_droid_voice_3: "assets/raycast/sfx/viper_droid/probe_droid_voice_3.mp3",
+    probe_droid_voice_4: "assets/raycast/sfx/viper_droid/probe_droid_voice_4.mp3",
+    probe_droid_voice_5: "assets/raycast/sfx/viper_droid/probe_droid_voice_5.mp3",
+    probe_droid_voice_6: "assets/raycast/sfx/viper_droid/probe_droid_voice_6.mp3",
+    probe_droid_voice_7: "assets/raycast/sfx/viper_droid/probe_droid_voice_7.mp3",
+    probe_droid_voice_8: "assets/raycast/sfx/viper_droid/probe_droid_voice_8.mp3",
   },
 
   voicePools: {
     stormtrooper: defaultVoicePool,
+    viper_droid: defaultViperDroidVoicePool,
+    viperdroid: defaultViperDroidVoicePool,
   },
 
   defaultVoicePool,
@@ -38,3 +66,4 @@ export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
 // Backward-compatibility aliases
 export const stormtrooperVoicelineConfig = enemyVoicelineConfig;
 export const defaultStormtrooperVoicePool = defaultVoicePool;
+

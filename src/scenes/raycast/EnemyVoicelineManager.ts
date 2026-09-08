@@ -1,4 +1,4 @@
-﻿import { sound } from "@pixi/sound";
+import { sound, IMediaInstance, webaudio } from "@pixi/sound";
 import {
   IEnemyVoicePool,
   IEnemyVoicelineConfig,
@@ -7,6 +7,15 @@ import { enemyVoicelineConfig } from "../../configs/EnemyVoicelineConfig";
 import { RaycastEnemy } from "./RaycastEnemy";
 
 export type VoicelineCategory = "grenade" | "spotted" | "suspicious";
+
+function stopMediaInstance(inst: IMediaInstance | HTMLAudioElement): void {
+  if ("stop" in inst && typeof inst.stop === "function") {
+    inst.stop();
+  } else if ("pause" in inst && typeof inst.pause === "function") {
+    inst.pause();
+    inst.currentTime = 0;
+  }
+}
 
 interface QueuedVoiceline {
   alias: string;
@@ -23,8 +32,8 @@ interface ActiveSoundHandle {
   id: number;
   enemyId?: number;
   alias: string;
-  mediaInstance?: any;
-  timeoutId?: any;
+  mediaInstance?: IMediaInstance | HTMLAudioElement;
+  timeoutId?: ReturnType<typeof setTimeout>;
 }
 
 export class EnemyVoicelineManager {
@@ -177,9 +186,9 @@ export class EnemyVoicelineManager {
         if (handle.timeoutId) {
           clearTimeout(handle.timeoutId);
         }
-        if (handle.mediaInstance && typeof handle.mediaInstance.stop === "function") {
+        if (handle.mediaInstance) {
           try {
-            handle.mediaInstance.stop();
+            stopMediaInstance(handle.mediaInstance);
           } catch (e) {
             console.warn(`Failed to stop media instance for dead enemy ${enemyId}:`, e);
           }
@@ -243,9 +252,9 @@ export class EnemyVoicelineManager {
       for (const [id, handle] of Array.from(this.activeHandles.entries())) {
         if (handle.alias !== alias) {
           if (handle.timeoutId) clearTimeout(handle.timeoutId);
-          if (handle.mediaInstance && typeof handle.mediaInstance.stop === "function") {
+          if (handle.mediaInstance) {
             try {
-              handle.mediaInstance.stop();
+              stopMediaInstance(handle.mediaInstance);
             } catch {}
           }
           try {
@@ -456,9 +465,10 @@ export class EnemyVoicelineManager {
 
     try {
       // Resume audioContext if browser suspended it before first gesture
-      if (sound.context && (sound.context as any).audioContext?.state === "suspended") {
+      const ctx = sound.context as webaudio.WebAudioContext | undefined;
+      if (ctx?.audioContext && ctx.audioContext.state === "suspended") {
         try {
-          (sound.context as any).audioContext.resume();
+          ctx.audioContext.resume();
         } catch {}
       }
 
@@ -470,12 +480,12 @@ export class EnemyVoicelineManager {
         volume: effectiveVolume,
         loop: false,
         complete: onFinish,
-      });
+      }) as IMediaInstance | Promise<IMediaInstance>;
 
       if (res) {
-        if (typeof (res as any).then === "function") {
-          (res as Promise<any>)
-            .then((inst) => {
+        if (res instanceof Promise) {
+          res
+            .then((inst: IMediaInstance) => {
               if (
                 item.category !== "grenade" &&
                 item.enemyId !== undefined &&
@@ -500,7 +510,7 @@ export class EnemyVoicelineManager {
             this.deadEnemyIds.has(item.enemyId)
           ) {
             try {
-              (res as any).stop?.();
+              res.stop();
             } catch {}
             onFinish();
             return;
@@ -571,9 +581,9 @@ export class EnemyVoicelineManager {
       if (handle.timeoutId) {
         clearTimeout(handle.timeoutId);
       }
-      if (handle.mediaInstance && typeof handle.mediaInstance.stop === "function") {
+      if (handle.mediaInstance) {
         try {
-          handle.mediaInstance.stop();
+          stopMediaInstance(handle.mediaInstance);
         } catch {}
       }
     }

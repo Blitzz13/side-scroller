@@ -9,7 +9,11 @@ import {
   IMuzzleFlashSparks,
 } from "../../configs/interfaces/IRaycastWeaponConfig";
 import { IRaycastPickupConfig } from "../../configs/interfaces/IRaycastPickupConfig";
-import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
+import {
+  IRaycastEnemyConfig,
+  IRaycastEnemyAnimationConfig,
+  IRaycastEnemyAnimationSequence,
+} from "../../configs/interfaces/IRaycastEnemyConfig";
 import {
   raycastWeaponConfigs,
   getRaycastWeaponConfig,
@@ -50,6 +54,8 @@ export {
   IMuzzleFlashSparks,
   IRaycastPickupConfig,
   IRaycastEnemyConfig,
+  IRaycastEnemyAnimationConfig,
+  IRaycastEnemyAnimationSequence,
 };
 export {
   raycastWeaponConfigs,

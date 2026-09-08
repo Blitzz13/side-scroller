@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="22" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="23" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -101,7 +101,7 @@
   <image source="assets/raycast/pickups/key_card_blue.png" width="25" height="30"/>
  </tile>
  <tile id="15">
-  <image source="assets/raycast/textures/stairs.png" width="667" height="374"/>
+  <image source="assets/raycast/textures/stairs_up.png" width="667" height="374"/>
  </tile>
  <tile id="16" type="Object">
   <properties>
@@ -137,5 +137,8 @@
  </tile>
  <tile id="21" type="DestructableWall">
   <image source="assets/raycast/textures/computer_panel.jpg" width="124" height="124"/>
+ </tile>
+ <tile id="22">
+  <image source="assets/raycast/enemies/viper_droid_default_1.png" width="51" height="63"/>
  </tile>
 </tileset>

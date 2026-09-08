@@ -1,5 +1,5 @@
 import { AnimatedSprite, Graphics, SCALE_MODES, Spritesheet, Texture } from "pixi.js";
-import { sound } from "@pixi/sound";
+import { sound, IMediaInstance } from "@pixi/sound";
 import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
 
 export type EnemyAIState = "idle" | "chase" | "attack" | "dead";
@@ -34,30 +34,81 @@ export class RaycastEnemy {
   public lastSpottedTime: number = 0;
   public lastSuspiciousTime: number = 0;
 
+  // Target tracking & repositioning
+  public lastKnownPlayerX: number = 0;
+  public lastKnownPlayerY: number = 0;
+  public hasTarget: boolean = false;
+  public searchTimer: number = 0;
+  public repositionCooldown: number = 0;
+  public wanderDirX: number = 0;
+  public wanderDirY: number = 0;
+  public stuckFrames: number = 0;
+  public stepOutFrames: number = 0;
+  public currentVOffset: number = 0;
+
   // Sound instance tracking to allow immediate stopping on death
   public onDeathCallback?: (enemy: RaycastEnemy) => void;
-  private activeSoundInstances: Set<any> = new Set();
+  private activeSoundInstances: Set<IMediaInstance> = new Set();
+  private hoverSoundInstance: IMediaInstance | null = null;
+  private isHoverSoundPlaying: boolean = false;
 
   public stopActiveSounds(): void {
+    if (this.hoverSoundInstance) {
+      try {
+        this.hoverSoundInstance.stop();
+      } catch {}
+      this.hoverSoundInstance = null;
+    }
+    this.isHoverSoundPlaying = false;
+
     for (const inst of Array.from(this.activeSoundInstances)) {
       try {
-        if (typeof inst?.stop === "function") {
-          inst.stop();
-        }
+        inst.stop();
       } catch {}
     }
     this.activeSoundInstances.clear();
   }
 
-  private trackSoundInstance(res: any): void {
+  private startHoverSound(hoverConfig: { src: string; volume?: number; loop?: boolean }): void {
+    if (this.isDead || this.isHoverSoundPlaying) return;
+    try {
+      if (!sound.exists(hoverConfig.src)) return;
+      this.isHoverSoundPlaying = true;
+      const res = sound.play(hoverConfig.src, {
+        volume: hoverConfig.volume ?? 0.5,
+        loop: true,
+      }) as IMediaInstance | Promise<IMediaInstance>;
+      if (res) {
+        if (res instanceof Promise) {
+          res
+            .then((inst: IMediaInstance) => {
+              if (this.isDead) {
+                inst?.stop?.();
+              } else if (inst) {
+                this.hoverSoundInstance = inst;
+                this.trackSoundInstance(inst);
+              }
+            })
+            .catch(() => {
+              this.isHoverSoundPlaying = false;
+            });
+        } else {
+          this.hoverSoundInstance = res;
+          this.trackSoundInstance(res);
+        }
+      }
+    } catch {
+      this.isHoverSoundPlaying = false;
+    }
+  }
+
+  private trackSoundInstance(res: IMediaInstance | Promise<IMediaInstance>): void {
     if (!res) return;
-    if (typeof res.then === "function") {
+    if (res instanceof Promise) {
       res
-        .then((inst: any) => {
+        .then((inst: IMediaInstance) => {
           if (this.isDead) {
-            try {
-              inst?.stop?.();
-            } catch {}
+            inst?.stop?.();
           } else if (inst) {
             this.activeSoundInstances.add(inst);
           }
@@ -65,9 +116,7 @@ export class RaycastEnemy {
         .catch(() => {});
     } else {
       if (this.isDead) {
-        try {
-          res.stop?.();
-        } catch {}
+        res.stop();
       } else {
         this.activeSoundInstances.add(res);
       }
@@ -89,6 +138,7 @@ export class RaycastEnemy {
     this.maxHealth = config.maxHealth;
     this.dirX = 0;
     this.dirY = 1;
+    this.currentVOffset = config.vOffset ?? 0;
 
     if (spritesheet) {
       this.initAnimatedSprite(spritesheet);
@@ -106,12 +156,16 @@ export class RaycastEnemy {
     const getFrames = (prefix: string, count: number): Texture[] => {
       const frames: Texture[] = [];
       for (let i = 1; i <= count; i++) {
-        const t = texs[`${prefix}_${i}.png`];
+        const t =
+          texs[`${prefix}_${i}.png`] ||
+          texs[`${prefix}_${i}`] ||
+          texs[`${prefix}${i}.png`] ||
+          texs[`${prefix}${i}`];
         if (t) {
           frames.push(t);
         }
       }
-      return frames.length > 0 ? frames : [texs[`${prefix}.png`] || Texture.WHITE];
+      return frames.length > 0 ? frames : [texs[`${prefix}.png`] || texs[prefix] || Texture.WHITE];
     };
 
     // Helper for single frame
@@ -123,27 +177,60 @@ export class RaycastEnemy {
       return [Texture.WHITE];
     };
 
+    const animConfig = this.config.animationConfig;
+
+    if (animConfig?.omniDirectional) {
+      const def = animConfig.defaultAnimation;
+      const shoot = animConfig.shootingAnimation;
+      const death = animConfig.deathAnimation;
+
+      this.animations = {
+        default: def ? getFrames(def.prefix, def.count) : [Texture.WHITE],
+        shooting: shoot ? getFrames(shoot.prefix, shoot.count) : [Texture.WHITE],
+        death_1: death ? getFrames(death.prefix, death.count) : [Texture.WHITE],
+      };
+
+      const initialTextures = this.animations.default || [Texture.WHITE];
+      const initialSpeed = def?.speed ?? 0.16;
+      this.animatedSprite = new AnimatedSprite(initialTextures);
+      this.animatedSprite.anchor.set(0.5, 1.0);
+      this.animatedSprite.animationSpeed = initialSpeed;
+      this.animatedSprite.roundPixels = true;
+      this.animatedSprite.visible = false;
+      this.currentAnimKey = "default";
+      if (def?.loop !== false) {
+        this.animatedSprite.loop = true;
+        this.animatedSprite.play();
+      }
+      return;
+    }
+
+    const walkPrefix = animConfig?.walkingPrefix ?? "storm_trooper/walking";
+    const standPrefix = animConfig?.standingPrefix ?? "storm_trooper/standing";
+    const deathPrefix = animConfig?.deathPrefix ?? "storm_trooper/death_1";
+    const shootName = animConfig?.shootingPrefix ?? "storm_trooper/shooting";
+
     this.animations = {
       // 1. Walking animations (6 frames each)
-      walking_towards: getFrames("storm_trooper/walking_towards", 6),
-      walking_towards_left_diagonal: getFrames("storm_trooper/walking_left_diagonal", 6),
-      walking_left: getFrames("storm_trooper/walking_left", 6),
-      walking_away_left_diagonal: getFrames("storm_trooper/walking_away_left_diagonal", 6),
-      walking_away: getFrames("storm_trooper/walking_away", 6),
+      walking_towards: getFrames(`${walkPrefix}_towards`, 6),
+      walking_towards_left_diagonal: getFrames(`${walkPrefix}_left_diagonal`, 6),
+      walking_left: getFrames(`${walkPrefix}_left`, 6),
+      walking_away_left_diagonal: getFrames(`${walkPrefix}_away_left_diagonal`, 6),
+      walking_away: getFrames(`${walkPrefix}_away`, 6),
 
       // 2. Standing / Idle poses (1 frame each)
-      standing_towards: getSingle("storm_trooper/standing_towards"),
-      standing_towards_left_diagonal: getSingle("storm_trooper/standing_towards_left_diagonal"),
-      standing_left: getSingle("storm_trooper/standing_left"),
-      standing_away_left_diagonal: getSingle("storm_trooper/standing_away_left_diagonal"),
-      standing_away: getSingle("storm_trooper/standing_away"),
+      standing_towards: getSingle(`${standPrefix}_towards`),
+      standing_towards_left_diagonal: getSingle(`${standPrefix}_towards_left_diagonal`),
+      standing_left: getSingle(`${standPrefix}_left`),
+      standing_away_left_diagonal: getSingle(`${standPrefix}_away_left_diagonal`),
+      standing_away: getSingle(`${standPrefix}_away`),
 
       // 3. Shooting pose
-      shooting: getSingle("storm_trooper/shooting"),
+      shooting: getSingle(shootName),
 
       // 4. Death animations (6 frames each)
-      death_1: getFrames("storm_trooper/death_1", 6),
-      death_2: getFrames("storm_trooper/death_2", 6),
+      death_1: getFrames(deathPrefix, 6),
+      death_2: getFrames(deathPrefix.replace("_1", "_2"), 6),
     };
 
     const initialTextures = this.animations.standing_towards || [Texture.WHITE];
@@ -161,16 +248,24 @@ export class RaycastEnemy {
 
   public takeDamage(
     amount: number,
-    onDeath?: (enemy: RaycastEnemy) => void
+    onDeath?: (enemy: RaycastEnemy) => void,
+    sourceX?: number,
+    sourceY?: number
   ): boolean {
     if (this.isDead) return false;
 
     this.health = Math.max(0, this.health - amount);
     this.painTimer = 8; // Flash red for ~8 frames
 
-    // Instantly alert enemy to player
+    // Instantly alert enemy to player / attacker
     if (this.state === "idle") {
       this.state = "chase";
+    }
+    if (sourceX !== undefined && sourceY !== undefined) {
+      this.lastKnownPlayerX = sourceX;
+      this.lastKnownPlayerY = sourceY;
+      this.hasTarget = true;
+      this.searchTimer = 600;
     }
 
     if (this.health <= 0) {
@@ -189,7 +284,8 @@ export class RaycastEnemy {
       }
 
       // Play death animation
-      this.playAnimation("death_1", false, 0.14);
+      const deathSpeed = this.config.animationConfig?.deathAnimation?.speed ?? 0.14;
+      this.playAnimation("death_1", false, deathSpeed);
 
       // Play death sound from config
       if (this.config.deathSounds && this.config.deathSounds.length > 0) {
@@ -222,6 +318,79 @@ export class RaycastEnemy {
     return false;
   }
 
+  private moveTowards(
+    targetX: number,
+    targetY: number,
+    speed: number,
+    tryMoveEnemy: (enemy: RaycastEnemy, newX: number, newY: number) => boolean
+  ): boolean {
+    const tdx = targetX - this.x;
+    const tdy = targetY - this.y;
+    const dist = Math.hypot(tdx, tdy);
+    if (dist < 0.001) return false;
+
+    const baseDirX = tdx / dist;
+    const baseDirY = tdy / dist;
+
+    // 1. Direct move attempt
+    if (tryMoveEnemy(this, this.x + baseDirX * speed, this.y + baseDirY * speed)) {
+      this.stuckFrames = 0;
+      this.dirX = baseDirX;
+      this.dirY = baseDirY;
+      return true;
+    }
+
+    // 2. Sliding on axes
+    if (tryMoveEnemy(this, this.x + baseDirX * speed, this.y)) {
+      this.stuckFrames = 0;
+      this.dirX = baseDirX;
+      return true;
+    }
+    if (tryMoveEnemy(this, this.x, this.y + baseDirY * speed)) {
+      this.stuckFrames = 0;
+      this.dirY = baseDirY;
+      return true;
+    }
+
+    // 3. Multi-angle feelers for steering around corners and obstacles
+    const angleDeviations = [
+      Math.PI / 6, -Math.PI / 6,
+      Math.PI / 4, -Math.PI / 4,
+      Math.PI / 3, -Math.PI / 3,
+      Math.PI / 2, -Math.PI / 2,
+      (2 * Math.PI) / 3, -(2 * Math.PI) / 3,
+      (3 * Math.PI) / 4, -(3 * Math.PI) / 4,
+    ];
+
+    const baseAngle = Math.atan2(baseDirY, baseDirX);
+
+    for (const dev of angleDeviations) {
+      const testAngle = baseAngle + dev;
+      const testDirX = Math.cos(testAngle);
+      const testDirY = Math.sin(testAngle);
+
+      if (tryMoveEnemy(this, this.x + testDirX * speed, this.y + testDirY * speed)) {
+        this.stuckFrames = 0;
+        this.dirX = testDirX;
+        this.dirY = testDirY;
+        return true;
+      }
+      if (tryMoveEnemy(this, this.x + testDirX * speed, this.y)) {
+        this.stuckFrames = 0;
+        this.dirX = testDirX;
+        return true;
+      }
+      if (tryMoveEnemy(this, this.x, this.y + testDirY * speed)) {
+        this.stuckFrames = 0;
+        this.dirY = testDirY;
+        return true;
+      }
+    }
+
+    this.stuckFrames++;
+    return false;
+  }
+
   public update(
     delta: number,
     playerX: number,
@@ -236,6 +405,9 @@ export class RaycastEnemy {
     }
 
     if (this.state === "dead") {
+      if (this.currentVOffset > 0) {
+        this.currentVOffset = Math.max(0, this.currentVOffset - 0.015 * delta);
+      }
       return;
     }
 
@@ -247,112 +419,249 @@ export class RaycastEnemy {
     const dy = playerY - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist > 0.001) {
-      // Face towards player when active
-      if (this.state !== "idle") {
-        this.dirX = dx / dist;
-        this.dirY = dy / dist;
+    // Update looping hover / idle sound with distance attenuation
+    const hoverConfig = this.config.hoverSound || this.config.idleSound;
+    if (hoverConfig && !this.isDead) {
+      if (!this.isHoverSoundPlaying) {
+        this.startHoverSound(hoverConfig);
+      }
+      if (this.hoverSoundInstance) {
+        const baseVol = hoverConfig.volume ?? 0.5;
+        const maxDist = Math.max(12, this.config.sightRange || 12);
+        const falloff = Math.max(0, 1 - dist / maxDist);
+        const effectiveVol = baseVol * falloff;
+        try {
+          if (typeof this.hoverSoundInstance.volume === "number") {
+            this.hoverSoundInstance.volume = effectiveVol;
+          } else if (typeof this.hoverSoundInstance.set === "function") {
+            this.hoverSoundInstance.set("volume", effectiveVol);
+          }
+        } catch {}
       }
     }
 
     const los = hasLineOfSight(this.x, this.y, playerX, playerY);
     const lof = hasLineOfFire ? hasLineOfFire(this.x, this.y, playerX, playerY) : los;
 
+    const dirToPlayerX = dist > 0.001 ? dx / dist : 0;
+    const dirToPlayerY = dist > 0.001 ? dy / dist : 1;
+    const perpX = -dirToPlayerY;
+    const perpY = dirToPlayerX;
+
+    // Check visibility from left and right shoulders to ensure enemy emerges fully from corner edges
+    const shoulderOffset = this.config.shoulderOffset ?? 0.35;
+    const clearanceMultiplier = this.config.coverClearanceOffset ?? 1.5;
+    const defaultStepOut = this.config.stepOutFrames ?? 30;
+
+    const losLeft = hasLineOfSight(this.x - perpX * shoulderOffset, this.y - perpY * shoulderOffset, playerX, playerY);
+    const losRight = hasLineOfSight(this.x + perpX * shoulderOffset, this.y + perpY * shoulderOffset, playerX, playerY);
+    const lofLeft = hasLineOfFire ? hasLineOfFire(this.x - perpX * shoulderOffset, this.y - perpY * shoulderOffset, playerX, playerY) : losLeft;
+    const lofRight = hasLineOfFire ? hasLineOfFire(this.x + perpX * shoulderOffset, this.y + perpY * shoulderOffset, playerX, playerY) : losRight;
+
+    const fullVisibility = los && losLeft && losRight && lof && lofLeft && lofRight;
+
+    if (los && !this.wasSeeingPlayer) {
+      this.stepOutFrames = defaultStepOut; // Step forward/out into open room/hallway when first acquiring target
+    }
+    this.wasSeeingPlayer = los;
+
+    if (this.stepOutFrames > 0) {
+      this.stepOutFrames = Math.max(0, this.stepOutFrames - delta);
+    }
+
+    // Track sight / target knowledge
+    if (los) {
+      this.lastKnownPlayerX = playerX;
+      this.lastKnownPlayerY = playerY;
+      this.hasTarget = true;
+      this.searchTimer = 600; // Search/reposition for ~10 seconds at 60fps
+    } else if (this.searchTimer > 0) {
+      this.searchTimer = Math.max(0, this.searchTimer - delta);
+      if (this.searchTimer <= 0) {
+        this.hasTarget = false;
+      }
+    }
+
+    if (dist > 0.001) {
+      // Face towards player when active and visible
+      if (this.state !== "idle" && (los || !this.isMoving)) {
+        this.dirX = dx / dist;
+        this.dirY = dy / dist;
+      }
+    }
+
     // State Machine
     if (this.state === "idle") {
       this.isMoving = false;
-      if (dist <= this.config.sightRange && los) {
+      // Alerted by direct sight or close proximity
+      if ((dist <= this.config.sightRange && los) || (dist <= 3.2 && los)) {
         this.state = dist <= this.config.attackRange && lof ? "attack" : "chase";
       }
     } else if (this.state === "chase") {
-      if (dist <= this.config.attackRange && los && lof) {
+      if (dist <= this.config.attackRange && fullVisibility && this.stepOutFrames <= 0) {
         this.state = "attack";
         this.isMoving = false;
-      } else if (!lof) {
-        // They can see the player through a thin wall, but can't shoot.
-        // Don't walk into the grid, just face the player and stand still.
-        // (This also stops them from walking into closed doors or solid walls)
-        this.isMoving = false;
       } else {
-        // Move towards player
+        // Move / reposition towards player or out of cover
         const speed = this.config.speed * delta;
-        const moveX = (dx / dist) * speed;
-        const moveY = (dy / dist) * speed;
+        let tx = playerX;
+        let ty = playerY;
+
+        if (los) {
+          // If we see player but are partially covered behind a corner, steer towards the clear shoulder
+          if (!losLeft && losRight) {
+            tx = this.x + perpX * clearanceMultiplier + dirToPlayerX * 0.8;
+            ty = this.y + perpY * clearanceMultiplier + dirToPlayerY * 0.8;
+          } else if (losLeft && !losRight) {
+            tx = this.x - perpX * clearanceMultiplier + dirToPlayerX * 0.8;
+            ty = this.y - perpY * clearanceMultiplier + dirToPlayerY * 0.8;
+          } else {
+            tx = playerX;
+            ty = playerY;
+          }
+        } else if (this.hasTarget) {
+          const toLastDist = Math.hypot(this.lastKnownPlayerX - this.x, this.lastKnownPlayerY - this.y);
+          if (toLastDist > 0.4) {
+            tx = this.lastKnownPlayerX;
+            ty = this.lastKnownPlayerY;
+          } else {
+            // Reached last known position without spotting player -> reposition / sweep around corner
+            if (this.repositionCooldown <= 0) {
+              const randAngle = Math.random() * Math.PI * 2;
+              this.wanderDirX = Math.cos(randAngle);
+              this.wanderDirY = Math.sin(randAngle);
+              this.repositionCooldown = 60 + Math.random() * 60;
+            } else {
+              this.repositionCooldown -= delta;
+            }
+            tx = this.x + this.wanderDirX * 2.5;
+            ty = this.y + this.wanderDirY * 2.5;
+          }
+        } else {
+          // Lost target completely and search timer expired -> return to idle
+          this.state = "idle";
+          this.isMoving = false;
+          return;
+        }
 
         const oldX = this.x;
         const oldY = this.y;
+        const moved = this.moveTowards(tx, ty, speed, tryMoveEnemy);
+        const actualMovedDist = Math.hypot(this.x - oldX, this.y - oldY);
+        this.isMoving = moved && actualMovedDist > 0.0001;
 
-        let actuallyMoved = tryMoveEnemy(this, this.x + moveX, this.y + moveY);
-        if (!actuallyMoved) {
-          // Try sliding along walls
-          if (tryMoveEnemy(this, this.x + moveX, this.y)) {
-            actuallyMoved = true;
-          } else if (tryMoveEnemy(this, this.x, this.y + moveY)) {
-            actuallyMoved = true;
+        // While stepping out from cover into full view, can fire if within attack range
+        if (los && lof && dist <= this.config.attackRange) {
+          const now = Date.now();
+          if (now - this.lastShotTime >= this.config.rateOfFire) {
+            this.lastShotTime = now;
+            this.shootingTimer = 12;
+
+            if (this.config.attackSounds && this.config.attackSounds.length > 0) {
+              const snd = this.config.attackSounds[
+                Math.floor(Math.random() * this.config.attackSounds.length)
+              ];
+              try {
+                const res = sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
+                this.trackSoundInstance(res);
+              } catch (e) {
+                console.warn("Failed to play enemy attack sound:", e);
+              }
+            }
+
+            onShootPlayer(this, this.config.damage, this.config.accuracy, dist);
           }
-        }
-        
-        // Even if the collision check "succeeded" by sliding, if the enemy didn't physically 
-        // change its location significantly, it is effectively blocked (like sliding endlessly into a door hinge).
-        // If distance moved is near zero, force the enemy to stand still.
-        const movedDist = Math.hypot(this.x - oldX, this.y - oldY);
-        if (movedDist < 0.001) {
-          this.isMoving = false;
-        } else {
-          this.isMoving = actuallyMoved;
         }
       }
     } else if (this.state === "attack") {
       this.isMoving = false;
       if (dist > this.config.attackRange + 1.2 || !los || !lof) {
         this.state = "chase";
+      } else if (!fullVisibility) {
+        // Partially occluded by corner cover -> step out into the open
+        const speed = this.config.speed * delta * 0.8;
+        let stepX = 0;
+        let stepY = 0;
+        if (!losLeft && losRight) {
+          stepX = perpX * speed;
+          stepY = perpY * speed;
+        } else if (losLeft && !losRight) {
+          stepX = -perpX * speed;
+          stepY = -perpY * speed;
+        } else {
+          stepX = dirToPlayerX * speed;
+          stepY = dirToPlayerY * speed;
+        }
+        const oldX = this.x;
+        const oldY = this.y;
+        tryMoveEnemy(this, this.x + stepX, this.y + stepY);
+        const movedDist = Math.hypot(this.x - oldX, this.y - oldY);
+        this.isMoving = movedDist > 0.0001;
       } else {
         // Maintain stopping distance
         if (dist < this.config.minDistance) {
           const stepBackSpeed = this.config.speed * 0.7 * delta;
-          const backX = -(dx / dist) * stepBackSpeed;
-          const backY = -(dy / dist) * stepBackSpeed;
-          
+          const backX = -dirToPlayerX * stepBackSpeed;
+          const backY = -dirToPlayerY * stepBackSpeed;
+
           const oldX = this.x;
           const oldY = this.y;
-          
+
           tryMoveEnemy(this, this.x + backX, this.y + backY);
-          
+
           const movedDist = Math.hypot(this.x - oldX, this.y - oldY);
-          if (movedDist < 0.001) {
-             this.isMoving = false;
-          } else {
-             this.isMoving = true; // Technically moving backwards here
+          this.isMoving = movedDist > 0.0001;
+        }
+      }
+
+      // Fire at player on cooldown
+      const now = Date.now();
+      if (now - this.lastShotTime >= this.config.rateOfFire) {
+        this.lastShotTime = now;
+        this.shootingTimer = 12; // Show shooting frame for ~12 ticks
+
+        // Play blaster attack sound
+        if (this.config.attackSounds && this.config.attackSounds.length > 0) {
+          const snd = this.config.attackSounds[
+            Math.floor(Math.random() * this.config.attackSounds.length)
+          ];
+          try {
+            const res = sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
+            this.trackSoundInstance(res);
+          } catch (e) {
+            console.warn("Failed to play enemy attack sound:", e);
           }
         }
 
-        // Fire at player on cooldown
-        const now = Date.now();
-        if (now - this.lastShotTime >= this.config.rateOfFire) {
-          this.lastShotTime = now;
-          this.shootingTimer = 12; // Show shooting frame for ~12 ticks
-
-          // Play blaster attack sound
-          if (this.config.attackSounds && this.config.attackSounds.length > 0) {
-            const snd = this.config.attackSounds[
-              Math.floor(Math.random() * this.config.attackSounds.length)
-            ];
-            try {
-              const res = sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
-              this.trackSoundInstance(res);
-            } catch (e) {
-              console.warn("Failed to play enemy attack sound:", e);
-            }
-          }
-
-          onShootPlayer(this, this.config.damage, this.config.accuracy, dist);
-        }
+        onShootPlayer(this, this.config.damage, this.config.accuracy, dist);
       }
     }
   }
 
   public updateAnimation(playerX: number, playerY: number): void {
     if (!this.animatedSprite) return;
+
+    if (this.config.animationConfig?.omniDirectional) {
+      this.isFlipped = false;
+      if (this.state === "dead") {
+        const deathSpeed = this.config.animationConfig.deathAnimation?.speed ?? 0.14;
+        this.playAnimation("death_1", false, deathSpeed);
+        if (this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1) {
+          this.animatedSprite.gotoAndStop(this.animatedSprite.totalFrames - 1);
+        }
+        return;
+      }
+
+      if (this.shootingTimer > 0) {
+        const shootSpeed = this.config.animationConfig.shootingAnimation?.speed ?? 0.16;
+        this.playAnimation("shooting", false, shootSpeed);
+        return;
+      }
+
+      const defSpeed = this.config.animationConfig.defaultAnimation?.speed ?? 0.16;
+      this.playAnimation("default", true, defSpeed);
+      return;
+    }
 
     if (this.state === "dead") {
       this.isFlipped = false;

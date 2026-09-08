@@ -2,6 +2,40 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-08] - Viper Probe Droid Integration, Hovering Physics & Depth Sorting Fix
+
+### 1. Viper Probe Droid Enemy Implementation
+- **Configuration & Integration** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added full support and configuration for the Imperial Viper Probe Droid (`RaycastEnemyType.VIPER_PROBE_DROID = "viper_droid"`).
+  - Defined enemy attributes including health, movement speed, sight/attack ranges, fire cadence, vertical offset, and floating physics.
+  - Registered all audio assets for probe droid hovering loop, 6 randomized blaster shot variations, and 8 scanner/vocal transmissions in `GameConfig.ts`.
+  - Updated level tileset metadata in [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx) and [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json) to spawn probe droids correctly based on `enemyType`.
+
+### 2. Hovering Physics, Floating Animation & Death Drop
+- **Vertical Hovering & Ground Fallback** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Implemented configurable vertical elevation offset (`vOffset`) and real-time sinusoidal bobbing (`floatingBob`).
+  - Added dynamic death drop animation: upon dying, hovering units smoothly drop down to ground level (`currentVOffset` interpolates to 0 via `deathDropSpeed`), preventing eliminated probe droids from floating in the air.
+
+### 3. Dynamic Audio Architecture (Hovering, Random Shots & Alert Voicelines)
+- **Positional & State-Driven SFX** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added continuous looping hovering audio for probe droids with distance-based volume attenuation that automatically stops on death.
+  - Added randomized shot audio selection picking from `shotSounds` array on each blaster discharge.
+  - Integrated randomized alert scanner chatter / droid vocal lines on target detection via `EnemyVoicelineManager`.
+
+### 4. Combat AI: Repositioning & Cover Peek Offsets
+- **Line of Sight Recovery & Cover Stepping** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Implemented repositioning AI: when the player breaks line of sight behind walls or cover, the droid maneuvers towards the player's last known position to re-establish combat engagement instead of idling in place.
+  - Added per-enemy configurable cover offset (`coverOffset`) so enemies step out further from wall corners during combat.
+
+### 5. Transparent Thin Wall & Entity Depth Sorting Pipeline
+- **Unified Layering & Z-Buffer Separation** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Separated `zBuffer[i]` to strictly track closest solid opaque walls and closed doors, ensuring transparent thin walls (e.g. wire fences) do not falsely clip billboard sprites via column stencil masks.
+  - Unified thin wall slices, decorative objects, enemies, and animated pickups inside `this.entityContainer` (`sortableChildren = true`, `zIndex: 20`) positioned above solid background walls (`wallContainer`, `zIndex: 10`).
+  - Applied consistent depth-sorting index `Math.floor((maxRenderDistance - distance) * 1000)` across thin wall slices, world props, pickups, and enemy sprites/masks so sprites behind fences are clearly visible through transparent mesh openings while remaining occluded behind solid walls.
+
+### 6. Strict Type Safety
+- Refactored configurations, enemy handlers, and pickup managers to eliminate `any` type assertions and maintain strict TypeScript compliance.
+
 ## [2026-09-06] - Transparent Thin Wall Depth Separation & Sprite Visibility Fix
 
 ### 1. Opaque Z-Buffer Occlusion Separation

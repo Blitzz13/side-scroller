@@ -156,6 +156,7 @@ export class RaycastScene extends BaseScene {
   private worldContainer!: Container;
   private backgroundContainer!: Container;
   private wallContainer!: Container;
+  private entityContainer!: Container;
 
 
 
@@ -289,10 +290,16 @@ export class RaycastScene extends BaseScene {
     this.wallContainer.zIndex = 10;
     this.worldContainer.addChild(this.wallContainer);
 
-    // Thin wall layer container (transparent barriers, fences, door protectors rendered in front of enemies/pickups)
-    this.thinWallContainer = new Container();
-    this.thinWallContainer.zIndex = 45;
-    this.worldContainer.addChild(this.thinWallContainer);
+    // Entity layer container holding all depth-sorted transparent elements (thin walls, pickups, enemies)
+    this.entityContainer = new Container();
+    this.entityContainer.zIndex = 20;
+    this.entityContainer.sortableChildren = true;
+    this.worldContainer.addChild(this.entityContainer);
+
+    this.thinWallContainer = this.entityContainer;
+    this.objectContainer = this.entityContainer;
+    this.animatedPickupContainer = this.entityContainer;
+    this.enemyContainer = this.entityContainer;
 
     for (let i = 0; i < gameConfig.width; i++) {
       const columnSprites: Sprite[] = [];
@@ -343,11 +350,6 @@ export class RaycastScene extends BaseScene {
       this.hitPool.push(colHits);
     }
 
-    // Container for billboard sprites (rendered on top of wall columns with depth testing)
-    this.objectContainer = new Container();
-    this.objectContainer.zIndex = 20;
-    this.worldContainer.addChild(this.objectContainer);
-
     for (let i = 0; i < 2000; i++) {
       const sprite = new Sprite();
       sprite.width = 1;
@@ -355,18 +357,6 @@ export class RaycastScene extends BaseScene {
       this.objectContainer.addChild(sprite);
       this.objectSpritePool.push(sprite);
     }
-
-    // Container for animated world props (keycards, rotating pickups)
-    this.animatedPickupContainer = new Container();
-    this.animatedPickupContainer.zIndex = 30;
-    this.animatedPickupContainer.sortableChildren = true;
-    this.worldContainer.addChild(this.animatedPickupContainer);
-
-    // Container for animated enemy sprites
-    this.enemyContainer = new Container();
-    this.enemyContainer.zIndex = 40;
-    this.enemyContainer.sortableChildren = true;
-    this.worldContainer.addChild(this.enemyContainer);
 
     this.enemyManager = new RaycastEnemyManager(this.enemyContainer);
 
@@ -815,7 +805,7 @@ export class RaycastScene extends BaseScene {
       }
     };
     await this.enemyManager.initSpritesheets();
-    this.enemyManager.parseMapEnemies(mapData);
+    this.enemyManager.parseMapEnemies(mapData, firstgid, this.tileMeta);
 
     // Initialize thermal detonator manager textures & frames
     await this.detonatorManager.initTextures();
@@ -1582,17 +1572,9 @@ export class RaycastScene extends BaseScene {
     if (this.playerController) {
       this.playerController.dispose();
     }
-    if (this.objectContainer) {
-      this.objectContainer.removeChildren();
-      this.objectContainer.destroy({ children: true });
-    }
-    if (this.enemyContainer) {
-      this.enemyContainer.removeChildren();
-      this.enemyContainer.destroy({ children: true });
-    }
-    if (this.thinWallContainer) {
-      this.thinWallContainer.removeChildren();
-      this.thinWallContainer.destroy({ children: true });
+    if (this.entityContainer && !(this.entityContainer as any).destroyed) {
+      this.entityContainer.removeChildren();
+      this.entityContainer.destroy({ children: true });
     }
     this.thinWallSpritePool = [];
     this.objectSpritePool = [];
@@ -2712,20 +2694,20 @@ export class RaycastScene extends BaseScene {
         }
       }
 
-      // To find the closest fully opaque thing that blocks sprites behind it (for zBuffer)
+      // To find the closest solid opaque wall or closed door (for zBuffer)
       for (let j = hitCount - 1; j >= 0; j--) {
         const ray = pool[j];
-        if (ray.side !== 2) { // Not a thin wall
+        if (ray.side !== 2) { // Skip thin walls, since thin walls have transparency and are depth-sorted
           if (ray.isDoor) {
-             const open = ray.doorOpen !== undefined ? ray.doorOpen : 0;
-             if (open <= 0.01) { // Fully closed door blocks everything behind it
-               solidDist = ray.distance;
-               break;
-             }
-             // If open, we look THROUGH it to the next solid thing, so don't break yet
+            const open = ray.doorOpen !== undefined ? ray.doorOpen : 0;
+            if (open <= 0.01) { // Fully closed door blocks everything behind it
+              solidDist = ray.distance;
+              break;
+            }
+            // If open, we look THROUGH it to the next solid obstacle
           } else {
-             solidDist = ray.distance; // Solid wall block
-             break;
+            solidDist = ray.distance; // Solid wall block
+            break;
           }
         }
       }
@@ -2901,6 +2883,9 @@ export class RaycastScene extends BaseScene {
             sprite.texture = slices[clampedTexX];
           }
 
+          if (isThinWall) {
+            sprite.zIndex = Math.floor((this.MAX_RENDER_DISTANCE - ray.distance) * 1000);
+          }
           sprite.y = drawStart;
           sprite.height = drawEnd - drawStart;
           sprite.width = 1;
@@ -3220,6 +3205,7 @@ export class RaycastScene extends BaseScene {
           sprite.width = 1;
           sprite.height = drawEndY - stripeStartY;
           sprite.tint = obj.tint ?? tint;
+          sprite.zIndex = Math.floor((this.MAX_RENDER_DISTANCE - transformY) * 1000);
           sprite.visible = true;
         }
       }

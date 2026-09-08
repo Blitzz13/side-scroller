@@ -3,6 +3,24 @@ import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
 import { RaycastWeaponType } from "../../enums/RaycastWeaponType";
 import { IEnemyVoicePool } from "./IStormtrooperVoicelineConfig";
 
+export interface IRaycastEnemyAnimationSequence {
+  prefix: string;
+  count: number;
+  speed?: number;
+  loop?: boolean;
+}
+
+export interface IRaycastEnemyAnimationConfig {
+  omniDirectional?: boolean;
+  defaultAnimation?: IRaycastEnemyAnimationSequence;
+  shootingAnimation?: IRaycastEnemyAnimationSequence;
+  deathAnimation?: IRaycastEnemyAnimationSequence;
+  walkingPrefix?: string;
+  standingPrefix?: string;
+  shootingPrefix?: string;
+  deathPrefix?: string;
+}
+
 export interface IRaycastEnemyConfig {
   type: RaycastEnemyType;
   name: string;
@@ -25,5 +43,14 @@ export interface IRaycastEnemyConfig {
   painSounds?: ISoundConfig[];
   deathSounds?: ISoundConfig[];
   attackSounds?: ISoundConfig[];
+  idleSound?: ISoundConfig; // Looping idle/hover sound
+  hoverSound?: ISoundConfig; // Looping hover sound
   voicelines?: IEnemyVoicePool;
+  shootHeight?: number; // Vertical height offset for firing laser (default: 0.55)
+  vOffset?: number; // Normalized vertical offset above floor (e.g. 0.12 for floating)
+  floatingBob?: boolean; // Organic floating bobbing motion while hovering
+  shoulderOffset?: number; // Distance in tiles from center to left/right shoulders for cover clearance checks (default: 0.35)
+  coverClearanceOffset?: number; // Extra offset distance to step out past cover edges into open space (default: 1.5)
+  stepOutFrames?: number; // Duration in ticks/frames the enemy continues moving out into the open upon spotting player (default: 30)
+  animationConfig?: IRaycastEnemyAnimationConfig;
 }
