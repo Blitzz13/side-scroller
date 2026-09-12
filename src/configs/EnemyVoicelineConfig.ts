@@ -27,6 +27,12 @@ export const defaultViperDroidVoicePool: IEnemyVoicePool = {
   ],
 };
 
+export const defaultImperialOfficerVoicePool: IEnemyVoicePool = {
+  spotted: ["stop_right_there_scum", "troopers_blast_him"],
+  suspicious: [],
+  grenade: [],
+};
+
 export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
   maxConcurrentVoicelines: 1,
   voicelineSpacing: 2500,
@@ -52,12 +58,17 @@ export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
     probe_droid_voice_6: "assets/raycast/sfx/viper_droid/probe_droid_voice_6.mp3",
     probe_droid_voice_7: "assets/raycast/sfx/viper_droid/probe_droid_voice_7.mp3",
     probe_droid_voice_8: "assets/raycast/sfx/viper_droid/probe_droid_voice_8.mp3",
+    stop_right_there_scum: "assets/raycast/sfx/imperial_officer/stop_right_there_scum.mp3",
+    troopers_blast_him: "assets/raycast/sfx/imperial_officer/troopers_blast_him.mp3",
   },
 
   voicePools: {
     stormtrooper: defaultVoicePool,
     viper_droid: defaultViperDroidVoicePool,
     viperdroid: defaultViperDroidVoicePool,
+    imperial_officer: defaultImperialOfficerVoicePool,
+    imperialofficer: defaultImperialOfficerVoicePool,
+    officer: defaultImperialOfficerVoicePool,
   },
 
   defaultVoicePool,

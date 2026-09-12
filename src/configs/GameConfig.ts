@@ -185,6 +185,22 @@ export const manifest: AssetsManifest = {
             alias: "probe_droid_voice_8",
             src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_8.mp3"
           },
+          {
+            alias: "imperial_officer_death",
+            src: "./assets/raycast/sfx/imperial_officer/imperial_officer_death.mp3"
+          },
+          {
+            alias: "officer_commando_damage",
+            src: "./assets/raycast/sfx/imperial_officer/officer_commando_damage.mp3"
+          },
+          {
+            alias: "stop_right_there_scum",
+            src: "./assets/raycast/sfx/imperial_officer/stop_right_there_scum.mp3"
+          },
+          {
+            alias: "troopers_blast_him",
+            src: "./assets/raycast/sfx/imperial_officer/troopers_blast_him.mp3"
+          }
         ]
       },
       {
@@ -282,6 +298,10 @@ export const manifest: AssetsManifest = {
           {
             name: "viper_droid_raycast",
             src: "./assets/raycast/enemies/viper_droid.json",
+          },
+          {
+            name: "imperial_officer",
+            src: "./assets/raycast/enemies/implerial_officer.json",
           }
         ],
       },

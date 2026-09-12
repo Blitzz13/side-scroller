@@ -45,6 +45,11 @@ export class RaycastEnemyManager {
     stormtrooper_hear_something: "assets/raycast/sfx/storm_trooper/i_hear_something.mp3",
     stormtrooper_rebel_scum: "assets/raycast/sfx/storm_trooper/rebel_scum.mp3",
     stormtrooper_there_he_is: "assets/raycast/sfx/storm_trooper/there_he_is.mp3",
+    dh_17_blaster: "assets/sounds/dh_17_blaster.mp3",
+    imperial_officer_death: "assets/raycast/sfx/imperial_officer/imperial_officer_death.mp3",
+    officer_commando_damage: "assets/raycast/sfx/imperial_officer/officer_commando_damage.mp3",
+    stop_right_there_scum: "assets/raycast/sfx/imperial_officer/stop_right_there_scum.mp3",
+    troopers_blast_him: "assets/raycast/sfx/imperial_officer/troopers_blast_him.mp3",
   };
 
   constructor(container: Container) {
@@ -170,6 +175,9 @@ export class RaycastEnemyManager {
           if (imgLower.includes("viper") || imgLower.includes("probe") || imgLower.includes("droid")) {
             return raycastEnemyConfigs[RaycastEnemyType.VIPER_DROID];
           }
+          if (imgLower.includes("officer")) {
+            return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_OFFICER];
+          }
           if (imgLower.includes("storm") || imgLower.includes("trooper")) {
             return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
           }
@@ -206,6 +214,9 @@ export class RaycastEnemyManager {
               const imgLower = tileDef.image.toLowerCase();
               if (imgLower.includes("viper") || imgLower.includes("probe") || imgLower.includes("droid")) {
                 return raycastEnemyConfigs[RaycastEnemyType.VIPER_DROID];
+              }
+              if (imgLower.includes("officer")) {
+                return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_OFFICER];
               }
               if (imgLower.includes("storm") || imgLower.includes("trooper")) {
                 return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];

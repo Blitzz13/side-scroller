@@ -150,6 +150,78 @@ export const viperDroidRaycastConfig: IRaycastEnemyConfig = {
   },
 };
 
+const imperialOfficerPainSounds: ISoundConfig[] = [
+  {
+    src: "officer_commando_damage",
+    loop: false,
+    volume: 0.8,
+  },
+];
+
+const imperialOfficerDeathSounds: ISoundConfig[] = [
+  {
+    src: "imperial_officer_death",
+    loop: false,
+    volume: 0.9,
+  },
+];
+
+const imperialOfficerAttackSounds: ISoundConfig[] = [
+  {
+    src: "dh_17_blaster",
+    loop: false,
+    volume: 0.25,
+  },
+];
+
+export const imperialOfficerConfig: IRaycastEnemyConfig = {
+  type: RaycastEnemyType.IMPERIAL_OFFICER,
+  name: "Imperial Officer",
+  maxHealth: 40,
+  speed: 0.02,
+  sightRange: 12,
+  attackRange: 6.0,
+  minDistance: 2.2,
+  rateOfFire: 750,
+  damage: 10,
+  accuracy: 0.7,
+  scale: 0.7,
+  referenceHeight: 69,
+  spritesheet: "assets/raycast/enemies/implerial_officer.json",
+  dropWeapon: RaycastWeaponType.DH17,
+  dropAmmo: 20,
+  dropChance: 1.0,
+  painSounds: imperialOfficerPainSounds,
+  deathSounds: imperialOfficerDeathSounds,
+  attackSounds: imperialOfficerAttackSounds,
+  shoulderOffset: 0.35,
+  coverClearanceOffset: 1.5,
+  stepOutFrames: 30,
+  voicelines: {
+    spotted: ["stop_right_there_scum", "troopers_blast_him"],
+    suspicious: ["stop_right_there_scum"],
+    grenade: [],
+  },
+  animationConfig: {
+    walkingPrefix: "walking",
+    standingPrefix: "standing",
+    shootingPrefix: "shooting",
+    deathPrefix: "death_1",
+    shootingAnimation: {
+      prefix: "shooting",
+      count: 2,
+      speed: 0.16,
+      loop: false,
+    },
+    deathAnimation: {
+      prefix: "death_1",
+      count: 7,
+      speed: 0.14,
+      loop: false,
+    },
+  },
+};
+
 /**
  * Global registry of Raycast enemy configs indexed by RaycastEnemyType.
  * Additional enemy types can easily be added here with their custom stats,
@@ -158,6 +230,7 @@ export const viperDroidRaycastConfig: IRaycastEnemyConfig = {
 export const raycastEnemyConfigs: Record<RaycastEnemyType, IRaycastEnemyConfig> = {
   [RaycastEnemyType.STORMTROOPER]: stormtrooperConfig,
   [RaycastEnemyType.VIPER_DROID]: viperDroidRaycastConfig,
+  [RaycastEnemyType.IMPERIAL_OFFICER]: imperialOfficerConfig,
 };
 
 export function getRaycastEnemyConfig(
@@ -171,10 +244,16 @@ export function getRaycastEnemyConfig(
   for (const cfg of Object.values(raycastEnemyConfigs)) {
     const typeStr = cfg.type.toLowerCase().replace(/[-_ ]/g, "");
     const nameStr = cfg.name.toLowerCase().replace(/[-_ ]/g, "");
-    if (typeStr === normalized || nameStr.includes(normalized) || normalized.includes(typeStr)) {
+    if (
+      typeStr === normalized ||
+      nameStr.includes(normalized) ||
+      normalized.includes(typeStr) ||
+      (normalized.includes("officer") && typeStr.includes("officer"))
+    ) {
       return cfg;
     }
   }
 
   return stormtrooperConfig;
 }
+

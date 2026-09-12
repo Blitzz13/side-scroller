@@ -242,6 +242,9 @@ export class EnemyVoicelineManager {
     // Pick grenade shout alias from enemy voice pool
     const pool = this.getVoicePool(closestEnemy ?? undefined);
     const grenadeLines = pool.grenade || [];
+    if (pool.grenade !== undefined && pool.grenade.length === 0) {
+      return;
+    }
     const alias =
       grenadeLines.length > 0
         ? grenadeLines[Math.floor(Math.random() * grenadeLines.length)]

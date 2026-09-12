@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="23" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="24" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -140,5 +140,8 @@
  </tile>
  <tile id="22">
   <image source="assets/raycast/enemies/viper_droid_default_1.png" width="51" height="63"/>
+ </tile>
+ <tile id="23">
+  <image source="assets/raycast/enemies/implerial_officer.png" width="35" height="69"/>
  </tile>
 </tileset>

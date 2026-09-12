@@ -209,9 +209,13 @@ export class RaycastEnemy {
     const standPrefix = animConfig?.standingPrefix ?? "storm_trooper/standing";
     const deathPrefix = animConfig?.deathPrefix ?? "storm_trooper/death_1";
     const shootName = animConfig?.shootingPrefix ?? "storm_trooper/shooting";
+    const deathCount = animConfig?.deathAnimation?.count ?? 8;
+    const shootCount = animConfig?.shootingAnimation?.count ?? 6;
+
+    const hasSingleShoot = Boolean(texs[`${shootName}.png`] || texs[shootName]);
 
     this.animations = {
-      // 1. Walking animations (6 frames each)
+      // 1. Walking animations (up to 6 frames each)
       walking_towards: getFrames(`${walkPrefix}_towards`, 6),
       walking_towards_left_diagonal: getFrames(`${walkPrefix}_left_diagonal`, 6),
       walking_left: getFrames(`${walkPrefix}_left`, 6),
@@ -225,12 +229,15 @@ export class RaycastEnemy {
       standing_away_left_diagonal: getSingle(`${standPrefix}_away_left_diagonal`),
       standing_away: getSingle(`${standPrefix}_away`),
 
-      // 3. Shooting pose
-      shooting: getSingle(shootName),
+      // 3. Shooting pose (supports single frame or multi-frame sequence)
+      shooting: hasSingleShoot ? getSingle(shootName) : getFrames(shootName, shootCount),
 
-      // 4. Death animations (6 frames each)
-      death_1: getFrames(deathPrefix, 6),
-      death_2: getFrames(deathPrefix.replace("_1", "_2"), 6),
+      // 4. Death animations (supports up to deathCount frames)
+      death_1: getFrames(deathPrefix, deathCount),
+      death_2: getFrames(deathPrefix.replace("_1", "_2"), deathCount),
+
+      // 5. Optional damage / hit reaction pose
+      ...((texs["damage.png"] || texs["damage"]) ? { damage: getSingle("damage") } : {}),
     };
 
     const initialTextures = this.animations.standing_towards || [Texture.WHITE];
@@ -664,8 +671,9 @@ export class RaycastEnemy {
     }
 
     if (this.state === "dead") {
+      const deathSpeed = this.config.animationConfig?.deathAnimation?.speed ?? 0.14;
       this.isFlipped = false;
-      this.playAnimation("death_1", false, 0.14);
+      this.playAnimation("death_1", false, deathSpeed);
       // Stay on last frame if complete
       if (this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1) {
         this.animatedSprite.gotoAndStop(this.animatedSprite.totalFrames - 1);
@@ -673,9 +681,16 @@ export class RaycastEnemy {
       return;
     }
 
-    if (this.shootingTimer > 0) {
+    if (this.painTimer > 0 && this.animations.damage && this.animations.damage[0] !== Texture.WHITE) {
       this.isFlipped = false;
-      this.playAnimation("shooting", false);
+      this.playAnimation("damage", false);
+      return;
+    }
+
+    if (this.shootingTimer > 0) {
+      const shootSpeed = this.config.animationConfig?.shootingAnimation?.speed ?? 0.16;
+      this.isFlipped = false;
+      this.playAnimation("shooting", false, shootSpeed);
       return;
     }
 
