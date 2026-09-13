@@ -711,22 +711,22 @@ export class RaycastEnemy {
       dirName = "towards";
     } else if (deg >= 22.5 && deg < 67.5) {
       dirName = "towards_left_diagonal";
-      flipX = true;
+      flipX = false;
     } else if (deg <= -22.5 && deg > -67.5) {
       dirName = "towards_left_diagonal";
-      flipX = false;
+      flipX = true;
     } else if (deg >= 67.5 && deg < 112.5) {
       dirName = "left";
-      flipX = true;
+      flipX = false;
     } else if (deg <= -67.5 && deg > -112.5) {
       dirName = "left";
-      flipX = false;
+      flipX = true;
     } else if (deg >= 112.5 && deg < 157.5) {
       dirName = "away_left_diagonal";
-      flipX = true;
+      flipX = false;
     } else if (deg <= -112.5 && deg > -157.5) {
       dirName = "away_left_diagonal";
-      flipX = false;
+      flipX = true;
     } else {
       dirName = "away";
     }
