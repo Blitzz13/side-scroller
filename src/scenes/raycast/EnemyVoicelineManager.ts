@@ -5,8 +5,9 @@ import {
 } from "../../configs/interfaces/IEnemyVoicelineConfig";
 import { enemyVoicelineConfig } from "../../configs/EnemyVoicelineConfig";
 import { RaycastEnemy } from "./RaycastEnemy";
+import { VoicelineCategory } from "../../enums/VoicelineCategory";
 
-export type VoicelineCategory = "grenade" | "spotted" | "suspicious";
+export { VoicelineCategory };
 
 function stopMediaInstance(inst: IMediaInstance | HTMLAudioElement): void {
   if ("stop" in inst && typeof inst.stop === "function") {
@@ -32,6 +33,7 @@ interface ActiveSoundHandle {
   id: number;
   enemyId?: number;
   alias: string;
+  category?: VoicelineCategory;
   mediaInstance?: IMediaInstance | HTMLAudioElement;
   timeoutId?: ReturnType<typeof setTimeout>;
 }
@@ -173,15 +175,15 @@ export class EnemyVoicelineManager {
   public onEnemyDeath(enemyId: number): void {
     this.deadEnemyIds.add(enemyId);
 
-    // 1. Purge any queued non-grenade voicelines for this dead enemy
+    // 1. Purge any queued voicelines for this dead enemy
     this.queue = this.queue.filter((q) => q.enemyId !== enemyId);
 
-    // 2. Stop any active voicelines currently playing for this dead enemy
+    // 2. Stop any active voicelines currently playing for this dead enemy (except grenade shout mid-sentence)
     for (const [id, handle] of Array.from(this.activeHandles.entries())) {
       // Do NOT cut off a grenade shout mid-sentence if the enemy is blown up by the grenade
       if (
         handle.enemyId === enemyId &&
-        handle.alias !== EnemyVoicelineManager.DEFAULT_SOUND_GRENADE
+        handle.category !== VoicelineCategory.GRENADE
       ) {
         if (handle.timeoutId) {
           clearTimeout(handle.timeoutId);
@@ -205,7 +207,8 @@ export class EnemyVoicelineManager {
 
   /**
    * Triggered when the player throws a grenade / thermal detonator.
-   * Guarantees that "grenade, grenade" is shouted with emergency priority.
+   * Guarantees that a grenade reaction voiceline is shouted with emergency priority,
+   * provided there is an alive enemy capable of reacting within hearing range.
    */
   public onPlayerThrowGrenade(
     playerX: number,
@@ -213,47 +216,62 @@ export class EnemyVoicelineManager {
     enemies: RaycastEnemy[] = []
   ): void {
     const now = Date.now();
-    if (now - this.lastGrenadeTime < this.config.grenadeCooldown) {
+    const globalCooldown = this.config.globalGrenadeCooldown ?? 4000;
+    if (now - this.lastGrenadeTime < globalCooldown) {
       return;
     }
 
-    // 1. Find closest alive enemy on the map
+    // 1. Find closest alive enemy on the map within grenade hearing range who has grenade voicelines
+    // and whose per-enemy grenade cooldown has elapsed
+    const enemyCooldown = this.config.grenadeCooldown ?? 8000;
+    const maxRange = this.config.grenadeHearingRange ?? 25.0;
+    const maxRangeSq = maxRange * maxRange;
+
     let closestEnemy: RaycastEnemy | null = null;
     let closestDistSq = Infinity;
+    let chosenAlias: string | null = null;
 
     for (const enemy of enemies) {
-      if (enemy.isDead || this.deadEnemyIds.has(enemy.id)) continue;
+      if (!enemy || enemy.isDead || enemy.health <= 0 || this.deadEnemyIds.has(enemy.id)) {
+        continue;
+      }
+      // Check per-enemy grenade voiceline cooldown
+      if (now - (enemy.lastGrenadeTime ?? 0) < enemyCooldown) {
+        continue;
+      }
       const dx = enemy.x - playerX;
       const dy = enemy.y - playerY;
       const distSq = dx * dx + dy * dy;
+      if (distSq > maxRangeSq) {
+        continue;
+      }
+
+      // Check if this enemy has grenade voicelines
+      const pool = this.getVoicePool(enemy);
+      const grenadeLines = pool.grenade;
+      if (!grenadeLines || grenadeLines.length === 0) {
+        continue;
+      }
+
       if (distSq < closestDistSq) {
         closestDistSq = distSq;
         closestEnemy = enemy;
+        chosenAlias = grenadeLines[Math.floor(Math.random() * grenadeLines.length)];
       }
     }
 
-    // Use closest enemy position if available, or player position as fallback
-    const sourceX = closestEnemy ? closestEnemy.x : playerX;
-    const sourceY = closestEnemy ? closestEnemy.y : playerY;
-    const enemyId = closestEnemy ? closestEnemy.id : undefined;
-
-    this.lastGrenadeTime = now;
-
-    // Pick grenade shout alias from enemy voice pool
-    const pool = this.getVoicePool(closestEnemy ?? undefined);
-    const grenadeLines = pool.grenade || [];
-    if (pool.grenade !== undefined && pool.grenade.length === 0) {
+    // If no alive enemy capable of reacting is around (or ready after cooldown), do not play any voiceline!
+    if (!closestEnemy || !chosenAlias) {
       return;
     }
-    const alias =
-      grenadeLines.length > 0
-        ? grenadeLines[Math.floor(Math.random() * grenadeLines.length)]
-        : EnemyVoicelineManager.DEFAULT_SOUND_GRENADE;
+
+    this.lastGrenadeTime = now;
+    closestEnemy.lastGrenadeTime = now;
 
     // 2. Emergency Priority: Interrupt casual chatter if at max concurrent capacity
     if (this.activeHandles.size >= this.config.maxConcurrentVoicelines) {
       for (const [id, handle] of Array.from(this.activeHandles.entries())) {
-        if (handle.alias !== alias) {
+        if (handle.alias !== chosenAlias) {
           if (handle.timeoutId) clearTimeout(handle.timeoutId);
           if (handle.mediaInstance) {
             try {
@@ -268,15 +286,15 @@ export class EnemyVoicelineManager {
       }
     }
 
-    // 3. Play the grenade shout immediately!
+    // 3. Play the grenade shout immediately from the reacting enemy
     this.playVoiceline(
       {
-        alias,
-        category: "grenade",
+        alias: chosenAlias,
+        category: VoicelineCategory.GRENADE,
         priority: 3,
-        enemyId,
-        sourceX,
-        sourceY,
+        enemyId: closestEnemy.id,
+        sourceX: closestEnemy.x,
+        sourceY: closestEnemy.y,
         timestamp: now,
         maxAgeMs: 4000,
       },
@@ -319,7 +337,7 @@ export class EnemyVoicelineManager {
           this.requestVoiceline(
             {
               alias,
-              category: "spotted",
+              category: VoicelineCategory.SPOTTED,
               priority: 2, // Medium priority
               enemyId: enemy.id,
               sourceX: enemy.x,
@@ -354,7 +372,7 @@ export class EnemyVoicelineManager {
             this.requestVoiceline(
               {
                 alias,
-                category: "suspicious",
+                category: VoicelineCategory.SUSPICIOUS,
                 priority: 1, // Normal priority
                 enemyId: enemy.id,
                 sourceX: enemy.x,
@@ -385,7 +403,7 @@ export class EnemyVoicelineManager {
 
     const now = Date.now();
     const canPlayImmediately =
-      item.category === "grenade" ||
+      item.category === VoicelineCategory.GRENADE ||
       (this.activeHandles.size < this.config.maxConcurrentVoicelines &&
         now - this.lastVoicelineStartTime >= this.config.voicelineSpacing);
 
@@ -422,9 +440,8 @@ export class EnemyVoicelineManager {
     playerX: number,
     playerY: number
   ): void {
-    // If enemy died before a non-grenade line could start, do not play
+    // If enemy died before this line could start, do not play
     if (
-      item.category !== "grenade" &&
       item.enemyId !== undefined &&
       this.deadEnemyIds.has(item.enemyId)
     ) {
@@ -436,17 +453,24 @@ export class EnemyVoicelineManager {
 
     // Calculate volume based on distance if spatial audio is enabled
     let effectiveVolume = this.config.volume;
-    if (item.category === "grenade") {
-      // Emergency shout is always clearly audible (at least 0.85)
-      effectiveVolume = Math.max(0.85, this.config.volume);
-    } else if (this.config.enableSpatialAudio) {
+    if (this.config.enableSpatialAudio) {
       const dx = item.sourceX - playerX;
       const dy = item.sourceY - playerY;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      const maxDist = Math.max(10, this.config.hearingRange * 2);
+      const maxDist =
+        item.category === VoicelineCategory.GRENADE
+          ? Math.max(15, this.config.grenadeHearingRange)
+          : Math.max(10, this.config.hearingRange * 2);
       const falloff = Math.max(0, 1 - distance / maxDist);
       const minVol = this.config.minSpatialVolume ?? 0.5;
-      effectiveVolume = this.config.volume * (minVol + (1 - minVol) * falloff);
+      const baseVol =
+        item.category === VoicelineCategory.GRENADE
+          ? Math.max(0.85, this.config.volume)
+          : this.config.volume;
+      effectiveVolume = baseVol * (minVol + (1 - minVol) * falloff);
+    } else if (item.category === VoicelineCategory.GRENADE) {
+      // Emergency shout is always clearly audible (at least 0.85) when spatial audio disabled
+      effectiveVolume = Math.max(0.85, this.config.volume);
     }
 
     const instanceId = this.nextInstanceId++;
@@ -454,6 +478,7 @@ export class EnemyVoicelineManager {
       id: instanceId,
       enemyId: item.enemyId,
       alias: item.alias,
+      category: item.category,
     };
     this.activeHandles.set(instanceId, handle);
 
@@ -490,7 +515,7 @@ export class EnemyVoicelineManager {
           res
             .then((inst: IMediaInstance) => {
               if (
-                item.category !== "grenade" &&
+                item.category !== VoicelineCategory.GRENADE &&
                 item.enemyId !== undefined &&
                 this.deadEnemyIds.has(item.enemyId)
               ) {
@@ -508,7 +533,7 @@ export class EnemyVoicelineManager {
         } else {
           handle.mediaInstance = res;
           if (
-            item.category !== "grenade" &&
+            item.category !== VoicelineCategory.GRENADE &&
             item.enemyId !== undefined &&
             this.deadEnemyIds.has(item.enemyId)
           ) {
@@ -553,9 +578,7 @@ export class EnemyVoicelineManager {
       const q = this.queue[i];
       if (
         now - q.timestamp > q.maxAgeMs ||
-        (q.category !== "grenade" &&
-          q.enemyId !== undefined &&
-          this.deadEnemyIds.has(q.enemyId))
+        (q.enemyId !== undefined && this.deadEnemyIds.has(q.enemyId))
       ) {
         this.queue.splice(i, 1);
       }

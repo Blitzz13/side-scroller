@@ -1,4 +1,4 @@
-﻿export interface IEnemyVoicePool {
+export interface IEnemyVoicePool {
   /** Voice lines triggered when player is spotted / in line of sight */
   spotted?: string[];
   /** Voice lines triggered when player is close but not seen */
@@ -29,8 +29,11 @@ export interface IEnemyVoicelineConfig {
   /** Minimum interval in milliseconds between "I hear something" voicelines per enemy (default: 10000ms) */
   suspiciousCooldown: number;
 
-  /** Minimum interval in milliseconds between grenade reaction voicelines (default: 1200ms) */
+  /** Minimum interval in milliseconds between grenade reaction voicelines per enemy (default: 8000ms) */
   grenadeCooldown: number;
+
+  /** Global minimum interval in milliseconds between any grenade reaction voicelines across all enemies (default: 4000ms) */
+  globalGrenadeCooldown?: number;
 
   /** Enable distance-based spatial volume attenuation so closer enemies sound louder (default: true) */
   enableSpatialAudio?: boolean;

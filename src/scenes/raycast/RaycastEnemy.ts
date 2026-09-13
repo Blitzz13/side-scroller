@@ -33,6 +33,7 @@ export class RaycastEnemy {
   public wasSeeingPlayer: boolean = false;
   public lastSpottedTime: number = 0;
   public lastSuspiciousTime: number = 0;
+  public lastGrenadeTime: number = 0;
 
   // Target tracking & repositioning
   public lastKnownPlayerX: number = 0;

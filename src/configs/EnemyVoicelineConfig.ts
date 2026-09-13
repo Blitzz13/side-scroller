@@ -50,7 +50,8 @@ export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
   grenadeHearingRange: 25.0,
   spottedCooldown: 7000,
   suspiciousCooldown: 10000,
-  grenadeCooldown: 1200,
+  grenadeCooldown: 8000,
+  globalGrenadeCooldown: 4000,
   enableSpatialAudio: true,
   minSpatialVolume: 0.5,
 

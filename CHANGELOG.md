@@ -2,6 +2,49 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-13] - Imperial Officer & Commando Implementation, 8-Way Directional Animation, and Voiceline Audio System Overhaul
+
+### 1. Imperial Officer Enemy Implementation
+- **Enemy Configuration & Combat Stats** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added full support and configuration for the Imperial Officer (`RaycastEnemyType.IMPERIAL_OFFICER = "imperial_officer"`).
+  - Configured combat attributes: 40 HP, speed `0.02`, sight range `12`, attack range `6.0`, min engagement distance `2.2`, rate of fire `750ms`, damage `10`, accuracy `0.7`, sprite scale `0.7`, and reference height `69`.
+  - Configured DH-17 blaster drops (`RaycastWeaponType.DH17`, 20 ammo, 100% drop chance) upon death.
+  - Wired spritesheet animations (`assets/raycast/enemies/implerial_officer.json`) with 8-directional walking, standing, shooting, and 7-frame death animation sequence.
+  - Updated level tileset metadata in [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx) and [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json) to spawn officers via Tiled map data.
+
+### 2. Imperial Commando Enemy Implementation
+- **Enemy Configuration & Combat Stats** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts), [`assets/raycast/enemies/imperial_commando.json`](file:///D:/Projects/side-scroller/assets/raycast/enemies/imperial_commando.json)):
+  - Added configuration for the Imperial Commando (`RaycastEnemyType.IMPERIAL_COMMANDO = "imperial_commando"`).
+  - Configured combat attributes: 45 HP, reference height `73`, scale `0.7`, DH-17 blaster drop (`20` ammo, 100% chance), and shooting/death animations mapped to `shoot` and `death_1` prefixes.
+  - Linked tileset metadata in `StarWarsTileset.tsx` and `test_level.json` for spawning commando units.
+
+### 3. Audio Consolidation & Expanded Voiceline Library
+- **Shared Audio Assets & Bundle Registration** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Consolidated officer and commando audio files into `assets/raycast/sfx/imperial_officer_commando/`.
+  - Added and registered 6 new audio tracks:
+    - Spotted: `office_commando_stop_now.mp3`, `officer_commando_throw_down_your_weapons.mp3`
+    - Suspicious / Search: `officer_commando_he_must_be_here.mp3`, `officer_commando_no_use_hiding.mp3`, `officer_commando_show_yourself.mp3`
+    - Grenade Reaction: `officer_commando_fall_back.mp3`
+  - Configured shared `defaultImperialOfficerVoicePool` covering `imperial_officer` and `imperial_commando` enemy types with fallback support in `RaycastEnemyManager.ENEMY_SFX_REGISTRY`.
+
+### 4. 8-Way Directional Sprite & Diagonal Animation Jitter Fix
+- **Angle Calculation & Hysteresis Smoothing** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Fixed an issue where enemies walking sideways played mirrored or inverted directional sprites (e.g. facing left while walking right).
+  - Corrected relative view-angle calculation between enemy orientation/movement vector and camera line of sight.
+  - Fixed rapid oscillation and animation jitter when enemies navigate diagonally towards the player, ensuring smooth transitions across 8 directional animation buckets (`towards`, `towards_left`, `towards_right`, `left`, `right`, `away`, `away_left`, `away_right`).
+
+### 5. Grenade Voiceline Validation, Cooldowns & Numeric Enum Refactor
+- **Phantom Voiceline Bug Fix & Range Guard** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Fixed a bug where `"grenade, grenade"` shouted out of thin air when no alive enemies were present or within hearing range.
+  - `onPlayerThrowGrenade()` now strictly verifies alive enemy candidates (`!enemy.isDead && enemy.health > 0`), enforces `grenadeHearingRange` (25 tiles), and ensures the candidate's pool actually contains grenade reaction lines (preventing droids from shouting human lines).
+  - Added distance falloff spatial audio for grenade voicelines so distant shouts sound appropriately positioned in 3D space.
+- **Per-Enemy & Global Grenade Cooldowns** ([`src/configs/interfaces/IEnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IEnemyVoicelineConfig.ts), [`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Added `lastGrenadeTime` to `RaycastEnemy` and configured per-enemy cooldown (`grenadeCooldown = 8000ms`), preventing individual enemies from shouting repeatedly on rapid grenade throws.
+  - Introduced `globalGrenadeCooldown` (`4000ms`) to enforce global pacing between any grenade reactions across all enemies on the map.
+- **Numeric Voiceline Category Enum** ([`src/enums/VoicelineCategory.ts`](file:///D:/Projects/side-scroller/src/enums/VoicelineCategory.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Created numeric enum `VoicelineCategory` (`SUSPICIOUS = 0`, `SPOTTED = 1`, `GRENADE = 2`).
+  - Replaced string union types throughout `EnemyVoicelineManager` for `QueuedVoiceline.category` and `ActiveSoundHandle.category`.
+
 ## [2026-09-08] - Viper Probe Droid Integration, Hovering Physics & Depth Sorting Fix
 
 ### 1. Viper Probe Droid Enemy Implementation
