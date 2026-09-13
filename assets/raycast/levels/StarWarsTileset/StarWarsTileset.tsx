@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="24" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="25" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -143,5 +143,8 @@
  </tile>
  <tile id="23">
   <image source="assets/raycast/enemies/implerial_officer.png" width="35" height="69"/>
+ </tile>
+ <tile id="24">
+  <image source="assets/raycast/enemies/imperial_commando.png" width="31" height="73"/>
  </tile>
 </tileset>

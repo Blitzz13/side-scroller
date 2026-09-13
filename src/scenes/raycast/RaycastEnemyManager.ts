@@ -50,6 +50,12 @@ export class RaycastEnemyManager {
     officer_commando_damage: "assets/raycast/sfx/imperial_officer_commando/officer_commando_damage.mp3",
     stop_right_there_scum: "assets/raycast/sfx/imperial_officer_commando/stop_right_there_scum.mp3",
     troopers_blast_him: "assets/raycast/sfx/imperial_officer_commando/troopers_blast_him.mp3",
+    office_commando_stop_now: "assets/raycast/sfx/imperial_officer_commando/office_commando_stop_now.mp3",
+    officer_commando_fall_back: "assets/raycast/sfx/imperial_officer_commando/officer_commando_fall_back.mp3",
+    officer_commando_he_must_be_here: "assets/raycast/sfx/imperial_officer_commando/officer_commando_he_must_be_here.mp3",
+    officer_commando_no_use_hiding: "assets/raycast/sfx/imperial_officer_commando/officer_commando_no_use_hiding.mp3",
+    officer_commando_show_yourself: "assets/raycast/sfx/imperial_officer_commando/officer_commando_show_yourself.mp3",
+    officer_commando_throw_down_your_weapons: "assets/raycast/sfx/imperial_officer_commando/officer_commando_throw_down_your_weapons.mp3",
   };
 
   constructor(container: Container) {
@@ -178,6 +184,9 @@ export class RaycastEnemyManager {
           if (imgLower.includes("officer")) {
             return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_OFFICER];
           }
+          if (imgLower.includes("commando")) {
+            return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_COMMANDO];
+          }
           if (imgLower.includes("storm") || imgLower.includes("trooper")) {
             return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
           }
@@ -217,6 +226,9 @@ export class RaycastEnemyManager {
               }
               if (imgLower.includes("officer")) {
                 return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_OFFICER];
+              }
+              if (imgLower.includes("commando")) {
+                return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_COMMANDO];
               }
               if (imgLower.includes("storm") || imgLower.includes("trooper")) {
                 return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];

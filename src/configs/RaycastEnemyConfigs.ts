@@ -198,9 +198,17 @@ export const imperialOfficerConfig: IRaycastEnemyConfig = {
   coverClearanceOffset: 1.5,
   stepOutFrames: 30,
   voicelines: {
-    spotted: ["stop_right_there_scum", "troopers_blast_him"],
-    suspicious: ["stop_right_there_scum"],
-    grenade: [],
+    spotted: [
+      "officer_commando_fall_back",
+      "office_commando_stop_now",
+      "officer_commando_throw_down_your_weapons",
+    ],
+    suspicious: [
+      "officer_commando_he_must_be_here",
+      "officer_commando_no_use_hiding",
+      "officer_commando_show_yourself",
+    ],
+    grenade: ["officer_commando_fall_back"],
   },
   animationConfig: {
     walkingPrefix: "walking",
@@ -209,6 +217,85 @@ export const imperialOfficerConfig: IRaycastEnemyConfig = {
     deathPrefix: "death_1",
     shootingAnimation: {
       prefix: "shooting",
+      count: 2,
+      speed: 0.16,
+      loop: false,
+    },
+    deathAnimation: {
+      prefix: "death_1",
+      count: 7,
+      speed: 0.14,
+      loop: false,
+    },
+  },
+};
+
+const imperialCommandoPainSounds: ISoundConfig[] = [
+  {
+    src: "officer_commando_damage",
+    loop: false,
+    volume: 0.8,
+  },
+];
+
+const imperialCommandoDeathSounds: ISoundConfig[] = [
+  {
+    src: "imperial_officer_death",
+    loop: false,
+    volume: 0.9,
+  },
+];
+
+const imperialCommandoAttackSounds: ISoundConfig[] = [
+  {
+    src: "dh_17_blaster",
+    loop: false,
+    volume: 0.25,
+  },
+];
+
+export const imperialCommandoConfig: IRaycastEnemyConfig = {
+  type: RaycastEnemyType.IMPERIAL_COMMANDO,
+  name: "Imperial Commando",
+  maxHealth: 45,
+  speed: 0.02,
+  sightRange: 12,
+  attackRange: 6.0,
+  minDistance: 2.2,
+  rateOfFire: 750,
+  damage: 10,
+  accuracy: 0.7,
+  scale: 0.7,
+  referenceHeight: 73,
+  spritesheet: "assets/raycast/enemies/imperial_commando.json",
+  dropWeapon: RaycastWeaponType.DH17,
+  dropAmmo: 20,
+  dropChance: 1.0,
+  painSounds: imperialCommandoPainSounds,
+  deathSounds: imperialCommandoDeathSounds,
+  attackSounds: imperialCommandoAttackSounds,
+  shoulderOffset: 0.35,
+  coverClearanceOffset: 1.5,
+  stepOutFrames: 30,
+  voicelines: {
+    spotted: [
+      "office_commando_stop_now",
+      "officer_commando_throw_down_your_weapons",
+    ],
+    suspicious: [
+      "officer_commando_he_must_be_here",
+      "officer_commando_no_use_hiding",
+      "officer_commando_show_yourself",
+    ],
+    grenade: ["officer_commando_fall_back"],
+  },
+  animationConfig: {
+    walkingPrefix: "walking",
+    standingPrefix: "standing",
+    shootingPrefix: "shoot",
+    deathPrefix: "death_1",
+    shootingAnimation: {
+      prefix: "shoot",
       count: 2,
       speed: 0.16,
       loop: false,
@@ -231,6 +318,7 @@ export const raycastEnemyConfigs: Record<RaycastEnemyType, IRaycastEnemyConfig> 
   [RaycastEnemyType.STORMTROOPER]: stormtrooperConfig,
   [RaycastEnemyType.VIPER_DROID]: viperDroidRaycastConfig,
   [RaycastEnemyType.IMPERIAL_OFFICER]: imperialOfficerConfig,
+  [RaycastEnemyType.IMPERIAL_COMMANDO]: imperialCommandoConfig,
 };
 
 export function getRaycastEnemyConfig(
@@ -248,7 +336,8 @@ export function getRaycastEnemyConfig(
       typeStr === normalized ||
       nameStr.includes(normalized) ||
       normalized.includes(typeStr) ||
-      (normalized.includes("officer") && typeStr.includes("officer"))
+      (normalized.includes("officer") && typeStr.includes("officer")) ||
+      (normalized.includes("commando") && typeStr.includes("commando"))
     ) {
       return cfg;
     }

@@ -28,9 +28,18 @@ export const defaultViperDroidVoicePool: IEnemyVoicePool = {
 };
 
 export const defaultImperialOfficerVoicePool: IEnemyVoicePool = {
-  spotted: ["stop_right_there_scum", "troopers_blast_him"],
-  suspicious: [],
-  grenade: [],
+  spotted: [
+    "stop_right_there_scum",
+    "troopers_blast_him",
+    "office_commando_stop_now",
+    "officer_commando_throw_down_your_weapons",
+  ],
+  suspicious: [
+    "officer_commando_he_must_be_here",
+    "officer_commando_no_use_hiding",
+    "officer_commando_show_yourself",
+  ],
+  grenade: ["officer_commando_fall_back"],
 };
 
 export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
@@ -60,6 +69,12 @@ export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
     probe_droid_voice_8: "assets/raycast/sfx/viper_droid/probe_droid_voice_8.mp3",
     stop_right_there_scum: "assets/raycast/sfx/imperial_officer_commando/stop_right_there_scum.mp3",
     troopers_blast_him: "assets/raycast/sfx/imperial_officer_commando/troopers_blast_him.mp3",
+    office_commando_stop_now: "assets/raycast/sfx/imperial_officer_commando/office_commando_stop_now.mp3",
+    officer_commando_fall_back: "assets/raycast/sfx/imperial_officer_commando/officer_commando_fall_back.mp3",
+    officer_commando_he_must_be_here: "assets/raycast/sfx/imperial_officer_commando/officer_commando_he_must_be_here.mp3",
+    officer_commando_no_use_hiding: "assets/raycast/sfx/imperial_officer_commando/officer_commando_no_use_hiding.mp3",
+    officer_commando_show_yourself: "assets/raycast/sfx/imperial_officer_commando/officer_commando_show_yourself.mp3",
+    officer_commando_throw_down_your_weapons: "assets/raycast/sfx/imperial_officer_commando/officer_commando_throw_down_your_weapons.mp3",
   },
 
   voicePools: {
@@ -69,6 +84,9 @@ export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
     imperial_officer: defaultImperialOfficerVoicePool,
     imperialofficer: defaultImperialOfficerVoicePool,
     officer: defaultImperialOfficerVoicePool,
+    imperial_commando: defaultImperialOfficerVoicePool,
+    imperialcommando: defaultImperialOfficerVoicePool,
+    commando: defaultImperialOfficerVoicePool,
   },
 
   defaultVoicePool,

@@ -45,6 +45,9 @@ export class RaycastEnemy {
   public stuckFrames: number = 0;
   public stepOutFrames: number = 0;
   public currentVOffset: number = 0;
+  public clearanceDir: number = 0;
+  public clearanceTimer: number = 0;
+  private lastAnimDir: string = "";
 
   // Sound instance tracking to allow immediate stopping on death
   public onDeathCallback?: (enemy: RaycastEnemy) => void;
@@ -237,7 +240,9 @@ export class RaycastEnemy {
       death_2: getFrames(deathPrefix.replace("_1", "_2"), deathCount),
 
       // 5. Optional damage / hit reaction pose
-      ...((texs["damage.png"] || texs["damage"]) ? { damage: getSingle("damage") } : {}),
+      ...((texs["damage.png"] || texs["damage"] || texs["damage_1.png"] || texs["damage_1"])
+        ? { damage: (texs["damage.png"] || texs["damage"]) ? getSingle("damage") : getFrames("damage", 2) }
+        : {}),
     };
 
     const initialTextures = this.animations.standing_towards || [Texture.WHITE];
@@ -351,10 +356,12 @@ export class RaycastEnemy {
     if (tryMoveEnemy(this, this.x + baseDirX * speed, this.y)) {
       this.stuckFrames = 0;
       this.dirX = baseDirX;
+      this.dirY = 0;
       return true;
     }
     if (tryMoveEnemy(this, this.x, this.y + baseDirY * speed)) {
       this.stuckFrames = 0;
+      this.dirX = 0;
       this.dirY = baseDirY;
       return true;
     }
@@ -385,10 +392,12 @@ export class RaycastEnemy {
       if (tryMoveEnemy(this, this.x + testDirX * speed, this.y)) {
         this.stuckFrames = 0;
         this.dirX = testDirX;
+        this.dirY = 0;
         return true;
       }
       if (tryMoveEnemy(this, this.x, this.y + testDirY * speed)) {
         this.stuckFrames = 0;
+        this.dirX = 0;
         this.dirY = testDirY;
         return true;
       }
@@ -490,8 +499,8 @@ export class RaycastEnemy {
     }
 
     if (dist > 0.001) {
-      // Face towards player when active and visible
-      if (this.state !== "idle" && (los || !this.isMoving)) {
+      // Face towards player when active and not actively moving
+      if (this.state !== "idle" && !this.isMoving) {
         this.dirX = dx / dist;
         this.dirY = dy / dist;
       }
@@ -514,14 +523,27 @@ export class RaycastEnemy {
         let tx = playerX;
         let ty = playerY;
 
+        if (this.clearanceTimer > 0) {
+          this.clearanceTimer = Math.max(0, this.clearanceTimer - delta);
+        }
+
         if (los) {
-          // If we see player but are partially covered behind a corner, steer towards the clear shoulder
+          // If we see player but are partially covered behind a corner, steer smoothly towards the clear shoulder
           if (!losLeft && losRight) {
-            tx = this.x + perpX * clearanceMultiplier + dirToPlayerX * 0.8;
-            ty = this.y + perpY * clearanceMultiplier + dirToPlayerY * 0.8;
+            this.clearanceDir = 1;
+            this.clearanceTimer = 20;
           } else if (losLeft && !losRight) {
-            tx = this.x - perpX * clearanceMultiplier + dirToPlayerX * 0.8;
-            ty = this.y - perpY * clearanceMultiplier + dirToPlayerY * 0.8;
+            this.clearanceDir = -1;
+            this.clearanceTimer = 20;
+          } else if (losLeft && losRight && this.clearanceTimer <= 0) {
+            this.clearanceDir = 0;
+          }
+
+          if (this.clearanceTimer > 0 && this.clearanceDir !== 0) {
+            // Diagonal steering: blend forward and lateral clearance at balanced 45-degree angle
+            const steerLateral = 0.95 * this.clearanceDir;
+            tx = this.x + (perpX * steerLateral + dirToPlayerX) * 1.5;
+            ty = this.y + (perpY * steerLateral + dirToPlayerY) * 1.5;
           } else {
             tx = playerX;
             ty = playerY;
@@ -704,34 +726,34 @@ export class RaycastEnemy {
 
     const deg = (diff * 180) / Math.PI;
 
-    let dirName: string;
-    let flipX = false;
+    // Direction hysteresis to prevent rapid flickering at sector boundaries
+    const hysteresis = 5.0;
+    const isDiag = this.lastAnimDir.includes("diagonal");
+    const isTowards = this.lastAnimDir === "towards";
+    const isLeft = this.lastAnimDir === "left";
+    const isAway = this.lastAnimDir === "away";
 
-    if (Math.abs(deg) < 22.5) {
+    const towardsBound = isTowards ? 22.5 + hysteresis : isDiag ? 22.5 - hysteresis : 22.5;
+    const leftBound = isLeft ? 67.5 - hysteresis : isDiag ? 67.5 + hysteresis : 67.5;
+    const awayBound = isAway ? 157.5 - hysteresis : isDiag ? 157.5 + hysteresis : 157.5;
+
+    const absDeg = Math.abs(deg);
+
+    let dirName: string;
+    if (absDeg < towardsBound) {
       dirName = "towards";
-    } else if (deg >= 22.5 && deg < 67.5) {
+    } else if (absDeg < leftBound) {
       dirName = "towards_left_diagonal";
-      flipX = false;
-    } else if (deg <= -22.5 && deg > -67.5) {
-      dirName = "towards_left_diagonal";
-      flipX = true;
-    } else if (deg >= 67.5 && deg < 112.5) {
+    } else if (absDeg < awayBound) {
       dirName = "left";
-      flipX = false;
-    } else if (deg <= -67.5 && deg > -112.5) {
-      dirName = "left";
-      flipX = true;
-    } else if (deg >= 112.5 && deg < 157.5) {
+    } else if (absDeg < 165) {
       dirName = "away_left_diagonal";
-      flipX = false;
-    } else if (deg <= -112.5 && deg > -157.5) {
-      dirName = "away_left_diagonal";
-      flipX = true;
     } else {
       dirName = "away";
     }
 
-    this.isFlipped = flipX;
+    this.lastAnimDir = dirName;
+    this.isFlipped = dirName !== "towards" && dirName !== "away" && deg < 0;
 
     if (this.state === "chase" && this.isMoving) {
       this.playAnimation(`walking_${dirName}`, true, 0.16);
@@ -746,13 +768,22 @@ export class RaycastEnemy {
     const textures = this.animations[key];
     if (!textures || textures.length === 0) return;
 
+    const prevFrame = this.animatedSprite.currentFrame;
+    const wasWalking = this.currentAnimKey.startsWith("walking_");
+    const isWalking = key.startsWith("walking_");
+
     this.currentAnimKey = key;
     this.animatedSprite.textures = textures;
     this.animatedSprite.loop = loop;
     this.animatedSprite.animationSpeed = speed;
 
     if (textures.length > 1) {
-      this.animatedSprite.gotoAndPlay(0);
+      if (wasWalking && isWalking) {
+        const nextFrame = prevFrame % textures.length;
+        this.animatedSprite.gotoAndPlay(nextFrame);
+      } else {
+        this.animatedSprite.gotoAndPlay(0);
+      }
     } else {
       this.animatedSprite.gotoAndStop(0);
     }

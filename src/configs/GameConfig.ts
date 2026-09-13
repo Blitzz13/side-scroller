@@ -200,6 +200,30 @@ export const manifest: AssetsManifest = {
           {
             alias: "troopers_blast_him",
             src: "./assets/raycast/sfx/imperial_officer_commando/troopers_blast_him.mp3"
+          },
+          {
+            alias: "office_commando_stop_now",
+            src: "./assets/raycast/sfx/imperial_officer_commando/office_commando_stop_now.mp3"
+          },
+          {
+            alias: "officer_commando_fall_back",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_fall_back.mp3"
+          },
+          {
+            alias: "officer_commando_he_must_be_here",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_he_must_be_here.mp3"
+          },
+          {
+            alias: "officer_commando_no_use_hiding",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_no_use_hiding.mp3"
+          },
+          {
+            alias: "officer_commando_show_yourself",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_show_yourself.mp3"
+          },
+          {
+            alias: "officer_commando_throw_down_your_weapons",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_throw_down_your_weapons.mp3"
           }
         ]
       },
@@ -302,6 +326,10 @@ export const manifest: AssetsManifest = {
           {
             name: "imperial_officer",
             src: "./assets/raycast/enemies/implerial_officer.json",
+          },
+          {
+            name: "imperial_commando",
+            src: "./assets/raycast/enemies/imperial_commando.json",
           }
         ],
       },
