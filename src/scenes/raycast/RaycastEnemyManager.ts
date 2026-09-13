@@ -46,10 +46,10 @@ export class RaycastEnemyManager {
     stormtrooper_rebel_scum: "assets/raycast/sfx/storm_trooper/rebel_scum.mp3",
     stormtrooper_there_he_is: "assets/raycast/sfx/storm_trooper/there_he_is.mp3",
     dh_17_blaster: "assets/sounds/dh_17_blaster.mp3",
-    imperial_officer_death: "assets/raycast/sfx/imperial_officer/imperial_officer_death.mp3",
-    officer_commando_damage: "assets/raycast/sfx/imperial_officer/officer_commando_damage.mp3",
-    stop_right_there_scum: "assets/raycast/sfx/imperial_officer/stop_right_there_scum.mp3",
-    troopers_blast_him: "assets/raycast/sfx/imperial_officer/troopers_blast_him.mp3",
+    imperial_officer_death: "assets/raycast/sfx/imperial_officer_commando/imperial_officer_death.mp3",
+    officer_commando_damage: "assets/raycast/sfx/imperial_officer_commando/officer_commando_damage.mp3",
+    stop_right_there_scum: "assets/raycast/sfx/imperial_officer_commando/stop_right_there_scum.mp3",
+    troopers_blast_him: "assets/raycast/sfx/imperial_officer_commando/troopers_blast_him.mp3",
   };
 
   constructor(container: Container) {
