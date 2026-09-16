@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="1920" tileheight="1920" tilecount="25" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="27" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -146,5 +146,19 @@
  </tile>
  <tile id="24">
   <image source="assets/raycast/enemies/imperial_commando.png" width="31" height="73"/>
+ </tile>
+ <tile id="25" type="Tile">
+  <properties>
+   <property name="stairType" value="up"/>
+   <property name="tileType" propertytype="TileType" value="stairs"/>
+  </properties>
+  <image source="assets/raycast/textures/stairs_up.jpg" width="2048" height="2048"/>
+ </tile>
+ <tile id="26" type="Tile">
+  <properties>
+   <property name="stairType" value="down"/>
+   <property name="tileType" propertytype="TileType" value="stairs"/>
+  </properties>
+  <image source="assets/raycast/textures/stairs_down.png" width="2048" height="2048"/>
  </tile>
 </tileset>

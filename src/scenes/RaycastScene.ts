@@ -28,6 +28,7 @@ import { RaycastEnemyManager } from "./raycast/RaycastEnemyManager";
 import { DestructableWallManager } from "./raycast/DestructableWallManager";
 import { ThermalDetonatorManager } from "./raycast/ThermalDetonatorManager";
 import { RaycastLaserManager } from "./raycast/RaycastLaserManager";
+import { RaycastStairsManager } from "./raycast/RaycastStairsManager";
 import { RaycastWeaponType } from "../enums/RaycastWeaponType";
 import { RaycastPickupType } from "../enums/RaycastPickupType";
 import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
@@ -77,6 +78,7 @@ export class RaycastScene extends BaseScene {
   private textures: Record<number, Texture> = {};
   private columnTextures: Record<number, Texture[]> = {};
   private moveSpeed: number = 0.02;
+  private playerRadius: number = 0.28;
   private rotSpeed: number = 0.05;
   private mouseSensitivity: number = 0.002;
   private map: number[][];
@@ -203,6 +205,7 @@ export class RaycastScene extends BaseScene {
   private detonatorManager!: ThermalDetonatorManager;
   private laserContainer!: Container;
   private laserManager!: RaycastLaserManager;
+  private stairsManager!: RaycastStairsManager;
   private shakeIntensity: number = 0;
   private shakeDuration: number = 0;
   private lockedDoors: Record<string, string> = {};
@@ -213,6 +216,7 @@ export class RaycastScene extends BaseScene {
 
   constructor(stage: Container, scale: number, level: string = "test_level") {
     super(stage, scale);
+    this.sortableChildren = true;
 
     this.map = [];
     this.floorMap = [];
@@ -392,6 +396,7 @@ export class RaycastScene extends BaseScene {
     this.pickupManager = new RaycastPickupManager(this.animatedPickupContainer);
     this.breakableManager = new RaycastBreakableManager();
     this.destructableWallManager = new DestructableWallManager();
+    this.stairsManager = new RaycastStairsManager(this as any);
 
     // Overlay mobile on-screen controls (only on mobile devices)
     if (this.isMobileDevice()) {
@@ -549,6 +554,11 @@ export class RaycastScene extends BaseScene {
         { id: 19, image: "shield_unit.png", type: "PickupItem", properties: [{ name: "amount", value: 25 }, { name: "type", value: "shield" }] },
         { id: 20, image: "assets/raycast/textures/computer_panel_destroyed.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
         { id: 21, image: "assets/raycast/textures/computer_panel.jpg", type: "DestructableWall", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 22, image: "assets/raycast/enemies/viper_droid_default_1.png", type: "Tile" },
+        { id: 23, image: "assets/raycast/enemies/implerial_officer.png", type: "Tile" },
+        { id: 24, image: "assets/raycast/enemies/imperial_commando.png", type: "Tile" },
+        { id: 25, image: "assets/raycast/textures/stairs_up.png", type: "Tile", properties: [{ name: "tileType", value: "stairs" }, { name: "stairType", value: "up" }] },
+        { id: 26, image: "assets/raycast/textures/stairs_down.png", type: "Tile", properties: [{ name: "tileType", value: "stairs" }, { name: "stairType", value: "down" }] },
       ];
     }
   }
@@ -758,7 +768,16 @@ export class RaycastScene extends BaseScene {
           .then((texture) => {
             this.textures[parseInt(tileId)] = texture;
           })
-          .catch((err) => console.error(`Failed to load ${fileName}:`, err));
+          .catch((err) => {
+            console.error(`Failed to load ${fileName}:`, err);
+            if (fileName.includes("stairs_up")) {
+              return Assets.load("assets/raycast/textures/stairs_up.jpg")
+                .then((t) => {
+                  this.textures[parseInt(tileId)] = t;
+                })
+                .catch(() => {});
+            }
+          });
       }
     );
     await Promise.all(texturePromises);
@@ -1205,6 +1224,11 @@ export class RaycastScene extends BaseScene {
     );
     this.mapObjects = this.pickupManager.getVisibleMapObjects();
 
+    // Parse stairs and integrate them into the map collision & raycast grid
+    if (this.stairsManager) {
+      this.stairsManager.parseMapStairs(mapData, firstgid, this.tileMeta);
+    }
+
     // --- Performance: Flatten jagged arrays into typed arrays ---
     const totalCells = this.mapHeight * this.mapWidth;
     this.mapFlat = new Int32Array(totalCells);
@@ -1572,6 +1596,9 @@ export class RaycastScene extends BaseScene {
     if (this.playerController) {
       this.playerController.dispose();
     }
+    if (this.stairsManager) {
+      this.stairsManager.destroy();
+    }
     if (this.entityContainer && !(this.entityContainer as any).destroyed) {
       this.entityContainer.removeChildren();
       this.entityContainer.destroy({ children: true });
@@ -1722,6 +1749,7 @@ export class RaycastScene extends BaseScene {
   };
 
   private tryShoot(isAutoFire: boolean = false): void {
+    if (this.stairsManager && this.stairsManager.isTransitioning()) return;
     const currentCfg = this.playerController.weaponConfig;
     if (!currentCfg) return;
 
@@ -1960,6 +1988,9 @@ export class RaycastScene extends BaseScene {
 
     this.updatePlayer(delta);
     this.updateDoors(delta);
+    if (this.stairsManager) {
+      this.stairsManager.update(delta);
+    }
     this.pickupManager.update(delta);
 
     // Build allThinWalls into reusable array without concat allocations
@@ -2048,6 +2079,7 @@ export class RaycastScene extends BaseScene {
   }
 
   private updatePlayer(delta: number) {
+    if (this.stairsManager && this.stairsManager.isTransitioning()) return;
     const moveSpeed = this.moveSpeed * delta;
 
     // Mobile joystick input
@@ -2063,6 +2095,12 @@ export class RaycastScene extends BaseScene {
       if (this.tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
+      } else {
+        if (this.tryMove(newX, this.player.y)) {
+          this.player.x = newX;
+        } else if (this.tryMove(this.player.x, newY)) {
+          this.player.y = newY;
+        }
       }
     } else if (this.keys.s || joyY > 0.15) {
       const intensity = this.keys.s ? 1 : Math.min(1, joyY);
@@ -2071,6 +2109,12 @@ export class RaycastScene extends BaseScene {
       if (this.tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
+      } else {
+        if (this.tryMove(newX, this.player.y)) {
+          this.player.x = newX;
+        } else if (this.tryMove(this.player.x, newY)) {
+          this.player.y = newY;
+        }
       }
     }
 
@@ -2093,6 +2137,12 @@ export class RaycastScene extends BaseScene {
       if (this.tryMove(newX, newY)) {
         this.player.x = newX;
         this.player.y = newY;
+      } else {
+        if (this.tryMove(newX, this.player.y)) {
+          this.player.x = newX;
+        } else if (this.tryMove(this.player.x, newY)) {
+          this.player.y = newY;
+        }
       }
     }
 
@@ -2106,18 +2156,49 @@ export class RaycastScene extends BaseScene {
   }
 
   private tryMove(newX: number, newY: number): boolean {
-    const targetX = Math.floor(newX);
-    const targetY = Math.floor(newY);
-    if (targetX < 0 || targetX >= this.mapWidth || targetY < 0 || targetY >= this.mapHeight) {
+    const r = this.playerRadius;
+
+    // Bounds check with radius
+    if (
+      newX - r < 0 ||
+      newX + r >= this.mapWidth ||
+      newY - r < 0 ||
+      newY + r >= this.mapHeight
+    ) {
       return false;
     }
 
-    const flatIdx = targetY * this.mapWidth + targetX;
-    const tile = this.mapFlat[flatIdx];
-    const isDoorOpen =
-      this.tileTypeFlags[flatIdx] === RaycastScene.TILE_DOOR &&
-      Math.abs(this.doorStatesFlat[flatIdx]) >= 0.7;
+    // Check all tiles overlapped by player collision circle
+    const minTileX = Math.floor(newX - r);
+    const maxTileX = Math.floor(newX + r);
+    const minTileY = Math.floor(newY - r);
+    const maxTileY = Math.floor(newY + r);
 
+    for (let gy = minTileY; gy <= maxTileY; gy++) {
+      for (let gx = minTileX; gx <= maxTileX; gx++) {
+        const flatIdx = gy * this.mapWidth + gx;
+        const tile = this.mapFlat[flatIdx];
+
+        if (tile !== 0) {
+          const isDoorOpen =
+            this.tileTypeFlags[flatIdx] === RaycastScene.TILE_DOOR &&
+            Math.abs(this.doorStatesFlat[flatIdx]) >= 0.7;
+
+          if (!isDoorOpen) {
+            // Circle-to-AABB distance check to ensure player stays at least `r` distance away from wall faces and corners
+            const clampX = Math.max(gx, Math.min(newX, gx + 1));
+            const clampY = Math.max(gy, Math.min(newY, gy + 1));
+            const dx = newX - clampX;
+            const dy = newY - clampY;
+            if (dx * dx + dy * dy < r * r) {
+              return false;
+            }
+          }
+        }
+      }
+    }
+
+    // Thin walls collision check with radius
     for (let i = 0; i < this.thinWalls.length; i++) {
       const wall = this.thinWalls[i];
       const minX = Math.min(wall.x1, wall.x2);
@@ -2125,24 +2206,30 @@ export class RaycastScene extends BaseScene {
       const minY = Math.min(wall.y1, wall.y2);
       const maxY = Math.max(wall.y1, wall.y2);
       if (
-        newX >= minX - 0.1 &&
-        newX <= maxX + 0.1 &&
-        newY >= minY - 0.1 &&
-        newY <= maxY + 0.1
+        newX + r >= minX &&
+        newX - r <= maxX &&
+        newY + r >= minY &&
+        newY - r <= maxY
       ) {
         return false;
       }
     }
 
-    if (this.destructableWallManager && this.destructableWallManager.checkCollision(newX, newY)) {
+    if (
+      this.destructableWallManager &&
+      this.destructableWallManager.checkCollision(newX, newY, r)
+    ) {
       return false;
     }
 
-    if (this.breakableManager && this.breakableManager.checkCollision(newX, newY)) {
+    if (
+      this.breakableManager &&
+      this.breakableManager.checkCollision(newX, newY, r)
+    ) {
       return false;
     }
 
-    return tile === 0 || isDoorOpen;
+    return true;
   }
 
   private updateDoors(delta: number) {
@@ -2167,17 +2254,29 @@ export class RaycastScene extends BaseScene {
   }
 
   private tryOpenDoor() {
+    if (this.stairsManager && this.stairsManager.isTransitioning()) return;
+
     const px = Math.floor(this.player.x);
     const py = Math.floor(this.player.y);
-    const lookX = Math.floor(this.player.x + this.player.dirX * 0.85);
-    const lookY = Math.floor(this.player.y + this.player.dirY * 0.85);
+    const lookX = Math.floor(this.player.x + this.player.dirX * 1.1);
+    const lookY = Math.floor(this.player.y + this.player.dirY * 1.1);
 
-    // Prioritize cell directly in front of player
+    // 1. Prioritize stairs if player is facing them
+    if (this.stairsManager && this.stairsManager.tryInteractStairs(lookX, lookY)) {
+      return;
+    }
+
+    // 2. Prioritize cell directly in front of player for doors
     if (this.checkAndInteractDoor(lookX, lookY)) {
       return;
     }
 
-    // Check adjacent cells
+    // 3. Check adjacent cells for stairs
+    if (this.stairsManager && this.stairsManager.tryInteractNearbyStairs(this.player.x, this.player.y)) {
+      return;
+    }
+
+    // 4. Check adjacent cells for doors
     for (let i = 0; i < RaycastScene.NEARBY_OFFSETS.length; i++) {
       const off = RaycastScene.NEARBY_OFFSETS[i];
       const x = px + off[0];
@@ -2652,7 +2751,7 @@ export class RaycastScene extends BaseScene {
           if (ray.doorSlide === DoorOpen.UP) {
             // Vertical sliding door is opening/open: uncovering from bottom up!
             if (open > 0.01) {
-              const dLineH = screenH / ray.distance;
+              const dLineH = screenH / Math.max(0.2, ray.distance);
               const dFloorY = dLineH / 2 + screenH / 2;
               const dTop = -dLineH / 2 + screenH / 2;
               const doorPanelBottom = Math.max(dTop, dFloorY - open * dLineH);
@@ -2668,7 +2767,7 @@ export class RaycastScene extends BaseScene {
               maxDrawEnd = Math.max(maxDrawEnd, doorPanelBottom);
             } else {
               // Door is fully closed, it acts exactly like a solid wall
-              const lineHeight = screenH / ray.distance;
+              const lineHeight = screenH / Math.max(0.2, ray.distance);
               const drawStart = -lineHeight / 2 + screenH / 2;
               const drawEnd = lineHeight / 2 + screenH / 2;
               minDrawStart = Math.min(minDrawStart, drawStart);
@@ -2677,7 +2776,7 @@ export class RaycastScene extends BaseScene {
           } else {
             // Horizontal door handling
             if (open < 0.05) {
-              const lineHeight = screenH / ray.distance;
+              const lineHeight = screenH / Math.max(0.2, ray.distance);
               const drawStart = -lineHeight / 2 + screenH / 2;
               const drawEnd = lineHeight / 2 + screenH / 2;
               minDrawStart = Math.min(minDrawStart, drawStart);
@@ -2686,7 +2785,7 @@ export class RaycastScene extends BaseScene {
           }
         } else if (tileFlag !== RaycastScene.TILE_THIN && !ray.isDoor) {
           // Standard solid wall block
-          const lineHeight = screenH / ray.distance;
+          const lineHeight = screenH / Math.max(0.2, ray.distance);
           const drawStart = -lineHeight / 2 + screenH / 2;
           const drawEnd = lineHeight / 2 + screenH / 2;
           minDrawStart = Math.min(minDrawStart, drawStart);
@@ -2761,7 +2860,7 @@ export class RaycastScene extends BaseScene {
       // Render wall column slices back-to-front (j = 0 is farthest hit, hitCount - 1 is closest)
       for (let j = 0; j < hitCount; j++) {
         const ray = pool[j];
-        const lineHeight = screenH / ray.distance;
+        const lineHeight = screenH / Math.max(0.2, ray.distance);
         let drawStart = -lineHeight / 2 + screenH / 2;
         let drawEnd = lineHeight / 2 + screenH / 2;
 
@@ -3216,5 +3315,60 @@ export class RaycastScene extends BaseScene {
       this.objectSpritePool[i].visible = false;
     }
     this.objectSpritePoolIndex = poolIdx;
+  }
+
+  public setPlayerPosition(x: number, y: number, dirX: number, dirY: number): void {
+    this.player.x = x;
+    this.player.y = y;
+    const len = Math.sqrt(dirX * dirX + dirY * dirY) || 1.0;
+    const nx = dirX / len;
+    const ny = dirY / len;
+    this.player.dirX = nx;
+    this.player.dirY = ny;
+    this.player.planeX = ny * 0.8;
+    this.player.planeY = -nx * 0.8;
+
+    this.uPlayerPosUniform[0] = this.player.x;
+    this.uPlayerPosUniform[1] = this.player.y;
+    this.uDirUniform[0] = this.player.dirX;
+    this.uDirUniform[1] = this.player.dirY;
+    this.uPlaneUniform[0] = this.player.planeX;
+    this.uPlaneUniform[1] = this.player.planeY;
+  }
+
+  public getPlayer(): { x: number; y: number; dirX: number; dirY: number; planeX: number; planeY: number } {
+    return this.player;
+  }
+
+  public getHUD(): RaycastHUD {
+    return this.hud;
+  }
+
+  public getWorldContainer(): Container {
+    return this.worldContainer;
+  }
+
+  public getWeaponView(): RaycastWeaponView {
+    return this.weaponView;
+  }
+
+  public getDestructableWallManager(): DestructableWallManager {
+    return this.destructableWallManager;
+  }
+
+  public getBreakableManager(): RaycastBreakableManager {
+    return this.breakableManager;
+  }
+
+  public getStairsManager(): RaycastStairsManager {
+    return this.stairsManager;
+  }
+
+  public getPlayerRadius(): number {
+    return this.playerRadius;
+  }
+
+  public setPlayerRadius(radius: number): void {
+    this.playerRadius = Math.max(0.1, radius);
   }
 }
