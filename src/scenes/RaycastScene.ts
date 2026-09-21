@@ -2115,6 +2115,8 @@ export class RaycastScene extends BaseScene {
 
     this.playerController.update(delta, isMoving, 1, this.lastFrameDistMoved);
 
+    this.updateInteractionPrompt();
+
     this.renderScene();
   }
 
@@ -2319,6 +2321,48 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  private updateInteractionPrompt(): void {
+    if (!this.hud || !this.stairsManager) return;
+
+    if (this.stairsManager.isTransitioning()) {
+      this.hud.setPrompt(null);
+      return;
+    }
+
+    const lookX = Math.floor(this.player.x + this.player.dirX * 1.1);
+    const lookY = Math.floor(this.player.y + this.player.dirY * 1.1);
+    const isFacingDoor =
+      lookX >= 0 &&
+      lookX < this.mapWidth &&
+      lookY >= 0 &&
+      lookY < this.mapHeight &&
+      this.tileTypeFlags[lookY * this.mapWidth + lookX] === RaycastScene.TILE_DOOR;
+
+    if (isFacingDoor) {
+      this.hud.setPrompt(null);
+      return;
+    }
+
+    const stair = this.stairsManager.getNearbyStair(
+      this.player.x,
+      this.player.y,
+      this.player.dirX,
+      this.player.dirY
+    );
+
+    if (stair) {
+      let promptText = "PRESS [E] TO ENTER";
+      if (stair.stairType === "up") {
+        promptText = "[▲] PRESS [E] TO ENTER";
+      } else if (stair.stairType === "down") {
+        promptText = "[▼] PRESS [E] TO ENTER";
+      }
+      this.hud.setPrompt(promptText, 0x00e5ff);
+    } else {
+      this.hud.setPrompt(null);
+    }
+  }
+
   private tryOpenDoor() {
     if (this.stairsManager && this.stairsManager.isTransitioning()) return;
 
@@ -2337,8 +2381,12 @@ export class RaycastScene extends BaseScene {
       return;
     }
 
-    // 3. Check adjacent cells for stairs
-    if (this.stairsManager && this.stairsManager.tryInteractNearbyStairs(this.player.x, this.player.y)) {
+    // 3. Check adjacent cells or general nearby stairs
+    if (
+      this.stairsManager &&
+      (this.stairsManager.tryInteractNearbyStairs(this.player.x, this.player.y) ||
+        this.stairsManager.tryInteract(this.player.x, this.player.y, this.player.dirX, this.player.dirY))
+    ) {
       return;
     }
 

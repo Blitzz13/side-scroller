@@ -43,6 +43,12 @@ export class RaycastHUD extends Container {
   private sprintText: Text;
   private sprintIcon: Graphics;
 
+  // Interaction prompt (Center, below crosshair)
+  private promptContainer: Container;
+  private promptBg: Graphics;
+  private promptText: Text;
+  private currentPromptText: string = "";
+
   constructor() {
     super();
 
@@ -290,6 +296,32 @@ export class RaycastHUD extends Container {
     this.sprintContainer.addChild(this.sprintText);
 
     this.addChild(this.sprintContainer);
+
+    // 7. Interaction Prompt (Center, just below crosshair)
+    this.promptContainer = new Container();
+    this.promptContainer.position.set(screenW / 2, screenH / 2 + 70);
+    this.promptContainer.visible = false;
+
+    this.promptBg = new Graphics();
+    this.promptContainer.addChild(this.promptBg);
+
+    this.promptText = new Text("", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 14,
+      fontWeight: "bold",
+      fill: 0x00e5ff,
+      letterSpacing: 1,
+      align: "center",
+      dropShadow: true,
+      dropShadowColor: 0x000000,
+      dropShadowDistance: 1,
+      dropShadowBlur: 2,
+    });
+    this.promptText.resolution = dpr;
+    this.promptText.anchor.set(0.5, 0.5);
+    this.promptContainer.addChild(this.promptText);
+
+    this.addChild(this.promptContainer);
   }
 
   public addKeycard(color: string, customTexture?: Texture): void {
@@ -483,6 +515,52 @@ export class RaycastHUD extends Container {
     if (this.sprintContainer && this.sprintContainer.visible) {
       this.sprintContainer.alpha = 0.85 + Math.sin(Date.now() * 0.008) * 0.15;
     }
+
+    // 4. Interaction prompt pulse
+    if (this.promptContainer && this.promptContainer.visible) {
+      this.promptContainer.alpha = 0.88 + Math.sin(Date.now() * 0.007) * 0.12;
+    }
+  }
+
+  public setPrompt(message: string | null, borderColor: number = 0x00e5ff): void {
+    if (!message) {
+      if (this.promptContainer.visible) {
+        this.promptContainer.visible = false;
+        this.currentPromptText = "";
+      }
+      return;
+    }
+
+    if (this.currentPromptText === message && this.promptContainer.visible) {
+      return;
+    }
+
+    this.currentPromptText = message;
+    this.promptText.text = message;
+
+    const textW = this.promptText.width;
+    const textH = this.promptText.height;
+    const padX = 18;
+    const padY = 7;
+
+    this.promptBg.clear();
+    this.promptBg.beginFill(0x060f18, 0.85);
+    this.promptBg.lineStyle(1.8, borderColor, 0.85);
+    this.promptBg.drawRoundedRect(
+      -textW / 2 - padX,
+      -textH / 2 - padY,
+      textW + padX * 2,
+      textH + padY * 2,
+      6
+    );
+    this.promptBg.endFill();
+
+    this.promptContainer.visible = true;
+    this.promptContainer.alpha = 1;
+  }
+
+  public clearPrompt(): void {
+    this.setPrompt(null);
   }
 
   public setSprinting(sprinting: boolean): void {

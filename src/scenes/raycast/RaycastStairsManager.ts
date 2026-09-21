@@ -275,6 +275,52 @@ export class RaycastStairsManager {
     return { x: frontX, y: frontY, dirX: dx, dirY: dy };
   }
 
+  public getNearbyStair(
+    playerX: number,
+    playerY: number,
+    dirX?: number,
+    dirY?: number
+  ): StairNode | null {
+    if (this.isTransitioning()) return null;
+
+    // 1. Check facing direction ahead of player
+    if (dirX !== undefined && dirY !== undefined) {
+      const forwardDists = [0.6, 0.9, 1.25];
+      for (const d of forwardDists) {
+        const lx = Math.floor(playerX + dirX * d);
+        const ly = Math.floor(playerY + dirY * d);
+        const stair = this.stairs.get(`${lx},${ly}`);
+        if (stair) {
+          return stair;
+        }
+      }
+    }
+
+    // 2. Check adjacent cells (current cell + 4 cardinal neighbors)
+    const px = Math.floor(playerX);
+    const py = Math.floor(playerY);
+    const offsets = [
+      [0, 0],
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+
+    for (const [ox, oy] of offsets) {
+      const stair = this.stairs.get(`${px + ox},${py + oy}`);
+      if (stair) {
+        // Player center to stair cell center distance check
+        const dist = Math.hypot(playerX - (stair.x + 0.5), playerY - (stair.y + 0.5));
+        if (dist <= 1.38) {
+          return stair;
+        }
+      }
+    }
+
+    return null;
+  }
+
   public tryInteractStairs(targetCellX: number, targetCellY: number): boolean {
     if (this.isTransitioning()) return false;
 
@@ -306,6 +352,20 @@ export class RaycastStairsManager {
       }
     }
 
+    return false;
+  }
+
+  public tryInteract(
+    playerX: number,
+    playerY: number,
+    dirX: number,
+    dirY: number
+  ): boolean {
+    if (this.isTransitioning()) return false;
+    const stair = this.getNearbyStair(playerX, playerY, dirX, dirY);
+    if (stair) {
+      return this.executeTransition(stair);
+    }
     return false;
   }
 
