@@ -8,7 +8,12 @@ export class DestructableWallManager {
   /**
    * Parses all DestructableWall objects from the DoorProtectors layer or any object layers in Tiled mapData.
    */
-  public parseMapDoorProtectors(mapData: any, firstgid: number = 1): void {
+  public parseMapDoorProtectors(
+    mapData: any,
+    firstgid: number = 1,
+    offsetX: number = 0,
+    offsetY: number = 0
+  ): void {
     this.walls = [];
 
     const tileW = mapData.tilewidth || 64;
@@ -61,7 +66,8 @@ export class DestructableWallManager {
       if (!isDestructable) return;
       processedObjIds.add(obj.id);
 
-      const gid = obj.gid ?? 0;
+      const rawGid = obj.gid ?? 0;
+      const gid = rawGid & 0x1FFFFFFF;
       const adjustedTileId = gid !== 0 ? gid - firstgid : 1; // Default to fence texture if not set
 
       // Resolve grid cell (gx, gy)
@@ -71,8 +77,8 @@ export class DestructableWallManager {
       const objCenterX = obj.x + objW * 0.5;
       const objCenterY = gid !== 0 ? obj.y - objH * 0.5 : obj.y + objH * 0.5;
 
-      const gridX = Math.floor(objCenterX / tileW);
-      const gridY = Math.floor(objCenterY / tileH);
+      const gridX = Math.floor(objCenterX / tileW) + offsetX;
+      const gridY = Math.floor(objCenterY / tileH) + offsetY;
 
       let align = "center";
       let rotation = "vertical";

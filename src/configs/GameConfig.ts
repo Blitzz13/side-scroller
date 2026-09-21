@@ -291,6 +291,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/raycast/textures/computer_panel_destroyed.jpg",
           },
           {
+            name: "level1",
+            src: "./assets/raycast/levels/level1.json",
+          },
+          {
             name: "level2",
             src: "./assets/raycast/levels/test_level.json",
           },

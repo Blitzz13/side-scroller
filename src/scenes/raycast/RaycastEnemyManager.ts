@@ -15,6 +15,7 @@ import { RaycastPlayerController } from "./RaycastPlayerController";
 import { gameConfig } from "../../configs/GameConfig";
 import { EnemyVoicelineManager } from "./EnemyVoicelineManager";
 import { RaycastLaserManager } from "./RaycastLaserManager";
+import { extractTiledGidAndRotation, forEachTileInLayer } from "./tiledUtils";
 
 export class RaycastEnemyManager {
   private container: Container;
@@ -289,7 +290,9 @@ export class RaycastEnemyManager {
       }>;
     },
     firstgid: number = 1,
-    tileMeta?: Record<number, TileMeta>
+    tileMeta?: Record<number, TileMeta>,
+    offsetX: number = 0,
+    offsetY: number = 0
   ): void {
     // Clean up any existing enemies
     this.disposeEnemies();
@@ -300,10 +303,18 @@ export class RaycastEnemyManager {
     interface TiledLayerNode {
       name?: string;
       data?: number[];
+      chunks?: Array<{
+        data: number[];
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }>;
       objects?: Array<{
         x: number;
         y: number;
         gid?: number;
+        rotation?: number;
         type?: string;
         name?: string;
         properties?: Array<{ name: string; value: unknown }>;
@@ -327,42 +338,51 @@ export class RaycastEnemyManager {
 
     const allLayers = collectLayers((mapData.layers || []) as TiledLayerNode[]);
 
-    // Check for "Enemies" tile layers or object layers
+    // Check for "Enemies" tile layers or object layers (exclude player Spawns layer)
     const enemyLayers = allLayers.filter(
       (layer: TiledLayerNode) =>
         layer.name &&
         (layer.name.toLowerCase().includes("enem") ||
           layer.name.toLowerCase().includes("monster") ||
-          layer.name.toLowerCase().includes("trooper") ||
-          layer.name.toLowerCase().includes("spawn"))
+          layer.name.toLowerCase().includes("trooper")) &&
+        layer.name.toLowerCase() !== "spawns" &&
+        !layer.name.toLowerCase().includes("player")
     );
 
     for (const layer of enemyLayers) {
-      if (layer.data && layer.width) {
-        const layerWidth = layer.width;
-        // Tile Layer
-        layer.data.forEach((tileGid: number, index: number) => {
-          if (tileGid !== 0) {
-            const x = (index % layerWidth) + 0.5;
-            const y = Math.floor(index / layerWidth) + 0.5;
-            const config = this.resolveEnemyConfigForTile(
-              tileGid,
-              firstgid,
-              tileMeta,
-              mapData
-            );
-            this.spawnEnemy(config, x, y);
+      if (layer.data || layer.chunks) {
+        // Tile Layer (flat data or infinite chunks)
+        forEachTileInLayer(layer, (rawTileGid: number, tileX: number, tileY: number) => {
+          if (rawTileGid !== 0) {
+            const { gid, dirX, dirY } = extractTiledGidAndRotation(rawTileGid);
+            if (gid !== 0) {
+              const x = tileX + offsetX + 0.5;
+              const y = tileY + offsetY + 0.5;
+              const config = this.resolveEnemyConfigForTile(
+                gid,
+                firstgid,
+                tileMeta,
+                mapData
+              );
+              this.spawnEnemy(config, x, y, dirX, dirY);
+            }
           }
         });
       } else if (layer.objects) {
         // Object Layer
         for (const obj of layer.objects) {
-          const x = obj.x / 64;
-          const y = obj.y / 64;
+          const tileW = 64;
+          const x = obj.x / tileW + offsetX + 0.5;
+          const y = obj.y / tileW + offsetY + 0.5;
           let config: IRaycastEnemyConfig | undefined;
+          let dirX = 0;
+          let dirY = 1;
           if (obj.gid !== undefined && obj.gid > 0) {
+            const decoded = extractTiledGidAndRotation(obj.gid);
+            dirX = decoded.dirX;
+            dirY = decoded.dirY;
             config = this.resolveEnemyConfigForTile(
-              obj.gid,
+              decoded.gid,
               firstgid,
               tileMeta,
               mapData
@@ -372,9 +392,14 @@ export class RaycastEnemyManager {
             config =
               getRaycastEnemyConfig(typeName) ||
               raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
+            if (obj.rotation !== undefined) {
+              const rad = (obj.rotation * Math.PI) / 180;
+              dirX = Math.round(-Math.sin(rad));
+              dirY = Math.round(Math.cos(rad));
+            }
           }
           if (config) {
-            this.spawnEnemy(config, x, y);
+            this.spawnEnemy(config, x, y, dirX, dirY);
           }
         }
       }
@@ -385,6 +410,8 @@ export class RaycastEnemyManager {
     config: IRaycastEnemyConfig,
     x: number,
     y: number,
+    dirX: number = 0,
+    dirY: number = 1,
     spritesheet?: Spritesheet
   ): RaycastEnemy {
     const sheet =
@@ -397,6 +424,10 @@ export class RaycastEnemyManager {
       this.spritesheets["assets/raycast/enemies/storm_trooper.json"] ||
       this.spritesheets["storm_trooper"];
     const enemy = new RaycastEnemy(this.nextEnemyId++, config, x, y, sheet);
+    enemy.dirX = dirX;
+    enemy.dirY = dirY;
+    enemy.wanderDirX = dirX;
+    enemy.wanderDirY = dirY;
 
     if (enemy.animatedSprite) {
       // Per-enemy Graphics mask for partial wall occlusion

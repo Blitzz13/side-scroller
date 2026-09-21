@@ -721,6 +721,20 @@ export class RaycastLaserManager {
     }
   }
 
+  public clear(): void {
+    for (const laser of this.lasers) {
+      laser.sprite.visible = false;
+      this.laserSpritePool.push(laser.sprite);
+    }
+    this.lasers = [];
+    for (const imp of this.impacts) {
+      imp.graphics.clear();
+      imp.graphics.visible = false;
+      this.impactGraphicsPool.push(imp.graphics);
+    }
+    this.impacts = [];
+  }
+
   public dispose(): void {
     for (const laser of this.lasers) {
       laser.sprite.destroy();

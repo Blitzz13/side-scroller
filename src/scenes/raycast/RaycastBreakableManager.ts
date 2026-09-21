@@ -2,6 +2,7 @@ import { Assets, Rectangle, SCALE_MODES, Texture } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { MapObject, RaycastBreakable, TileMeta } from "./types";
 import { defaultDestructibleWallConfig } from "../../configs/DestructableWallConfig";
+import { forEachTileInLayer } from "./tiledUtils";
 
 export class RaycastBreakableManager {
   private breakables: RaycastBreakable[] = [];
@@ -50,7 +51,9 @@ export class RaycastBreakableManager {
     mapData: any,
     tileMeta: Record<number, TileMeta>,
     tileTypes: Record<number, string>,
-    firstgid: number
+    firstgid: number,
+    offsetX: number = 0,
+    offsetY: number = 0
   ): void {
     this.breakables = [];
     this.nextId = 1;
@@ -153,15 +156,16 @@ export class RaycastBreakableManager {
         });
       }
 
-      if (layer.data) {
-        // Tile Layer
-        layer.data.forEach((tileGid: number, index: number) => {
-          if (tileGid !== 0) {
+      if (layer.data || layer.chunks) {
+        // Tile Layer (handles both flat array and chunks)
+        forEachTileInLayer(layer, (rawGid: number, lx: number, ly: number) => {
+          if (rawGid !== 0) {
+            const tileGid = rawGid & 0x1FFFFFFF;
             const adjustedTileId = tileGid - firstgid;
             const breakableType = breakableTileMap[adjustedTileId];
             if (breakableType) {
-              const x = (index % layer.width) + 0.5;
-              const y = Math.floor(index / layer.width) + 0.5;
+              const x = lx + offsetX + 0.5;
+              const y = ly + offsetY + 0.5;
               const meta = tileMeta[adjustedTileId] || {};
               this.spawnBreakable(
                 breakableType,
@@ -194,8 +198,9 @@ export class RaycastBreakableManager {
             return; // Handled by DestructableWallManager
           }
 
-          const gid = obj.gid ?? 0;
-          if (gid !== 0) {
+          const rawGid = obj.gid ?? 0;
+          if (rawGid !== 0) {
+            const gid = rawGid & 0x1FFFFFFF;
             const adjustedTileId = gid - firstgid;
             const objName = (obj.name || "").toLowerCase();
             const objType = (obj.type || "").toLowerCase();
@@ -264,8 +269,8 @@ export class RaycastBreakableManager {
 
               const objW = obj.width || tileW;
               const objH = obj.height || tileH;
-              const x = (obj.x + objW / 2) / tileW;
-              const y = (obj.y - objH / 2) / tileH;
+              const x = (obj.x + objW / 2) / tileW + offsetX;
+              const y = (obj.y - objH / 2) / tileH + offsetY;
 
               this.spawnBreakable(
                 breakableType,

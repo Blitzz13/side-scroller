@@ -34,6 +34,19 @@ import { RaycastPickupType } from "../enums/RaycastPickupType";
 import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
 import floorCeilingVert from "./raycast/shaders/floorCeiling.vert";
 import floorCeilingFrag from "./raycast/shaders/floorCeiling.frag";
+import {
+  calculateMapBounds,
+  extractTiledGidAndRotation,
+  forEachTileInLayer,
+} from "./raycast/tiledUtils";
+
+export interface LevelFinishZone {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  targetLevel: string;
+}
 
 interface RayHit {
   wallType: number;
@@ -215,8 +228,13 @@ export class RaycastScene extends BaseScene {
   private isRightMouseDown: boolean = false;
   private bgMusicInstance: any = null;
   private firstgid: number = 1;
+  private currentLevel: string = "level1";
+  private isLevelTransitioning: boolean = false;
+  private levelFinishZones: LevelFinishZone[] = [];
+  private currentMapOffsetX: number = 0;
+  private currentMapOffsetY: number = 0;
 
-  constructor(stage: Container, scale: number, level: string = "test_level") {
+  constructor(stage: Container, scale: number, level: string = "level1") {
     super(stage, scale);
     this.sortableChildren = true;
 
@@ -733,6 +751,16 @@ export class RaycastScene extends BaseScene {
   }
 
   private async loadLevel(levelName: string) {
+    this.currentLevel = levelName;
+    this.thinWalls = [];
+    this.doorStates = {};
+    this.doorEntries = [];
+    this.doorSlideModes = {};
+    this.lockedDoors = {};
+    this.levelFinishZones = [];
+    if (this.laserManager) this.laserManager.clear();
+    if (this.detonatorManager) this.detonatorManager.clear();
+
     let mapData: any;
     try {
       mapData = await Assets.load(`assets/raycast/levels/${levelName}.json`);
@@ -759,6 +787,7 @@ export class RaycastScene extends BaseScene {
           tileset.tiles.forEach((tile: any) => {
             const tileId = tile.id;
             const imagePath = tile.image;
+            if (!imagePath || imagePath.includes("player_spawn")) return;
             const fileName = imagePath.split(/[\\/]/).pop();
             textureMap[tileId] = imagePath;
           });
@@ -808,14 +837,19 @@ export class RaycastScene extends BaseScene {
     await this.breakableManager.initTextures();
     this.firstgid = mapData.tilesets?.[0]?.firstgid ?? 1;
     const firstgid = this.firstgid;
+    const offsetX = this.currentMapOffsetX;
+    const offsetY = this.currentMapOffsetY;
+
     this.breakableManager.parseMapBreakables(
       mapData,
       this.tileMeta,
       this.tileTypes,
-      firstgid
+      firstgid,
+      offsetX,
+      offsetY
     );
     this.pickupManager.bindBreakables(this.breakableManager.getBreakables());
-    this.destructableWallManager.parseMapDoorProtectors(mapData, firstgid);
+    this.destructableWallManager.parseMapDoorProtectors(mapData, firstgid, offsetX, offsetY);
     this.destructableWallManager.bindBreakables(
       this.breakableManager.getBreakables(),
       firstgid
@@ -829,31 +863,33 @@ export class RaycastScene extends BaseScene {
       }
     };
     await this.enemyManager.initSpritesheets();
-    this.enemyManager.parseMapEnemies(mapData, firstgid, this.tileMeta);
+    this.enemyManager.parseMapEnemies(mapData, firstgid, this.tileMeta, offsetX, offsetY);
 
     // Initialize thermal detonator manager textures & frames
     await this.detonatorManager.initTextures();
     await this.laserManager.initTextures();
 
-    // Spawn initial thermal detonator pickups for quick player testing
-    this.pickupManager.spawnPickup(
-      RaycastPickupType.THERMAL_DETONATOR_BELT,
-      3.0,
-      5.2,
-      5
-    );
-    this.pickupManager.spawnPickup(
-      RaycastPickupType.THERMAL_DETONATOR_SINGLE,
-      3.8,
-      5.2,
-      1
-    );
-    this.pickupManager.spawnPickup(
-      RaycastPickupType.SHIELD,
-      4.6,
-      5.2,
-      50
-    );
+    // Spawn initial thermal detonator pickups for quick player testing only on test_level
+    if (levelName === "test_level") {
+      this.pickupManager.spawnPickup(
+        RaycastPickupType.THERMAL_DETONATOR_BELT,
+        3.0,
+        5.2,
+        5
+      );
+      this.pickupManager.spawnPickup(
+        RaycastPickupType.THERMAL_DETONATOR_SINGLE,
+        3.8,
+        5.2,
+        1
+      );
+      this.pickupManager.spawnPickup(
+        RaycastPickupType.SHIELD,
+        4.6,
+        5.2,
+        50
+      );
+    }
 
     console.log("Parsed map:", this.map);
     console.log("Parsed floor map:", this.floorMap);
@@ -871,6 +907,8 @@ export class RaycastScene extends BaseScene {
           if (this.map[y][x] === 0) {
             this.player.x = x + 0.5;
             this.player.y = y + 0.5;
+            this.uPlayerPosUniform[0] = this.player.x;
+            this.uPlayerPosUniform[1] = this.player.y;
             console.log(`Moved player to (${this.player.x}, ${this.player.y})`);
             break;
           }
@@ -880,17 +918,36 @@ export class RaycastScene extends BaseScene {
   }
 
   private parseTiledMap(mapData: any) {
-    this.map = Array(mapData.height)
+    const collectLayers = (layers: any[]): any[] => {
+      let flat: any[] = [];
+      for (const l of layers) {
+        if (l.layers && Array.isArray(l.layers)) {
+          flat = flat.concat(collectLayers(l.layers));
+        } else {
+          flat.push(l);
+        }
+      }
+      return flat;
+    };
+    const allLayers = collectLayers(mapData.layers || []);
+
+    const bounds = calculateMapBounds(mapData, allLayers);
+    this.mapWidth = bounds.mapWidth;
+    this.mapHeight = bounds.mapHeight;
+    const offsetX = bounds.offsetX;
+    const offsetY = bounds.offsetY;
+    this.currentMapOffsetX = offsetX;
+    this.currentMapOffsetY = offsetY;
+
+    this.map = Array(this.mapHeight)
       .fill(0)
-      .map(() => Array(mapData.width).fill(0));
-    this.floorMap = Array(mapData.height)
+      .map(() => Array(this.mapWidth).fill(0));
+    this.floorMap = Array(this.mapHeight)
       .fill(0)
-      .map(() => Array(mapData.width).fill(-1));
-    this.ceilingMap = Array(mapData.height)
+      .map(() => Array(this.mapWidth).fill(-1));
+    this.ceilingMap = Array(this.mapHeight)
       .fill(0)
-      .map(() => Array(mapData.width).fill(-1));
-    this.mapWidth = mapData.width;
-    this.mapHeight = mapData.height;
+      .map(() => Array(this.mapWidth).fill(-1));
 
     this.firstgid = mapData.tilesets?.[0]?.firstgid ?? 1;
     const firstgid = this.firstgid;
@@ -982,76 +1039,63 @@ export class RaycastScene extends BaseScene {
       });
     }
 
-    const collectLayers = (layers: any[]): any[] => {
-      let flat: any[] = [];
-      for (const l of layers) {
-        if (l.layers && Array.isArray(l.layers)) {
-          flat = flat.concat(collectLayers(l.layers));
-        } else {
-          flat.push(l);
-        }
-      }
-      return flat;
-    };
-    const allLayers = collectLayers(mapData.layers || []);
-
     const floorLayers = allLayers.filter(
       (layer: any) => layer.name && layer.name.toLowerCase() === "floor"
     );
     for (const floorLayer of floorLayers) {
-      if (floorLayer.data) {
-        floorLayer.data.forEach((tileGid: number, index: number) => {
-          const x = index % floorLayer.width;
-          const y = Math.floor(index / floorLayer.width);
-          if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
-            if (tileGid !== 0) {
-              this.floorMap[y][x] = tileGid - firstgid;
-            } else if (this.floorMap[y][x] === undefined) {
-              this.floorMap[y][x] = -1;
-            }
+      forEachTileInLayer(floorLayer, (rawGid: number, lx: number, ly: number) => {
+        const x = lx + offsetX;
+        const y = ly + offsetY;
+        if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+          const gid = rawGid & 0x1FFFFFFF;
+          if (gid !== 0) {
+            this.floorMap[y][x] = gid - firstgid;
+          } else if (this.floorMap[y][x] === undefined) {
+            this.floorMap[y][x] = -1;
           }
-        });
-      }
+        }
+      });
     }
 
     const ceilingLayers = allLayers.filter(
       (layer: any) => layer.name && layer.name.toLowerCase() === "ceiling"
     );
     for (const ceilingLayer of ceilingLayers) {
-      if (ceilingLayer.data) {
-        ceilingLayer.data.forEach((tileGid: number, index: number) => {
-          const x = index % ceilingLayer.width;
-          const y = Math.floor(index / ceilingLayer.width);
-          if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
-            if (tileGid !== 0) {
-              this.ceilingMap[y][x] = tileGid - firstgid;
-            } else if (this.ceilingMap[y][x] === undefined) {
-              this.ceilingMap[y][x] = -1;
-            }
+      forEachTileInLayer(ceilingLayer, (rawGid: number, lx: number, ly: number) => {
+        const x = lx + offsetX;
+        const y = ly + offsetY;
+        if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+          const gid = rawGid & 0x1FFFFFFF;
+          if (gid !== 0) {
+            this.ceilingMap[y][x] = gid - firstgid;
+          } else if (this.ceilingMap[y][x] === undefined) {
+            this.ceilingMap[y][x] = -1;
           }
-        });
-      }
+        }
+      });
     }
 
     const wallsLayers = allLayers.filter(
       (layer: any) => layer.name && layer.name.toLowerCase() === "walls"
     );
     for (const wallsLayer of wallsLayers) {
-      if (wallsLayer.data) {
-        wallsLayer.data.forEach((tileId: number, index: number) => {
-          const x = index % wallsLayer.width;
-          const y = Math.floor(index / wallsLayer.width);
-          if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
-            if (tileId !== 0) {
-              this.map[y][x] = tileId;
-              const tileType = this.tileTypes[tileId];
-              if (tileType === "door" || tileType === TileType.DOOR) {
-                this.doorStates[`${x},${y}`] = 0;
-              }
+      forEachTileInLayer(wallsLayer, (rawGid: number, lx: number, ly: number) => {
+        const x = lx + offsetX;
+        const y = ly + offsetY;
+        if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+          const gid = rawGid & 0x1FFFFFFF;
+          if (gid !== 0) {
+            const tileId = gid - firstgid;
+            const meta = this.tileMeta[tileId];
+            if (meta?.image?.toLowerCase().includes("player_spawn") || tileId === 27) return;
+            this.map[y][x] = gid;
+            const tileType = this.tileTypes[gid];
+            if (tileType === "door" || tileType === TileType.DOOR) {
+              this.doorStates[`${x},${y}`] = 0;
             }
           }
-        });
-      }
+        }
+      });
     }
 
     const destructableWallLayers = allLayers.filter(
@@ -1070,28 +1114,30 @@ export class RaycastScene extends BaseScene {
         const tileW = mapData.tilewidth || 64;
         const tileH = mapData.tileheight || 64;
         dwLayer.objects.forEach((obj: any) => {
-          const gid = obj.gid ?? 0;
+          const rawGid = obj.gid ?? 0;
+          const gid = rawGid & 0x1FFFFFFF;
           if (gid !== 0) {
             const objW = obj.width || tileW;
             const objH = obj.height || tileH;
             const centerX = obj.x + objW * 0.5;
-            const centerY = gid !== 0 ? obj.y - objH * 0.5 : obj.y + objH * 0.5;
-            const gridX = Math.floor(centerX / tileW);
-            const gridY = Math.floor(centerY / tileH);
+            const centerY = rawGid !== 0 ? obj.y - objH * 0.5 : obj.y + objH * 0.5;
+            const gridX = Math.floor(centerX / tileW) + offsetX;
+            const gridY = Math.floor(centerY / tileH) + offsetY;
             if (gridX >= 0 && gridX < this.mapWidth && gridY >= 0 && gridY < this.mapHeight) {
               this.map[gridY][gridX] = gid;
               this.tileTypes[gid] = TileType.THICK_WALL;
             }
           }
         });
-      } else if (dwLayer.data) {
-        dwLayer.data.forEach((tileGid: number, index: number) => {
-          if (tileGid !== 0) {
-            const x = index % dwLayer.width;
-            const y = Math.floor(index / dwLayer.width);
+      } else if (dwLayer.data || dwLayer.chunks) {
+        forEachTileInLayer(dwLayer, (rawGid: number, lx: number, ly: number) => {
+          const gid = rawGid & 0x1FFFFFFF;
+          if (gid !== 0) {
+            const x = lx + offsetX;
+            const y = ly + offsetY;
             if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
-              this.map[y][x] = tileGid;
-              this.tileTypes[tileGid] = TileType.THICK_WALL;
+              this.map[y][x] = gid;
+              this.tileTypes[gid] = TileType.THICK_WALL;
             }
           }
         });
@@ -1102,95 +1148,93 @@ export class RaycastScene extends BaseScene {
       (layer: any) => layer.name && layer.name.toLowerCase() === "thinwalls"
     );
     for (const thinWallsLayer of thinWallsLayers) {
-      if (thinWallsLayer.data) {
-        const thinWallTiles: Array<{ x: number; y: number; tileId: number }> = [];
-        thinWallsLayer.data.forEach((tileId: number, index: number) => {
-          if (tileId !== 0) {
-            const x = index % thinWallsLayer.width;
-            const y = Math.floor(index / thinWallsLayer.width);
-            thinWallTiles.push({ x, y, tileId });
+      const thinWallTiles: Array<{ x: number; y: number; tileId: number }> = [];
+      forEachTileInLayer(thinWallsLayer, (rawGid: number, lx: number, ly: number) => {
+        const gid = rawGid & 0x1FFFFFFF;
+        if (gid !== 0) {
+          thinWallTiles.push({ x: lx + offsetX, y: ly + offsetY, tileId: gid });
+        }
+      });
+
+      thinWallTiles.forEach(({ x, y, tileId }) => {
+        const tileType = this.tileTypes[tileId];
+        const adjustedTileId = tileId - firstgid;
+        if (tileType === "thinWall" || tileType === TileType.THIN_WALL) {
+          const hasTop = thinWallTiles.some(
+            (t) =>
+              t.x === x &&
+              t.y === y - 1 &&
+              (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
+          );
+          const hasBottom = thinWallTiles.some(
+            (t) =>
+              t.x === x &&
+              t.y === y + 1 &&
+              (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
+          );
+          const hasLeft = thinWallTiles.some(
+            (t) =>
+              t.x === x - 1 &&
+              t.y === y &&
+              (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
+          );
+          const hasRight = thinWallTiles.some(
+            (t) =>
+              t.x === x + 1 &&
+              t.y === y &&
+              (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
+          );
+
+          let orientation: "vertical" | "horizontal" = "vertical";
+          if ((hasLeft || hasRight) && !(hasTop || hasBottom)) {
+            orientation = "horizontal";
+          } else if ((hasTop || hasBottom) && !(hasLeft || hasRight)) {
+            orientation = "vertical";
+          } else if (hasLeft || hasRight) {
+            orientation = "horizontal";
           }
-        });
 
-        thinWallTiles.forEach(({ x, y, tileId }) => {
-          const tileType = this.tileTypes[tileId];
-          const adjustedTileId = tileId - firstgid;
-          if (tileType === "thinWall" || tileType === TileType.THIN_WALL) {
-            const hasTop = thinWallTiles.some(
-              (t) =>
-                t.x === x &&
-                t.y === y - 1 &&
-                (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
-            );
-            const hasBottom = thinWallTiles.some(
-              (t) =>
-                t.x === x &&
-                t.y === y + 1 &&
-                (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
-            );
-            const hasLeft = thinWallTiles.some(
-              (t) =>
-                t.x === x - 1 &&
-                t.y === y &&
-                (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
-            );
-            const hasRight = thinWallTiles.some(
-              (t) =>
-                t.x === x + 1 &&
-                t.y === y &&
-                (this.tileTypes[t.tileId] === "thinWall" || this.tileTypes[t.tileId] === TileType.THIN_WALL)
-            );
-
-            let orientation: "vertical" | "horizontal" = "vertical";
-            if ((hasLeft || hasRight) && !(hasTop || hasBottom)) {
-              orientation = "horizontal";
-            } else if ((hasTop || hasBottom) && !(hasLeft || hasRight)) {
-              orientation = "vertical";
-            } else if (hasLeft || hasRight) {
-              orientation = "horizontal";
-            }
-
-            if (orientation === "vertical") {
-              this.thinWalls.push({
-                x1: x + 0.5,
-                y1: y,
-                x2: x + 0.5,
-                y2: y + 1,
-                texture: adjustedTileId,
-                orientation,
-              });
-            } else {
-              this.thinWalls.push({
-                x1: x,
-                y1: y + 0.5,
-                x2: x + 1,
-                y2: y + 0.5,
-                texture: adjustedTileId,
-                orientation,
-              });
-            }
+          if (orientation === "vertical") {
+            this.thinWalls.push({
+              x1: x + 0.5,
+              y1: y,
+              x2: x + 0.5,
+              y2: y + 1,
+              texture: adjustedTileId,
+              orientation,
+            });
+          } else {
+            this.thinWalls.push({
+              x1: x,
+              y1: y + 0.5,
+              x2: x + 1,
+              y2: y + 0.5,
+              texture: adjustedTileId,
+              orientation,
+            });
           }
-        });
-      }
+        }
+      });
     }
 
     const doorsLayers = allLayers.filter(
       (layer: any) => layer.name && layer.name.toLowerCase() === "doors"
     );
     for (const doorsLayer of doorsLayers) {
-      if (doorsLayer.data) {
-        doorsLayer.data.forEach((tileId: number, index: number) => {
-          if (tileId !== 0) {
-            const x = index % doorsLayer.width;
-            const y = Math.floor(index / doorsLayer.width);
-            const tileType = this.tileTypes[tileId];
+      forEachTileInLayer(doorsLayer, (rawGid: number, lx: number, ly: number) => {
+        const gid = rawGid & 0x1FFFFFFF;
+        if (gid !== 0) {
+          const x = lx + offsetX;
+          const y = ly + offsetY;
+          if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
+            const tileType = this.tileTypes[gid];
             if (tileType === "door" || tileType === TileType.DOOR) {
-              this.map[y][x] = tileId;
+              this.map[y][x] = gid;
               this.doorStates[`${x},${y}`] = 0;
             }
           }
-        });
-      }
+        }
+      });
     }
 
     // Door keys layer parsing (identifies doors requiring keycards)
@@ -1199,24 +1243,78 @@ export class RaycastScene extends BaseScene {
       (layer: any) => layer.name && layer.name.toLowerCase().includes("key")
     );
     for (const keysLayer of keysLayers) {
-      if (keysLayer.data) {
-        keysLayer.data.forEach((tileGid: number, index: number) => {
-          if (tileGid !== 0) {
-            const x = index % keysLayer.width;
-            const y = Math.floor(index / keysLayer.width);
-            const adjustedTileId = tileGid - firstgid;
-            const meta = this.tileMeta[adjustedTileId] || {};
-            const typeStr = (meta.type || this.tileTypes[tileGid] || "").toLowerCase();
-            const imgStr = (meta.image || "").toLowerCase();
+      forEachTileInLayer(keysLayer, (rawGid: number, lx: number, ly: number) => {
+        const gid = rawGid & 0x1FFFFFFF;
+        if (gid !== 0) {
+          const x = lx + offsetX;
+          const y = ly + offsetY;
+          const adjustedTileId = gid - firstgid;
+          const meta = this.tileMeta[adjustedTileId] || {};
+          const typeStr = (meta.type || this.tileTypes[gid] || "").toLowerCase();
+          const imgStr = (meta.image || "").toLowerCase();
 
-            let reqKey = "blue";
-            if (typeStr.includes("green") || imgStr.includes("green")) reqKey = "green";
-            else if (typeStr.includes("red") || imgStr.includes("red")) reqKey = "red";
-            else if (typeStr.includes("blue") || imgStr.includes("blue")) reqKey = "blue";
+          let reqKey = "blue";
+          if (typeStr.includes("green") || imgStr.includes("green")) reqKey = "green";
+          else if (typeStr.includes("red") || imgStr.includes("red")) reqKey = "red";
+          else if (typeStr.includes("blue") || imgStr.includes("blue")) reqKey = "blue";
 
-            this.lockedDoors[`${x},${y}`] = reqKey;
-          }
-        });
+          this.lockedDoors[`${x},${y}`] = reqKey;
+        }
+      });
+    }
+
+    // Spawns layer parsing (player spawn location & rotation)
+    const spawnLayers = allLayers.filter(
+      (layer: any) => layer.name && layer.name.toLowerCase().includes("spawn")
+    );
+    for (const spawnLayer of spawnLayers) {
+      forEachTileInLayer(spawnLayer, (rawGid: number, lx: number, ly: number) => {
+        if (rawGid !== 0) {
+          const info = extractTiledGidAndRotation(rawGid);
+          this.player.x = lx + offsetX + 0.5;
+          this.player.y = ly + offsetY + 0.5;
+          this.player.dirX = info.dirX;
+          this.player.dirY = info.dirY;
+          const fov = 0.8;
+          this.player.planeX = info.dirY * fov;
+          this.player.planeY = -info.dirX * fov;
+
+          this.uPlayerPosUniform[0] = this.player.x;
+          this.uPlayerPosUniform[1] = this.player.y;
+          this.uDirUniform[0] = this.player.dirX;
+          this.uDirUniform[1] = this.player.dirY;
+          this.uPlaneUniform[0] = this.player.planeX;
+          this.uPlaneUniform[1] = this.player.planeY;
+        }
+      });
+    }
+
+    // LevelFinish layer parsing (level exit trigger zones)
+    this.levelFinishZones = [];
+    const finishLayers = allLayers.filter(
+      (layer: any) => layer.name && layer.name.toLowerCase().includes("finish")
+    );
+    const tileW = mapData.tilewidth || 64;
+    const tileH = mapData.tileheight || 64;
+    for (const finishLayer of finishLayers) {
+      if (finishLayer.objects && Array.isArray(finishLayer.objects)) {
+        for (const obj of finishLayer.objects) {
+          const objW = obj.width || tileW;
+          const objH = obj.height || tileH;
+          const x1 = obj.x / tileW + offsetX;
+          const y1 = obj.y / tileH + offsetY;
+          const x2 = (obj.x + objW) / tileW + offsetX;
+          const y2 = (obj.y + objH) / tileH + offsetY;
+          const targetLevel = obj.name || obj.type || "test_level";
+
+          this.levelFinishZones.push({
+            x1: Math.min(x1, x2),
+            y1: Math.min(y1, y2),
+            x2: Math.max(x1, x2),
+            y2: Math.max(y1, y2),
+            targetLevel,
+          });
+        }
       }
     }
 
@@ -1225,13 +1323,15 @@ export class RaycastScene extends BaseScene {
       mapData,
       this.tileMeta,
       this.tileTypes,
-      firstgid
+      firstgid,
+      offsetX,
+      offsetY
     );
     this.mapObjects = this.pickupManager.getVisibleMapObjects();
 
     // Parse stairs and integrate them into the map collision & raycast grid
     if (this.stairsManager) {
-      this.stairsManager.parseMapStairs(mapData, firstgid, this.tileMeta);
+      this.stairsManager.parseMapStairs(mapData, firstgid, this.tileMeta, offsetX, offsetY);
     }
 
     // --- Performance: Flatten jagged arrays into typed arrays ---
@@ -2121,7 +2221,7 @@ export class RaycastScene extends BaseScene {
   }
 
   private updatePlayer(delta: number) {
-    if (this.stairsManager && this.stairsManager.isTransitioning()) {
+    if ((this.stairsManager && this.stairsManager.isTransitioning()) || this.isLevelTransitioning) {
       this.lastFrameDistMoved = 0;
       return;
     }
@@ -2220,6 +2320,58 @@ export class RaycastScene extends BaseScene {
       if (lookDelta !== 0) {
         this.rotatePlayer(lookDelta);
       }
+    }
+
+    // 4. Check level finish trigger zones
+    this.checkLevelFinish();
+  }
+
+  private checkLevelFinish(): void {
+    if (this.isLevelTransitioning) return;
+    if (!this.levelFinishZones || this.levelFinishZones.length === 0) return;
+
+    const px = this.player.x;
+    const py = this.player.y;
+
+    for (const zone of this.levelFinishZones) {
+      if (px >= zone.x1 && px <= zone.x2 && py >= zone.y1 && py <= zone.y2) {
+        this.triggerLevelTransition(zone.targetLevel);
+        break;
+      }
+    }
+  }
+
+  private triggerLevelTransition(targetLevel: string): void {
+    if (this.isLevelTransitioning) return;
+    this.isLevelTransitioning = true;
+
+    this.hud?.showToast(`Entering ${targetLevel}...`, 0x00ffff);
+    try {
+      sound.play("door_1", { volume: 0.5 });
+    } catch {}
+
+    const wipe = this.stairsManager?.getWipeTransition();
+    if (wipe) {
+      wipe.start(
+        this.worldContainer,
+        this.getWeaponView(),
+        {
+          duration: 0.75,
+          wipeType: 0.0,
+          wipeDir: { x: 1, y: 0 },
+          lineColor: [0.0, 1.0, 0.8],
+          onTeleport: async () => {
+            await this.loadLevel(targetLevel);
+          },
+          onComplete: () => {
+            this.isLevelTransitioning = false;
+          },
+        }
+      );
+    } else {
+      this.loadLevel(targetLevel).then(() => {
+        this.isLevelTransitioning = false;
+      });
     }
   }
 

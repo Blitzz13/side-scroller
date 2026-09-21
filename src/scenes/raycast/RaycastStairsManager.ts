@@ -3,6 +3,7 @@ import { sound } from "@pixi/sound";
 import { TileType } from "../../enums/TileType";
 import { TileMeta } from "./types";
 import { StarWarsWipeTransition } from "./StarWarsWipeTransition";
+import { forEachTileInLayer } from "./tiledUtils";
 
 export interface StairNode {
   x: number;
@@ -65,7 +66,9 @@ export class RaycastStairsManager {
   public parseMapStairs(
     mapData: any,
     firstgid: number,
-    tileMeta: Record<number, TileMeta>
+    tileMeta: Record<number, TileMeta>,
+    offsetX: number = 0,
+    offsetY: number = 0
   ): void {
     this.stairs.clear();
     this.stairList = [];
@@ -87,64 +90,63 @@ export class RaycastStairsManager {
     // 1. Scan layers for stairs
     for (const layer of allLayers) {
       const isStairLayer = layer.name && layer.name.toLowerCase().includes("stair");
-      if (layer.data) {
-        layer.data.forEach((gid: number, index: number) => {
-          if (gid === 0) return;
-          const x = index % layer.width;
-          const y = Math.floor(index / layer.width);
-          if (x < 0 || x >= this.scene.mapWidth || y < 0 || y >= this.scene.mapHeight) {
-            return;
-          }
+      forEachTileInLayer(layer, (rawGid, lx, ly) => {
+        if (rawGid === 0) return;
+        const x = lx + offsetX;
+        const y = ly + offsetY;
+        if (x < 0 || x >= this.scene.mapWidth || y < 0 || y >= this.scene.mapHeight) {
+          return;
+        }
 
-          const tileId = gid - firstgid;
-          const meta = tileMeta[tileId] || {};
-          const typeStr = (meta.tileType || meta.type || this.scene.tileTypes[gid] || "").toLowerCase();
-          const imgStr = (meta.image || "").toLowerCase();
+        const gid = rawGid & 0x1FFFFFFF;
+        const tileId = gid - firstgid;
+        const meta = tileMeta[tileId] || {};
+        const typeStr = (meta.tileType || meta.type || this.scene.tileTypes[gid] || "").toLowerCase();
+        const imgStr = (meta.image || "").toLowerCase();
 
-          const isStairTile =
-            isStairLayer ||
-            typeStr.includes("stair") ||
-            imgStr.includes("stair") ||
+        const isStairTile =
+          isStairLayer ||
+          typeStr.includes("stair") ||
+          imgStr.includes("stair") ||
+          tileId === 15 ||
+          tileId === 25 ||
+          tileId === 26;
+
+        if (isStairTile) {
+          let stairType: "up" | "down" | "generic" = "generic";
+          if (
+            imgStr.includes("stairs_up") ||
+            typeStr.includes("up") ||
+            (meta as any).stairType === "up" ||
             tileId === 15 ||
-            tileId === 25 ||
-            tileId === 26;
-
-          if (isStairTile) {
-            let stairType: "up" | "down" | "generic" = "generic";
-            if (
-              imgStr.includes("stairs_up") ||
-              typeStr.includes("up") ||
-              (meta as any).stairType === "up" ||
-              tileId === 15 ||
-              tileId === 25
-            ) {
-              stairType = "up";
-            } else if (
-              imgStr.includes("stairs_down") ||
-              typeStr.includes("down") ||
-              (meta as any).stairType === "down" ||
-              tileId === 26
-            ) {
-              stairType = "down";
-            }
-
-            const node: StairNode = {
-              x,
-              y,
-              gid,
-              tileId,
-              stairType,
-            };
-
-            this.stairs.set(`${x},${y}`, node);
-            this.stairList.push(node);
-
-            // Populate the scene's collision and raycast map with the stair tile
-            this.scene.map[y][x] = gid;
-            this.scene.tileTypes[gid] = TileType.STAIRS;
+            tileId === 25
+          ) {
+            stairType = "up";
+          } else if (
+            imgStr.includes("stairs_down") ||
+            typeStr.includes("down") ||
+            (meta as any).stairType === "down" ||
+            tileId === 26
+          ) {
+            stairType = "down";
           }
-        });
-      }
+
+          const node: StairNode = {
+            x,
+            y,
+            gid,
+            tileId,
+            stairType,
+          };
+
+          this.stairs.set(`${x},${y}`, node);
+          this.stairList.push(node);
+
+          // Populate the scene's collision and raycast map with the stair tile
+          this.scene.map[y][x] = gid;
+          this.scene.tileTypes[gid] = TileType.STAIRS;
+        }
+      });
     }
 
     // 2. Automatically pair each stairs tile with its adjacent reverse neighbor

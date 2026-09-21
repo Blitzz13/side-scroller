@@ -588,6 +588,10 @@ export class ThermalDetonatorManager {
     }
   }
 
+  public clear(): void {
+    this.dispose();
+  }
+
   public dispose(): void {
     for (const exp of this.explosions) {
       if (exp.sprite) exp.sprite.destroy();

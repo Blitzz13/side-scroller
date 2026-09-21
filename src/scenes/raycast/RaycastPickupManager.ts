@@ -19,6 +19,7 @@ import {
   getRaycastWeaponConfig,
 } from "./types";
 import { gameConfig } from "../../configs/GameConfig";
+import { forEachTileInLayer } from "./tiledUtils";
 
 export class RaycastPickupManager {
   private container: Container | null = null;
@@ -258,7 +259,9 @@ export class RaycastPickupManager {
     mapData: any,
     tileMeta: Record<number, TileMeta>,
     tileTypes: Record<number, string>,
-    firstgid: number
+    firstgid: number,
+    offsetX: number = 0,
+    offsetY: number = 0
   ): void {
     this.dispose();
     this.pickups = [];
@@ -342,12 +345,13 @@ export class RaycastPickupManager {
           layerAnchor = "floor";
       }
 
-      if (layer.data) {
+      if (layer.data || layer.chunks) {
         // Tile Layer
-        layer.data.forEach((tileGid: number, index: number) => {
-          if (tileGid !== 0) {
-            const x = (index % layer.width) + 0.5;
-            const y = Math.floor(index / layer.width) + 0.5;
+        forEachTileInLayer(layer, (rawTileGid: number, tileX: number, tileY: number) => {
+          if (rawTileGid !== 0) {
+            const tileGid = rawTileGid & 0x1fffffff;
+            const x = tileX + offsetX + 0.5;
+            const y = tileY + offsetY + 0.5;
             const adjustedTileId = tileGid - firstgid;
             const meta = tileMeta[adjustedTileId] || {};
             const typeStr = (meta.type || tileTypes[tileGid] || "").toLowerCase();
@@ -561,8 +565,8 @@ export class RaycastPickupManager {
 
             const objW = obj.width || tileW;
             const objH = obj.height || tileH;
-            const x = (obj.x + objW / 2) / tileW;
-            const y = (obj.y - objH / 2) / tileH;
+            const x = (obj.x + objW / 2) / tileW + offsetX;
+            const y = (obj.y - objH / 2) / tileH + offsetY;
             const normalizedType = (objType || meta.type || "").toLowerCase();
             const imgStr = (meta.image || "").toLowerCase();
 
