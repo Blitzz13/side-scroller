@@ -1,3 +1,4 @@
+import { sound } from "@pixi/sound";
 import { RaycastHUD } from "./RaycastHUD";
 import {
   IRaycastWeaponConfig,
@@ -15,6 +16,10 @@ export class RaycastPlayerController {
   private hud: RaycastHUD;
   private lastShotTime: number = 0;
   private inventory: Map<RaycastWeaponType, number> = new Map();
+  private sprintMultiplier: number = 1.7;
+  private stepDistance: number = 0.28;
+  private stepIndex: number = 0;
+  private readonly STEP_DISTANCE_THRESHOLD: number = 0.58;
 
   constructor(weaponView: RaycastWeaponView, hud: RaycastHUD) {
     this.weaponView = weaponView;
@@ -30,6 +35,7 @@ export class RaycastPlayerController {
       ammo: 0,
       maxAmmo: 99,
       keycards: new Set<string>(),
+      isSprinting: false,
     };
 
     // Initialize with default DH-17 blaster pistol
@@ -337,12 +343,96 @@ export class RaycastPlayerController {
     }
   }
 
-  public update(delta: number, isMoving: boolean, moveIntensity: number = 1): void {
-    this.weaponView.update(delta, isMoving, moveIntensity);
+  public get isSprinting(): boolean {
+    return this.state.isSprinting;
+  }
+
+  public get sprintSpeedMultiplier(): number {
+    return this.sprintMultiplier;
+  }
+
+  public get currentSpeedMultiplier(): number {
+    return this.state.isSprinting ? this.sprintMultiplier : 1.0;
+  }
+
+  public setSprinting(sprinting: boolean): void {
+    if (this.state.isSprinting === sprinting) return;
+    this.state.isSprinting = sprinting;
+    this.hud.setSprinting(sprinting);
+  }
+
+  public toggleSprint(): boolean {
+    this.setSprinting(!this.state.isSprinting);
+    return this.state.isSprinting;
+  }
+
+  public startSprint(): void {
+    this.setSprinting(true);
+  }
+
+  public stopSprint(): void {
+    this.setSprinting(false);
+  }
+
+  public update(
+    delta: number,
+    isMoving: boolean,
+    moveIntensity: number = 1,
+    distMoved: number = 0
+  ): void {
+    const intensity = this.state.isSprinting && isMoving ? 1.65 : moveIntensity;
+    this.weaponView.update(delta, isMoving, intensity);
     this.hud.update(delta);
+
+    // Footstep audio processing
+    this.updateFootsteps(delta, isMoving, distMoved);
+  }
+
+  public playFootstep(): void {
+    const stepSounds = ["step_1", "step_2"];
+    const alias = stepSounds[this.stepIndex % stepSounds.length];
+    this.stepIndex++;
+
+    const volume = this.state.isSprinting ? 0.35 : 0.25;
+    const speed = this.state.isSprinting ? 1.05 : 1.0;
+
+    if (!sound.exists(alias)) {
+      try {
+        sound.add(alias, { url: `./assets/raycast/sfx/${alias}.mp3`, preload: true });
+      } catch {
+        try {
+          sound.add(alias, `./assets/raycast/sfx/${alias}.mp3`);
+        } catch {}
+      }
+    }
+
+    try {
+      if (sound.exists(alias)) {
+        sound.play(alias, { volume, speed });
+      }
+    } catch (e) {
+      console.warn(`Could not play footstep sound "${alias}":`, e);
+    }
+  }
+
+  private updateFootsteps(delta: number, isMoving: boolean, distMoved: number): void {
+    if (!isMoving || distMoved <= 0.0001) {
+      if (!isMoving) {
+        this.stepDistance = 0.28;
+      }
+      return;
+    }
+
+    this.stepDistance += distMoved;
+    if (this.stepDistance >= this.STEP_DISTANCE_THRESHOLD) {
+      this.stepDistance -= this.STEP_DISTANCE_THRESHOLD;
+      this.playFootstep();
+    }
   }
 
   public dispose(): void {
-    // Reset state
+    this.state.isSprinting = false;
+    this.stepDistance = 0.28;
+    this.stepIndex = 0;
   }
 }

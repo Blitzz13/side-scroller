@@ -99,6 +99,7 @@ export interface RaycastPlayerState {
   ammo: number;
   maxAmmo: number;
   keycards: Set<string>;
+  isSprinting: boolean;
 }
 
 export interface MapObject {

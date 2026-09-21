@@ -5,8 +5,13 @@ export class VirtualButton extends Container implements IDisposable {
   private bgGraphic: Graphics;
   private labelText: Text;
   private radius: number;
+  private bgColor: number;
   private _isPressed: boolean = false;
   private activePointerId: number | null = null;
+  private isToggle: boolean = false;
+  private _isToggled: boolean = false;
+  private activeBgColor: number = 0x005577;
+  private activeBorderColor: number = 0x00e5ff;
 
   constructor(
     radius: number = 36,
@@ -17,9 +22,10 @@ export class VirtualButton extends Container implements IDisposable {
     super();
 
     this.radius = radius;
+    this.bgColor = bgColor;
 
     this.bgGraphic = new Graphics();
-    this.drawButton(false, bgColor);
+    this.drawButton(false);
 
     const dpr = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));
     this.labelText = new Text(label, {
@@ -49,16 +55,53 @@ export class VirtualButton extends Container implements IDisposable {
     return this._isPressed;
   }
 
-  private drawButton(pressed: boolean, bgColor: number = 0x111111): void {
+  public get isToggled(): boolean {
+    return this._isToggled;
+  }
+
+  public setToggleMode(
+    enabled: boolean,
+    activeBgColor: number = 0x005577,
+    activeBorderColor: number = 0x00e5ff
+  ): void {
+    this.isToggle = enabled;
+    this.activeBgColor = activeBgColor;
+    this.activeBorderColor = activeBorderColor;
+    this.drawButton(this._isPressed || this._isToggled);
+    this.updateLabelStyle();
+  }
+
+  public setToggled(toggled: boolean): void {
+    if (this._isToggled === toggled) return;
+    this._isToggled = toggled;
+    this.drawButton(this._isPressed || this._isToggled);
+    this.updateLabelStyle();
+  }
+
+  public setLabel(text: string): void {
+    this.labelText.text = text;
+  }
+
+  private updateLabelStyle(): void {
+    if (this._isToggled) {
+      this.labelText.style.fill = this.activeBorderColor;
+    } else {
+      this.labelText.style.fill = 0xffffff;
+    }
+  }
+
+  private drawButton(pressedOrActive: boolean): void {
     this.bgGraphic.clear();
-    this.bgGraphic.beginFill(
-      bgColor,
-      pressed ? 0.8 : 0.4
-    );
+    const currentColor = this._isToggled ? this.activeBgColor : this.bgColor;
+    const currentBorder = this._isToggled ? this.activeBorderColor : 0xffffff;
+    const borderAlpha = pressedOrActive ? 0.95 : (this._isToggled ? 0.9 : 0.6);
+    const fillAlpha = pressedOrActive ? 0.85 : (this._isToggled ? 0.75 : 0.4);
+
+    this.bgGraphic.beginFill(currentColor, fillAlpha);
     this.bgGraphic.lineStyle({
-      width: pressed ? 3 : 2,
-      color: 0xffffff,
-      alpha: pressed ? 0.95 : 0.6,
+      width: pressedOrActive || this._isToggled ? 3 : 2,
+      color: currentBorder,
+      alpha: borderAlpha,
     });
     this.bgGraphic.drawCircle(0, 0, this.radius);
     this.bgGraphic.endFill();
@@ -83,7 +126,12 @@ export class VirtualButton extends Container implements IDisposable {
       }
       this.activePointerId = null;
       this._isPressed = false;
-      this.drawButton(false);
+      if (this.isToggle) {
+        this._isToggled = !this._isToggled;
+        this.updateLabelStyle();
+        (this as any).emit("toggle", this._isToggled);
+      }
+      this.drawButton(this._isToggled);
       this.scale.set(1.0);
       (this as any).emit("release", e);
       (this as any).emit("tap", e);

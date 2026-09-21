@@ -15,6 +15,7 @@ export class MobileControls extends Container implements IDisposable {
   private btnAction: VirtualButton;
   private btnWeapon: VirtualButton;
   private btnFullscreen: VirtualButton;
+  private btnSprint: VirtualButton;
   private buttonTurnSpeed: number = 0.04;
 
   constructor() {
@@ -85,10 +86,27 @@ export class MobileControls extends Container implements IDisposable {
       toggleFullscreen();
     });
     this.addChild(this.btnFullscreen);
+
+    // 9. Sprint Toggle Button ([RUN])
+    this.btnSprint = new VirtualButton(42, "RUN", 0x1f2937);
+    this.btnSprint.position.set(screenW - 270, screenH - 230);
+    this.btnSprint.setToggleMode(true, 0x005577, 0x00e5ff);
+    this.btnSprint.on("toggle", (active: boolean) => {
+      (this as any).emit("toggleSprint", active);
+    });
+    this.addChild(this.btnSprint);
   }
 
   public get moveVector(): JoystickVector {
     return this.joystick.vector;
+  }
+
+  public get isSprintToggled(): boolean {
+    return this.btnSprint.isToggled;
+  }
+
+  public setSprintToggled(active: boolean): void {
+    this.btnSprint.setToggled(active);
   }
 
   public consumeLookDelta(): number {
@@ -114,6 +132,7 @@ export class MobileControls extends Container implements IDisposable {
     this.btnAction.dispose();
     this.btnWeapon.dispose();
     this.btnFullscreen.dispose();
+    this.btnSprint.dispose();
     this.destroy({ children: true });
   }
 }

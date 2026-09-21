@@ -37,6 +37,12 @@ export class RaycastHUD extends Container {
   private keycardBg: Graphics;
   private keycardIcons: Map<string, Sprite> = new Map();
 
+  // Sprint Indicator
+  private sprintContainer: Container;
+  private sprintBg: Graphics;
+  private sprintText: Text;
+  private sprintIcon: Graphics;
+
   constructor() {
     super();
 
@@ -246,6 +252,44 @@ export class RaycastHUD extends Container {
     this.keycardContainer.addChild(keycardLabel);
 
     this.addChild(this.keycardContainer);
+
+    // 6. Sprint Badge (Bottom-Left, directly above Health gauge)
+    this.sprintContainer = new Container();
+    this.sprintContainer.position.set(24, screenH - 126);
+    this.sprintContainer.visible = false;
+
+    this.sprintBg = new Graphics();
+    this.sprintBg.beginFill(0x0a1018, 0.85);
+    this.sprintBg.lineStyle(1.5, 0x00e5ff, 0.7);
+    this.sprintBg.drawRoundedRect(0, 0, 96, 24, 6);
+    this.sprintBg.endFill();
+    this.sprintContainer.addChild(this.sprintBg);
+
+    // High-tech lightning bolt glyph
+    this.sprintIcon = new Graphics();
+    this.sprintIcon.beginFill(0x00e5ff, 0.95);
+    this.sprintIcon.moveTo(13, 4);
+    this.sprintIcon.lineTo(7, 13);
+    this.sprintIcon.lineTo(12, 13);
+    this.sprintIcon.lineTo(9, 20);
+    this.sprintIcon.lineTo(18, 10);
+    this.sprintIcon.lineTo(13, 10);
+    this.sprintIcon.closePath();
+    this.sprintIcon.endFill();
+    this.sprintContainer.addChild(this.sprintIcon);
+
+    this.sprintText = new Text("SPRINT", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 11,
+      fontWeight: "bold",
+      fill: 0x00e5ff,
+      letterSpacing: 1,
+    });
+    this.sprintText.resolution = dpr;
+    this.sprintText.position.set(24, 5);
+    this.sprintContainer.addChild(this.sprintText);
+
+    this.addChild(this.sprintContainer);
   }
 
   public addKeycard(color: string, customTexture?: Texture): void {
@@ -432,6 +476,20 @@ export class RaycastHUD extends Container {
       }
       if (this.toastTimer <= 0) {
         this.toastContainer.visible = false;
+      }
+    }
+
+    // 3. Sprint badge pulse
+    if (this.sprintContainer && this.sprintContainer.visible) {
+      this.sprintContainer.alpha = 0.85 + Math.sin(Date.now() * 0.008) * 0.15;
+    }
+  }
+
+  public setSprinting(sprinting: boolean): void {
+    if (this.sprintContainer) {
+      this.sprintContainer.visible = sprinting;
+      if (sprinting) {
+        this.sprintContainer.alpha = 1;
       }
     }
   }

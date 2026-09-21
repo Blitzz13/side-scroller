@@ -102,6 +102,14 @@ export const manifest: AssetsManifest = {
             src: "./assets/sounds/calm_loop.mp3"
           },
           {
+            alias: "step_1",
+            src: "./assets/raycast/sfx/step_1.mp3"
+          },
+          {
+            alias: "step_2",
+            src: "./assets/raycast/sfx/step_2.mp3"
+          },
+          {
             alias: "stormtrooper_pain_1",
             src: "./assets/raycast/sfx/storm_trooper/stormtrooper_pain_1.mp3"
           },

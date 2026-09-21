@@ -73,11 +73,13 @@ export class RaycastScene extends BaseScene {
     a: false,
     s: false,
     d: false,
+    shift: false,
   };
   private graphics: Graphics;
   private textures: Record<number, Texture> = {};
   private columnTextures: Record<number, Texture[]> = {};
   private moveSpeed: number = 0.02;
+  private lastFrameDistMoved: number = 0;
   private playerRadius: number = 0.28;
   private rotSpeed: number = 0.05;
   private mouseSensitivity: number = 0.002;
@@ -406,6 +408,9 @@ export class RaycastScene extends BaseScene {
       this.mobileControls.on("action", () => this.tryOpenDoor());
       this.mobileControls.on("fire", () => this.tryShoot());
       this.mobileControls.on("switchWeapon", () => this.playerController.cycleWeapon(1));
+      this.mobileControls.on("toggleSprint", (active: boolean) => {
+        this.playerController.setSprinting(active);
+      });
       this.addChild(this.mobileControls);
     }
 
@@ -1688,6 +1693,12 @@ export class RaycastScene extends BaseScene {
   private blurHandler = () => {
     this.isLeftMouseDown = false;
     this.isRightMouseDown = false;
+    for (const k in this.keys) {
+      this.keys[k] = false;
+    }
+    if (!this.mobileControls && this.playerController) {
+      this.playerController.stopSprint();
+    }
   };
 
   private mouseUpHandler = (e: MouseEvent) => {
@@ -1919,14 +1930,38 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  private isPlayerMoving(): boolean {
+    const joyVector = this.mobileControls?.moveVector ?? RaycastScene.ZERO_VECTOR;
+    return (
+      this.keys.w ||
+      this.keys.s ||
+      this.keys.a ||
+      this.keys.d ||
+      Math.abs(joyVector.x) > 0.15 ||
+      Math.abs(joyVector.y) > 0.15
+    );
+  }
+
   private keyDownHandler = (e: KeyboardEvent) => {
     if (!this.bgMusicInstance) {
       this.playBackgroundMusic();
     }
-    if (e.key in this.keys) {
-      this.keys[e.key] = true;
+    const key = e.key.toLowerCase();
+    if (key in this.keys) {
+      this.keys[key] = true;
+      // If Shift is already held when starting to move on desktop, immediately sprint
+      if (!this.mobileControls && (this.keys.shift || e.shiftKey)) {
+        this.playerController.setSprinting(true);
+      }
     }
-    if (e.key === "e" || e.key === "E") {
+    // Desktop hold-to-sprint: immediately sprint when Shift is pressed while moving
+    if (e.key === "Shift" || e.code === "ShiftLeft" || e.code === "ShiftRight") {
+      this.keys.shift = true;
+      if (!this.mobileControls && this.isPlayerMoving()) {
+        this.playerController.setSprinting(true);
+      }
+    }
+    if (key === "e") {
       this.tryOpenDoor();
     }
     if (e.code === "Space") {
@@ -1942,17 +1977,29 @@ export class RaycastScene extends BaseScene {
     if (e.key === "3" || e.code === "Digit3") {
       this.playerController.switchWeapon(RaycastWeaponType.THERMAL_DETONATOR);
     }
-    if (e.key === "q" || e.key === "Q") {
+    if (key === "q") {
       this.playerController.cycleWeapon(-1);
     }
     // Toggle/Cycle Door Slide Mode (V: Up -> Down -> Sideways)
-    if (e.key === "v" || e.key === "V") {
+    if (key === "v") {
       this.cycleDoorSlideMode();
     }
   };
 
   private keyUpHandler = (e: KeyboardEvent) => {
-    if (e.key in this.keys) this.keys[e.key] = false;
+    const key = e.key.toLowerCase();
+    if (key in this.keys) this.keys[key] = false;
+
+    // Desktop hold-to-sprint: immediately stop sprinting when Shift is released
+    if (e.key === "Shift" || e.code === "ShiftLeft" || e.code === "ShiftRight" || !e.shiftKey) {
+      if (e.key === "Shift" || e.code === "ShiftLeft" || e.code === "ShiftRight") {
+        this.keys.shift = false;
+      }
+      if (!this.mobileControls && (!this.keys.shift || !e.shiftKey)) {
+        this.keys.shift = false;
+        this.playerController.setSprinting(false);
+      }
+    }
   };
 
   private rotatePlayer(angle: number): void {
@@ -2059,28 +2106,44 @@ export class RaycastScene extends BaseScene {
     }
 
     // Determine movement for weapon bobbing
-    const joyVector = this.mobileControls?.moveVector ?? RaycastScene.ZERO_VECTOR;
-    const isMoving =
-      this.keys.w ||
-      this.keys.s ||
-      this.keys.a ||
-      this.keys.d ||
-      Math.abs(joyVector.x) > 0.15 ||
-      Math.abs(joyVector.y) > 0.15;
+    const isMoving = this.isPlayerMoving();
 
     // Automatic continuous firing while right mouse button is pressed with the E-11 Blaster
     if (this.isRightMouseDown && this.playerController.equippedWeapon === RaycastWeaponType.E11) {
       this.tryShoot(true);
     }
 
-    this.playerController.update(delta, isMoving);
+    this.playerController.update(delta, isMoving, 1, this.lastFrameDistMoved);
 
     this.renderScene();
   }
 
   private updatePlayer(delta: number) {
-    if (this.stairsManager && this.stairsManager.isTransitioning()) return;
-    const moveSpeed = this.moveSpeed * delta;
+    if (this.stairsManager && this.stairsManager.isTransitioning()) {
+      this.lastFrameDistMoved = 0;
+      return;
+    }
+
+    const startX = this.player.x;
+    const startY = this.player.y;
+
+    const isMoving = this.isPlayerMoving();
+
+    // On mobile: sprint is driven by mobileControls toggle button.
+    // On desktop: sprint only while Shift is kept pressed and player is moving.
+    if (this.mobileControls) {
+      if (this.playerController.isSprinting !== this.mobileControls.isSprintToggled) {
+        this.playerController.setSprinting(this.mobileControls.isSprintToggled);
+      }
+    } else {
+      const shouldSprint = this.keys.shift && isMoving;
+      if (this.playerController.isSprinting !== shouldSprint) {
+        this.playerController.setSprinting(shouldSprint);
+      }
+    }
+
+    const speedMultiplier = this.playerController.currentSpeedMultiplier;
+    const moveSpeed = this.moveSpeed * delta * speedMultiplier;
 
     // Mobile joystick input
     const joyVector = this.mobileControls?.moveVector ?? RaycastScene.ZERO_VECTOR;
@@ -2145,6 +2208,9 @@ export class RaycastScene extends BaseScene {
         }
       }
     }
+
+    // Track actual distance moved for footsteps
+    this.lastFrameDistMoved = Math.hypot(this.player.x - startX, this.player.y - startY);
 
     // 3. Mobile Camera Rotation (swipe look area & turn buttons)
     if (this.mobileControls) {

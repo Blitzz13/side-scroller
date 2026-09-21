@@ -2,6 +2,51 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-21] - Player Sprint Mechanics, Dynamic Footstep Audio System, HUD Sprint Badge & Mobile Toggle Controls
+
+### 1. Player Sprint System & Enhanced Movement Dynamics
+- **Sprint State & Speed Multiplier** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Added `isSprinting: boolean` to [`RaycastPlayerState`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts).
+  - Implemented `sprintMultiplier` (`1.7x` speed boost) in [`RaycastPlayerController`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts) with getters `isSprinting`, `sprintSpeedMultiplier`, and `currentSpeedMultiplier`.
+  - Added sprint management methods: `setSprinting()`, `toggleSprint()`, `startSprint()`, and `stopSprint()`, keeping state synchronized with HUD and player controllers.
+  - Dynamically amplified weapon bobbing animation intensity from `1.0` to `1.65` during sprint movement for heightened kinetic feedback.
+- **Desktop Hold-to-Sprint & Input Normalization** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Implemented desktop hold-to-sprint mechanics mapped to the `Shift` key (`ShiftLeft`, `ShiftRight`, or `e.shiftKey`).
+  - Sprint activates immediately when Shift is pressed while already moving, or when movement keys (`W`, `A`, `S`, `D`) are initiated while Shift is held.
+  - Automatically deactivates sprint upon releasing Shift or when the player stops moving.
+  - Normalized keyboard event handling (`e.key.toLowerCase()`) across action (`E`), weapon switch/cycle (`Q`), door mode (`V`), and movement keys.
+  - Enhanced window focus loss (`blurHandler`) to clear held keys and immediately disengage sprint.
+
+### 2. Distance-Based Dynamic Footstep Audio
+- **Audio Assets & Manifest Registration** ([`assets/raycast/sfx/step_1.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/step_1.mp3), [`assets/raycast/sfx/step_2.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/step_2.mp3), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added dedicated left/right boot footstep sound effects: `step_1.mp3` and `step_2.mp3`.
+  - Registered sound aliases `step_1` and `step_2` in [`GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) under asset manifest for preloading.
+- **Distance-Accumulated Step Cadence** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Tracked frame-to-frame movement delta distance (`lastFrameDistMoved = Math.hypot(dx, dy)`) in [`RaycastScene`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts).
+  - Implemented distance accumulator in [`RaycastPlayerController`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts) triggering footsteps at `STEP_DISTANCE_THRESHOLD = 0.58` grid units.
+  - Alternates footsteps sequentially between `step_1` and `step_2`.
+  - Dynamic audio modulation: standard walking plays footsteps at `volume: 0.25, speed: 1.0`, while sprinting increases volume and pitch/cadence (`volume: 0.35, speed: 1.05`).
+  - Added lazy-loading fallback with `@pixi/sound` to ensure footsteps play reliably even if manifest preloading has not finished.
+  - Resets step accumulator to an initial responsive offset (`0.28`) on stopping so the first step upon resuming movement sounds without delay.
+
+### 3. High-Tech HUD Sprint Badge
+- **Sprint Indicator & Animated Glyph** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Added sci-fi sprint badge positioned in the bottom-left viewport directly above the player health gauge (`x: 24, y: screenH - 126`).
+  - Styled with dark translucent backing (`0x0a1018`, alpha `0.85`), rounded cyan border (`0x00e5ff`), and bold `"SPRINT"` text.
+  - Rendered a custom vector lightning bolt glyph icon using Pixi Graphics.
+  - Implemented subtle real-time alpha oscillation / pulsing glow effect (`Math.sin(Date.now() * 0.008)`) while active.
+  - Added `setSprinting(sprinting: boolean)` to seamlessly toggle container visibility and alpha state.
+
+### 4. Mobile Toggle Controls & Virtual Button Enhancements
+- **Virtual Button Toggle Mode** ([`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts)):
+  - Extended [`VirtualButton`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts) to support stateful toggle behavior via `setToggleMode(enabled, activeBgColor, activeBorderColor)` and `setToggled(toggled)`.
+  - Added visual styling updates when toggled on: updates fill and border graphics to active colors and shifts label font fill color.
+  - Emits `"toggle"` event on pointer release alongside traditional button press events.
+- **Mobile Sprint ("RUN") Button Integration** ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added `[RUN]` virtual button to the mobile control layout positioned above action/weapon controls (`screenW - 270, screenH - 230`).
+  - Configured as a persistent toggle button with cyan active highlight (`0x005577` background, `0x00e5ff` border/label).
+  - Wired mobile sprint toggle events into [`RaycastScene`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) and synchronized two-way state via `isSprintToggled` and `setSprintToggled()`.
+
 ## [2026-09-13] - Imperial Officer & Commando Implementation, 8-Way Directional Animation, and Voiceline Audio System Overhaul
 
 ### 1. Imperial Officer Enemy Implementation
