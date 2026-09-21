@@ -55,11 +55,15 @@ export const manifest: AssetsManifest = {
           },
           {
             alias: "use_bacta",
-            src: "./assets/sounds/use_bacta.wav"
+            src: "./assets/raycast/sfx/use_bacta.wav"
           },
           {
-            alias: "pickup",
-            src: "./assets/sounds/pickup.mp3"
+            alias: "pickup_item",
+            src: "./assets/raycast/sfx/pickup_item.mp3"
+          },
+          {
+            alias: "pickup_shield",
+            src: "./assets/raycast/sfx/pickup_shield.mp3"
           },
           {
             alias: "button_click",

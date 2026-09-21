@@ -68,7 +68,7 @@ export const raycastBlueKeycardConfig: IRaycastPickupConfig = {
   keyColor: "blue",
   spritesheet: "assets/raycast/pickups/keycards.json",
   pickUpSound: {
-    src: "pickup",
+    src: "pickup_item",
     loop: false,
     volume: 1,
   },
@@ -85,7 +85,7 @@ export const raycastGreenKeycardConfig: IRaycastPickupConfig = {
   keyColor: "green",
   spritesheet: "assets/raycast/pickups/keycards.json",
   pickUpSound: {
-    src: "pickup",
+    src: "pickup_item",
     loop: false,
     volume: 1,
   },
@@ -102,7 +102,7 @@ export const raycastRedKeycardConfig: IRaycastPickupConfig = {
   keyColor: "red",
   spritesheet: "assets/raycast/pickups/keycards.json",
   pickUpSound: {
-    src: "pickup",
+    src: "pickup_item",
     loop: false,
     volume: 1,
   },
@@ -148,7 +148,7 @@ export const raycastShieldPickupConfig: IRaycastPickupConfig = {
   texture: "assets/raycast/pickups/shield_unit.png",
   spritesheet: "assets/raycast/pickups/shield_unit.json",
   pickUpSound: {
-    src: "repair_sound",
+    src: "pickup_shield",
     loop: false,
     volume: 1,
   },
