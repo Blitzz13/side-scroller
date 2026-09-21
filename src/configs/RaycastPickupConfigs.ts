@@ -35,7 +35,7 @@ export const raycastDh17PickupConfig: IRaycastPickupConfig = {
   type: RaycastPickupType.WEAPON,
   name: "DH-17 Blaster",
   amount: 30,
-  texture: "assets/raycast/weapons/dh_17.png",
+  texture: "assets/raycast/pickups/dh_17_item.png",
   weaponType: RaycastWeaponType.DH17,
   pickUpSound: {
     src: "reload_sound",

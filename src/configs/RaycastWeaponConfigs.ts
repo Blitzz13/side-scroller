@@ -96,8 +96,8 @@ export const dh17Config: IRaycastWeaponConfig = {
   maxAmmo: 99,
   defaultAmmo: 30,
   rateOfFire: 220,
-  equippedTexture: "assets/raycast/weapons/dh_17.png",
-  itemTexture: "assets/raycast/weapons/dh_17.png",
+  equippedTexture: "assets/raycast/weapons/dh_17_equiped.png",
+  itemTexture: "assets/raycast/pickups/dh_17_item.png",
   shootSounds: dh17ShootSounds,
   reloadSound: {
     src: "reload_sound",
@@ -174,5 +174,17 @@ export function getRaycastWeaponConfig(
     return raycastWeaponConfigs[RaycastWeaponType.DH17];
   }
 
-  return raycastWeaponConfigs[RaycastWeaponType.DH17];
+  if (normalized.includes("e11") || normalized.includes("rifle")) {
+    return raycastWeaponConfigs[RaycastWeaponType.E11];
+  }
+
+  if (
+    normalized.includes("thermal") ||
+    normalized.includes("detonator") ||
+    normalized.includes("grenade")
+  ) {
+    return raycastWeaponConfigs[RaycastWeaponType.THERMAL_DETONATOR];
+  }
+
+  return undefined;
 }

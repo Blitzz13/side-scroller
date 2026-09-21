@@ -57,6 +57,8 @@ export class RaycastPickupManager {
 
     const standardPickups = [
       { key: "weapon", path: "assets/raycast/pickups/e_11_item.png" },
+      { key: "weapon_e11", path: "assets/raycast/pickups/e_11_item.png" },
+      { key: "weapon_dh17", path: "assets/raycast/pickups/dh_17_item.png" },
       { key: "health", path: "assets/raycast/pickups/health.png" },
       { key: "ammo", path: "assets/ammo.png" },
       { key: "thermal_detonator_belt", path: "assets/raycast/pickups/thermal_detonator_belt.png" },
@@ -724,21 +726,27 @@ export class RaycastPickupManager {
     // Add uncollected non-animated pickups (keycards with AnimatedSprite are rendered via render())
     for (const pickup of this.pickups) {
       if (!pickup.collected && !pickup.animatedSprite) {
-        const pTypeKey =
-          pickup.type === RaycastPickupType.WEAPON
-            ? "weapon"
-            : pickup.type === RaycastPickupType.AMMO
-            ? "ammo"
-            : pickup.type === RaycastPickupType.THERMAL_DETONATOR_BELT
-            ? "thermal_detonator_belt"
-            : pickup.type === RaycastPickupType.THERMAL_DETONATOR_SINGLE
-            ? "thermal_detonator_pickup"
-            : pickup.type === RaycastPickupType.SHIELD
-            ? "shield"
-            : "health";
+        let pTypeKey = "health";
+        if (pickup.type === RaycastPickupType.WEAPON) {
+          if (pickup.weaponType === RaycastWeaponType.DH17) {
+            pTypeKey = "weapon_dh17";
+          } else if (pickup.weaponType === RaycastWeaponType.THERMAL_DETONATOR) {
+            pTypeKey = "thermal_detonator_pickup";
+          } else {
+            pTypeKey = "weapon_e11";
+          }
+        } else if (pickup.type === RaycastPickupType.AMMO) {
+          pTypeKey = "ammo";
+        } else if (pickup.type === RaycastPickupType.THERMAL_DETONATOR_BELT) {
+          pTypeKey = "thermal_detonator_belt";
+        } else if (pickup.type === RaycastPickupType.THERMAL_DETONATOR_SINGLE) {
+          pTypeKey = "thermal_detonator_pickup";
+        } else if (pickup.type === RaycastPickupType.SHIELD) {
+          pTypeKey = "shield";
+        }
 
-        const customTex = this.pickupTextures[pTypeKey];
-        const customSlices = this.pickupSlices[pTypeKey];
+        const customTex = this.pickupTextures[pTypeKey] || this.pickupTextures["weapon"];
+        const customSlices = this.pickupSlices[pTypeKey] || this.pickupSlices["weapon"];
 
         list.push({
           x: pickup.x,
@@ -1006,18 +1014,36 @@ export class RaycastPickupManager {
     amount: number | RaycastWeaponType = 20,
     weaponType: RaycastWeaponType = RaycastWeaponType.E11
   ): RaycastPickupItem {
-    const pConfig = getRaycastPickupConfig(type);
-    let finalAmount = typeof amount === "number" ? amount : 20;
-    let finalWeapon: RaycastWeaponType = weaponType;
+    let finalAmount = 20;
+    let finalWeapon: RaycastWeaponType = RaycastWeaponType.E11;
 
-    // Handle (type, x, y, dropWeapon, dropAmmo) order gracefully
-    if (
-      typeof (amount as any) === "string" ||
-      (typeof amount === "number" && typeof (weaponType as any) === "number" && amount < 10 && weaponType >= 10)
-    ) {
-      finalWeapon = amount as unknown as RaycastWeaponType;
+    if (typeof amount === "string") {
+      const cfg = getRaycastWeaponConfig(amount);
+      if (cfg) finalWeapon = cfg.type;
       finalAmount = typeof weaponType === "number" ? weaponType : 20;
+    } else if (
+      typeof amount === "number" &&
+      typeof weaponType === "number" &&
+      (amount === RaycastWeaponType.E11 ||
+        amount === RaycastWeaponType.DH17 ||
+        amount === RaycastWeaponType.THERMAL_DETONATOR) &&
+      weaponType > 2
+    ) {
+      // Caller passed (type, x, y, dropWeapon, dropAmmo)
+      finalWeapon = amount;
+      finalAmount = weaponType;
+    } else {
+      // Caller passed (type, x, y, dropAmmo, dropWeapon) or just (type, x, y, amount)
+      finalAmount = typeof amount === "number" ? amount : 20;
+      finalWeapon = typeof weaponType === "number" ? weaponType : RaycastWeaponType.E11;
     }
+
+    const pConfig =
+      type === RaycastPickupType.WEAPON
+        ? (finalWeapon === RaycastWeaponType.DH17
+            ? getRaycastPickupConfig("dh_17")
+            : getRaycastPickupConfig("e_11")) || getRaycastPickupConfig(type)
+        : getRaycastPickupConfig(type);
 
     let keyColor: string | undefined;
     if (type === RaycastPickupType.BLUE_KEYCARD) keyColor = "blue";

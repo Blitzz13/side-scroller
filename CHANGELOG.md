@@ -2,6 +2,28 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-21] - Fix Enemy Weapon Drop Discrimination & Ground Texture Overwrite
+
+### 1. Distinct Weapon Ground Pickup Textures & Slicing
+- **Texture Key Collision Resolution** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Fixed standard pickups registration in `initTextures()` where both `e_11_item.png` and `dh_17_item.png` shared the single key `"weapon"`, causing `dh_17_item.png` to silently overwrite `e_11_item.png`.
+  - Registered individual texture keys `"weapon_e11"`, `"weapon_dh17"`, and fallback `"weapon"`.
+- **Discriminative World Rendering** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Updated `getVisibleMapObjects()` to inspect `pickup.weaponType`:
+    - `RaycastWeaponType.DH17` renders with `"weapon_dh17"`.
+    - `RaycastWeaponType.THERMAL_DETONATOR` renders with `"thermal_detonator_pickup"`.
+    - `RaycastWeaponType.E11` renders with `"weapon_e11"`.
+  - Ground pickups now accurately reflect whether the weapon dropped by an enemy was an E-11 rifle or DH-17 pistol.
+- **Pickup Config Asset Paths** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Fixed `raycastDh17PickupConfig.texture` and `dh17Config.itemTexture` pointing to the first-person HUD sprite `assets/raycast/weapons/dh_17_equiped.png` instead of the ground pickup sprite `assets/raycast/pickups/dh_17_item.png`.
+
+### 2. Spawn Parameter Disambiguation & Config Mapping
+- **Loot Drop Parsing & Argument Order Normalization** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Refactored `spawnPickup()` to cleanly disambiguate between ammo counts and weapon enum types regardless of argument ordering.
+  - Resolved `pConfig` directly using the spawned `finalWeapon` type so weapon pickups inherit the correct stats, display names, and pickup sound triggers.
+- **Weapon Config Lookup Fallback Safety** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Updated `getRaycastWeaponConfig()` to avoid unconditionally defaulting unknown or invalid weapon identifiers to `DH-17`. Added explicit keyword matching for `e11`, `rifle`, `thermal`, and `detonator`.
+
 ## [2026-09-21] - Level End Debriefing Scene, LocalStorage Progress Persistence, Cinematic Fade Transitions, Button Audio, & Ultra-Sharp Typography
 
 ### 1. Level Completion, Progression & Save System
@@ -561,7 +583,7 @@ This document logs recent development changes and enhancements made to the Rayca
     - **Toss phase**: Swings forward and down offscreen, releasing the 3D projectile into the world at peak toss (`progress = 0.45`).
     - **Recovery/Draw phase**: Draws the next detonator from below the screen (or switches back to primary weapon if ammo depleted).
 - **DH-17 Blaster Pistol as Default Starting Weapon** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
-  - Added `RaycastWeaponType.DH17` enum and `dh17Config` using [`assets/raycast/weapons/dh_17.png`](file:///D:/Projects/side-scroller/assets/raycast/weapons/dh_17.png) and authentic firing sound [`assets/sounds/dh_17_blaster.mp3`](file:///D:/Projects/side-scroller/assets/sounds/dh_17_blaster.mp3).
+  - Added `RaycastWeaponType.DH17` enum and `dh17Config` using [`assets/raycast/weapons/dh_17_equiped.png`](file:///D:/Projects/side-scroller/assets/raycast/weapons/dh_17_equiped.png) and authentic firing sound [`assets/sounds/dh_17_blaster.mp3`](file:///D:/Projects/side-scroller/assets/sounds/dh_17_blaster.mp3).
   - Player now begins the game equipped with the **DH-17 Blaster Pistol** with 30 starting ammo instead of the E-11.
   - The E-11 Blaster Rifle can still be acquired as a weapon drop from defeated Stormtroopers or map pickups.
 - **E-11 Blaster Rifle Right-Click Automatic Fire Mode** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):

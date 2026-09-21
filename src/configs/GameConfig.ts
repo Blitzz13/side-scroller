@@ -442,7 +442,7 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "dh_17",
-            src: "./assets/raycast/weapons/dh_17.png"
+            src: "./assets/raycast/weapons/dh_17_equiped.png"
           },
           {
             name: "shield_unit",
