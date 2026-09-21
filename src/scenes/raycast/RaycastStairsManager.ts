@@ -37,6 +37,14 @@ export class RaycastStairsManager {
   private stairList: StairNode[] = [];
   private wipeTransition: StarWarsWipeTransition;
 
+  // Stair footstep audio playback sequence
+  private isStairStepActive: boolean = false;
+  private stairStepCounter: number = 0;
+  private totalStairSteps: number = 4;
+  private stairStepTimer: number = 0;
+  private readonly stairStepInterval: number = 0.16;
+  private stairStepType: "up" | "down" | "generic" = "generic";
+
   constructor(scene: IRaycastSceneContext) {
     this.scene = scene;
     this.wipeTransition = new StarWarsWipeTransition(scene as any);
@@ -380,12 +388,8 @@ export class RaycastStairsManager {
     const dx = partner.x - stair.x;
     const dy = partner.y - stair.y;
 
-    // Play transition sound
-    try {
-      sound.play("door_1", { volume: 0.45 });
-    } catch (e) {
-      console.warn("Failed to play stair transition sound:", e);
-    }
+    // Trigger stair footstep audio sequence (step_1 and step_2) instead of door_1
+    this.startStairFootsteps(stair.stairType);
 
     // Display HUD notification
     const hud = this.scene.getHUD();
@@ -406,7 +410,7 @@ export class RaycastStairsManager {
       this.scene.getWorldContainer(),
       this.scene.getWeaponView(),
       {
-        duration: 0.55,
+        duration: 0.65,
         wipeDir,
         wipeType: 0.0, // Iconic linear directional screen wipe
         lineColor: [0.0, 0.9, 1.0], // Glowing cyan energy line
@@ -424,11 +428,68 @@ export class RaycastStairsManager {
     return true;
   }
 
+  private startStairFootsteps(stairType: "up" | "down" | "generic"): void {
+    this.isStairStepActive = true;
+    this.stairStepCounter = 0;
+    this.totalStairSteps = 5;
+    this.stairStepTimer = 0; // Trigger step 0 immediately
+    this.stairStepType = stairType;
+  }
+
+  private updateStairSteps(delta: number): void {
+    if (!this.isStairStepActive) return;
+
+    this.stairStepTimer -= delta / 60;
+    if (this.stairStepTimer <= 0) {
+      this.playStairFootstep(this.stairStepCounter, this.stairStepType);
+      this.stairStepCounter++;
+      if (this.stairStepCounter >= this.totalStairSteps) {
+        this.isStairStepActive = false;
+      } else {
+        this.stairStepTimer = this.stairStepInterval;
+      }
+    }
+  }
+
+  private playStairFootstep(stepIndex: number, stairType: "up" | "down" | "generic"): void {
+    const stepSounds = ["step_1", "step_2"];
+    const alias = stepSounds[stepIndex % stepSounds.length];
+
+    // Progressive pitch/speed modulation: ascending steps rise slightly, descending steps deepen
+    let speed = 1.0;
+    if (stairType === "up") {
+      speed = 1.04 + stepIndex * 0.02;
+    } else if (stairType === "down") {
+      speed = 0.98 - stepIndex * 0.015;
+    }
+    const volume = 0.4;
+
+    if (!sound.exists(alias)) {
+      try {
+        sound.add(alias, { url: `./assets/raycast/sfx/${alias}.mp3`, preload: true });
+      } catch {
+        try {
+          sound.add(alias, `./assets/raycast/sfx/${alias}.mp3`);
+        } catch {}
+      }
+    }
+
+    try {
+      if (sound.exists(alias)) {
+        sound.play(alias, { volume, speed });
+      }
+    } catch (e) {
+      console.warn(`Could not play stair footstep sound "${alias}":`, e);
+    }
+  }
+
   public update(delta: number): void {
     this.wipeTransition.update(delta);
+    this.updateStairSteps(delta);
   }
 
   public destroy(): void {
+    this.isStairStepActive = false;
     this.wipeTransition.destroy();
     this.stairs.clear();
     this.stairList = [];
