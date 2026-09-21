@@ -1,4 +1,4 @@
-import { AssetsManifest, BitmapFont, RoundedRectangle } from "pixi.js";
+import { AssetsManifest, BitmapFont, RoundedRectangle, SCALE_MODES } from "pixi.js";
 import { DoorOpen, DoorSlideMode } from "../scenes/raycast/types";
 import { enemyVoicelineConfig, stormtrooperVoicelineConfig } from "./EnemyVoicelineConfig";
 
@@ -15,21 +15,29 @@ export const gameConfig = {
 
 export function registerFonts(): void {
   const dpr = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));
-  BitmapFont.from(
+  const font = BitmapFont.from(
     "arial32",
     {
-      fontFamily: "Arial",
+      fontFamily: "Segoe UI, Arial, sans-serif",
       fontSize: 32,
-      lineHeight: 33,
+      lineHeight: 34,
       fill: 0xffffff,
     },
     {
       chars: BitmapFont.ASCII,
-      resolution: dpr,
+      resolution: dpr * 2,
       textureWidth: 1024,
       textureHeight: 1024,
     }
   );
+  if (font && font.pageTextures) {
+    for (const key of Object.keys(font.pageTextures)) {
+      const page = font.pageTextures[key];
+      if (page && page.baseTexture) {
+        page.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+      }
+    }
+  }
 }
 
 export const manifest: AssetsManifest = {
@@ -44,6 +52,18 @@ export const manifest: AssetsManifest = {
           {
             alias: "repair_sound",
             src: "./assets/sounds/repair_sound.mp3"
+          },
+          {
+            alias: "use_bacta",
+            src: "./assets/sounds/use_bacta.wav"
+          },
+          {
+            alias: "pickup",
+            src: "./assets/sounds/pickup.mp3"
+          },
+          {
+            alias: "button_click",
+            src: "./assets/sounds/button_click.mp3"
           },
           {
             alias: "reload_sound",
@@ -68,6 +88,10 @@ export const manifest: AssetsManifest = {
           {
             alias: "end_theme",
             src: "./assets/sounds/end_theme.mp3"
+          },
+          {
+            alias: "end_level",
+            src: "./assets/sounds/end_level.mp3"
           },
           {
             alias: "blaster_1",
@@ -297,6 +321,10 @@ export const manifest: AssetsManifest = {
           {
             name: "level2",
             src: "./assets/raycast/levels/test_level.json",
+          },
+          {
+            name: "imperial_base_background",
+            src: "./assets/common/imperial_base_background.jpg",
           },
         ],
       },

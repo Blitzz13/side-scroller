@@ -4,4 +4,5 @@ export enum Scene {
     MainMenu = "MainMenu",
     EndGame = "EndGame",
     Raycast = "Raycast",
+    LevelEnd = "LevelEnd",
 }

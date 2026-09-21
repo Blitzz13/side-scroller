@@ -1,5 +1,5 @@
 import "./style.css";
-import { Application, BaseTexture, SCALE_MODES, Ticker } from "pixi.js";
+import { Application, BaseTexture, Graphics, SCALE_MODES, Ticker } from "pixi.js";
 import { MainMenu } from "./scenes/MainMenu";
 import { gameConfig, manifest, registerFonts } from "./configs/GameConfig";
 import { BaseScene } from "./scenes/BaseScene";
@@ -10,6 +10,8 @@ import { EndlessLevel } from "./scenes/EndlessLevel";
 import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
 import { RaycastScene } from "./scenes/RaycastScene";
+import { LevelEndScene } from "./scenes/LevelEndScene";
+import { RaycastSaveManager } from "./scenes/raycast/RaycastSaveManager";
 import { Stats } from "pixi-stats";
 
 // Set global nearest-neighbor pixel sampling for all loaded textures and spritesheets
@@ -68,7 +70,23 @@ window.onload = async (): Promise<void> => {
   });
 };
 
-function changeScene(scene: Scene): void {
+let transitionOverlay: Graphics | null = null;
+let isSceneTransitioning = false;
+
+function getTransitionOverlay(): Graphics {
+  if (!transitionOverlay) {
+    transitionOverlay = new Graphics();
+    transitionOverlay.beginFill(0x000000);
+    transitionOverlay.drawRect(-20, -20, gameConfig.width + 40, gameConfig.height + 40);
+    transitionOverlay.endFill();
+    transitionOverlay.zIndex = 999999;
+    transitionOverlay.alpha = 0;
+    transitionOverlay.eventMode = "none";
+  }
+  return transitionOverlay;
+}
+
+function buildScene(scene: Scene, nextLevel?: string): void {
   currentScene?.dispose();
   switch (scene) {
     case Scene.Endless:
@@ -84,15 +102,90 @@ function changeScene(scene: Scene): void {
     case Scene.EndGame:
       currentScene = new EndGame(app.stage, currentScale);
       break;
-    case Scene.Raycast:
-      currentScene = new RaycastScene(app.stage, currentScale);
+    case Scene.LevelEnd:
+      currentScene = new LevelEndScene(app.stage, currentScale, nextLevel);
       break;
+    case Scene.Raycast: {
+      const startingLevel = nextLevel || RaycastSaveManager.getCurrentLevel();
+      currentScene = new RaycastScene(app.stage, currentScale, startingLevel);
+      break;
+    }
     default:
       break;
   }
 
   Ticker.shared.speed = 1;
   currentScene.on(Scene.Change, changeScene);
+}
+
+function changeScene(scene: Scene, nextLevel?: string): void {
+  if (isSceneTransitioning) return;
+
+  const overlay = getTransitionOverlay();
+  app.stage.sortableChildren = true;
+
+  if (!currentScene) {
+    // Initial scene start: fade in from black smoothly
+    overlay.alpha = 1;
+    overlay.eventMode = "static";
+    app.stage.addChild(overlay);
+
+    buildScene(scene, nextLevel);
+
+    let fadeElapsed = 0;
+    const fadeDuration = 0.35;
+    const onInitialFadeIn = (delta: number) => {
+      fadeElapsed += delta / 60;
+      overlay.alpha = Math.max(0, 1 - fadeElapsed / fadeDuration);
+      if (overlay.alpha <= 0) {
+        overlay.alpha = 0;
+        overlay.eventMode = "none";
+        Ticker.shared.remove(onInitialFadeIn);
+      }
+    };
+    Ticker.shared.add(onInitialFadeIn);
+    return;
+  }
+
+  // Smooth cinematic scene transition: Fade Out -> Swap Scene -> Fade In
+  isSceneTransitioning = true;
+  overlay.alpha = 0;
+  overlay.eventMode = "static";
+  app.stage.addChild(overlay);
+
+  let fadeOutElapsed = 0;
+  const fadeDuration = 0.28;
+
+  const onFadeOut = (delta: number) => {
+    fadeOutElapsed += delta / 60;
+    overlay.alpha = Math.min(1, fadeOutElapsed / fadeDuration);
+
+    if (overlay.alpha >= 1) {
+      Ticker.shared.remove(onFadeOut);
+      overlay.alpha = 1;
+
+      // Swap the active scene while screen is fully black
+      buildScene(scene, nextLevel);
+      app.stage.addChild(overlay); // Ensure overlay stays on top
+
+      // Smoothly fade in the new scene
+      let fadeInElapsed = 0;
+      const onFadeIn = (inDelta: number) => {
+        fadeInElapsed += inDelta / 60;
+        overlay.alpha = Math.max(0, 1 - fadeInElapsed / fadeDuration);
+
+        if (overlay.alpha <= 0) {
+          Ticker.shared.remove(onFadeIn);
+          overlay.alpha = 0;
+          overlay.eventMode = "none";
+          isSceneTransitioning = false;
+        }
+      };
+      Ticker.shared.add(onFadeIn);
+    }
+  };
+
+  Ticker.shared.add(onFadeOut);
 }
 
 function resizeCanvas(): void {

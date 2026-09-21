@@ -19,12 +19,13 @@ export class Button extends Container {
         });
 
         buttonText.anchor.set(0.5);
+        buttonText.roundPixels = true;
         button.eventMode = 'static';
 
         this.addChild(button);
         this.addChild(buttonText);
 
-        buttonText.position.set(button.width / 2, button.height / 2);
+        buttonText.position.set(Math.round(size.width / 2), Math.round(size.height / 2));
 
         this.on("mouseenter", () => {
             this.alpha = 0.7;

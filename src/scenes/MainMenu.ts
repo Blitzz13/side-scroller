@@ -28,11 +28,30 @@ export class MainMenu extends BaseScene {
         background.scale.set(1.2);
         this.addChild(background);
 
+        const playClickSound = () => {
+            try {
+                if (sound.exists("button_click")) {
+                    sound.play("button_click", { volume: 0.45 });
+                } else {
+                    sound.add("button_click", {
+                        url: "./assets/sounds/button_click.mp3",
+                        preload: true,
+                        loaded: () => {
+                            sound.play("button_click", { volume: 0.45 });
+                        }
+                    });
+                }
+            } catch (e) {}
+        };
+
         this._playButton.x = gameConfig.width / 2 - this._playButton.width / 2;
         this._playButton.y = gameConfig.height / 3 - this._playButton.height / 2;
 
         this._playButton.eventMode = 'static';
-        this._playButton.on("pointerdown", () => {
+        this._playButton.cursor = 'pointer';
+        this._playButton.on("pointertap", (e) => {
+            e?.stopPropagation?.();
+            playClickSound();
             this.emit(GameEvent.SELECT_SHIP, allConfigs[this._currentVisibleShipIndex]);
             this.emit(Scene.Change, Scene.Endless);
         });
@@ -41,8 +60,12 @@ export class MainMenu extends BaseScene {
         const changeShip = new Button(defaultButtonSize, "Change Ship");
         changeShip.x = gameConfig.width / 2 - changeShip.width / 2;
         changeShip.y = this._playButton.y + this._playButton.height + 20;
+        changeShip.eventMode = 'static';
+        changeShip.cursor = 'pointer';
 
-        changeShip.on("pointerdown", () => {
+        changeShip.on("pointertap", (e) => {
+            e?.stopPropagation?.();
+            playClickSound();
             if (this._currentVisibleShipIndex >= allConfigs.length - 1) {
                 this._currentVisibleShipIndex = 0;
             } else {
@@ -53,8 +76,20 @@ export class MainMenu extends BaseScene {
             ship.texture.update();
         });
 
+        const raycastButton = new Button(defaultButtonSize, "Raycast 3D");
+        raycastButton.x = gameConfig.width / 2 - raycastButton.width / 2;
+        raycastButton.y = changeShip.y + changeShip.height + 20;
+        raycastButton.eventMode = 'static';
+        raycastButton.cursor = 'pointer';
+        raycastButton.on("pointertap", (e) => {
+            e?.stopPropagation?.();
+            playClickSound();
+            this.emit(Scene.Change, Scene.Raycast);
+        });
+
         this.addChild(this._playButton);
         this.addChild(changeShip);
+        this.addChild(raycastButton);
         this.addChild(ship);
         
         if (showInstructions) {

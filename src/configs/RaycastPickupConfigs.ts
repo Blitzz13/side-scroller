@@ -8,7 +8,7 @@ export const raycastHealthPickupConfig: IRaycastPickupConfig = {
   amount: 20,
   texture: "assets/raycast/pickups/health.png",
   pickUpSound: {
-    src: "repair_sound",
+    src: "use_bacta",
     loop: false,
     volume: 1,
   },
@@ -68,7 +68,7 @@ export const raycastBlueKeycardConfig: IRaycastPickupConfig = {
   keyColor: "blue",
   spritesheet: "assets/raycast/pickups/keycards.json",
   pickUpSound: {
-    src: "reload_sound",
+    src: "pickup",
     loop: false,
     volume: 1,
   },
@@ -85,7 +85,7 @@ export const raycastGreenKeycardConfig: IRaycastPickupConfig = {
   keyColor: "green",
   spritesheet: "assets/raycast/pickups/keycards.json",
   pickUpSound: {
-    src: "reload_sound",
+    src: "pickup",
     loop: false,
     volume: 1,
   },
@@ -102,7 +102,7 @@ export const raycastRedKeycardConfig: IRaycastPickupConfig = {
   keyColor: "red",
   spritesheet: "assets/raycast/pickups/keycards.json",
   pickUpSound: {
-    src: "reload_sound",
+    src: "pickup",
     loop: false,
     volume: 1,
   },

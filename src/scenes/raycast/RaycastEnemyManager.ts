@@ -23,6 +23,21 @@ export class RaycastEnemyManager {
   private spritesheets: Record<string, Spritesheet> = {};
   private nextEnemyId: number = 1;
   private voicelineManager: EnemyVoicelineManager;
+  private onKillCallback?: (killedEnemy: RaycastEnemy, killedCount: number, totalCount: number) => void;
+
+  public get totalEnemies(): number {
+    return this.enemies.length;
+  }
+
+  public get killedEnemies(): number {
+    return this.enemies.filter((e) => e.isDead).length;
+  }
+
+  public setOnKillCallback(
+    cb: (killedEnemy: RaycastEnemy, killedCount: number, totalCount: number) => void
+  ): void {
+    this.onKillCallback = cb;
+  }
 
   private static readonly ENEMY_SFX_REGISTRY: Record<string, string> = {
     probe_droid_hovering: "assets/raycast/sfx/viper_droid/probe_droid_hovering.mp3",
@@ -440,6 +455,9 @@ export class RaycastEnemyManager {
 
     enemy.onDeathCallback = (deadEnemy) => {
       this.voicelineManager.onEnemyDeath(deadEnemy.id);
+      if (this.onKillCallback) {
+        this.onKillCallback(deadEnemy, this.killedEnemies, this.enemies.length);
+      }
     };
 
     this.enemies.push(enemy);

@@ -14,9 +14,11 @@ import {
 } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
+import { Scene } from "../enums/Scene";
 import { gameConfig } from "../configs/GameConfig";
 import { MobileControls } from "../ui/MobileControls";
 import { MapObject, RaycastBreakable, TileMeta } from "./raycast/types";
+import { RaycastSaveManager } from "./raycast/RaycastSaveManager";
 import { defaultDestructibleWallConfig } from "../configs/DestructableWallConfig";
 import { RaycastPickupManager } from "./raycast/RaycastPickupManager";
 import { RaycastBreakableManager } from "./raycast/RaycastBreakableManager";
@@ -234,9 +236,12 @@ export class RaycastScene extends BaseScene {
   private currentMapOffsetX: number = 0;
   private currentMapOffsetY: number = 0;
 
-  constructor(stage: Container, scale: number, level: string = "level1") {
+  constructor(stage: Container, scale: number, level?: string) {
     super(stage, scale);
     this.sortableChildren = true;
+
+    const startLevel = level || RaycastSaveManager.getCurrentLevel();
+    this.currentLevel = startLevel;
 
     this.map = [];
     this.floorMap = [];
@@ -433,7 +438,7 @@ export class RaycastScene extends BaseScene {
     }
 
     this.setupControls();
-    this.loadLevel(level).then(() => {
+    this.loadLevel(startLevel).then(() => {
       Ticker.shared.add(this.tick, this);
       this.playBackgroundMusic();
     });
@@ -760,6 +765,7 @@ export class RaycastScene extends BaseScene {
     this.levelFinishZones = [];
     if (this.laserManager) this.laserManager.clear();
     if (this.detonatorManager) this.detonatorManager.clear();
+    if (this.playerController) this.playerController.resetKeycards();
 
     let mapData: any;
     try {
@@ -913,6 +919,20 @@ export class RaycastScene extends BaseScene {
             break;
           }
         }
+      }
+    }
+
+    // Restore saved player state (health, shield, weapons, ammo, keycards) if available for this run
+    if (RaycastSaveManager.hasSave()) {
+      const save = RaycastSaveManager.loadProgress();
+      if (
+        save &&
+        (save.currentLevel === levelName ||
+          save.nextLevel === levelName ||
+          save.previousLevel === levelName ||
+          (save.completedLevels && save.completedLevels.length > 0))
+      ) {
+        RaycastSaveManager.applySaveToPlayer(this.playerController);
       }
     }
   }
@@ -1657,7 +1677,39 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  private removeControls(): void {
+    window.removeEventListener("keydown", this.keyDownHandler);
+    window.removeEventListener("keyup", this.keyUpHandler);
+    window.removeEventListener("mousemove", this.mouseMoveHandler);
+    window.removeEventListener("mousedown", this.mouseDownHandler);
+    window.removeEventListener("mouseup", this.mouseUpHandler);
+    window.removeEventListener("contextmenu", this.contextMenuHandler);
+    window.removeEventListener("blur", this.blurHandler);
+    window.removeEventListener("wheel", this.wheelHandler);
+    document.removeEventListener(
+      "pointerlockchange",
+      this.pointerLockChangeHandler
+    );
+    this.isLeftMouseDown = false;
+    this.isRightMouseDown = false;
+    for (const k in this.keys) {
+      this.keys[k] = false;
+    }
+    if (this.playerController) {
+      this.playerController.stopSprint();
+    }
+  }
+
   public dispose(): void {
+    this.removeControls();
+    try {
+      if (document.exitPointerLock) {
+        document.exitPointerLock();
+      }
+    } catch {}
+    if (this.parent) {
+      this.parent.removeChild(this);
+    }
     Ticker.shared.remove(this.tick, this);
     if (this.bgMusicInstance) {
       try {
@@ -1668,82 +1720,114 @@ export class RaycastScene extends BaseScene {
     try {
       sound.stop("calm_loop");
     } catch {}
-    if (this.floorCeilingAtlasTexture && this.floorCeilingAtlasTexture !== Texture.WHITE) {
-      this.floorCeilingAtlasTexture.destroy(true);
-    }
-    if (this.floorCeilingMapTexture && this.floorCeilingMapTexture !== Texture.WHITE) {
-      this.floorCeilingMapTexture.destroy(true);
-    }
-    if (this.floorCeilingMesh) {
-      this.floorCeilingMesh.destroy({ children: true });
-    }
-    if (this.mobileControls) {
-      this.mobileControls.dispose();
-    }
-    if (this.weaponView) {
-      this.weaponView.dispose();
-    }
-    if (this.hud) {
-      this.hud.dispose();
-    }
-    if (this.pickupManager) {
-      this.pickupManager.dispose();
-    }
-    if (this.breakableManager) {
-      this.breakableManager.dispose();
-    }
-    if (this.destructableWallManager) {
-      this.destructableWallManager.dispose();
-    }
-    if (this.enemyManager) {
-      this.enemyManager.dispose();
-    }
-    if (this.playerController) {
-      this.playerController.dispose();
-    }
-    if (this.stairsManager) {
-      this.stairsManager.destroy();
-    }
-    if (this.entityContainer && !(this.entityContainer as any).destroyed) {
-      this.entityContainer.removeChildren();
-      this.entityContainer.destroy({ children: true });
-    }
+    try {
+      if (this.floorCeilingAtlasTexture && this.floorCeilingAtlasTexture !== Texture.WHITE) {
+        this.floorCeilingAtlasTexture.destroy(true);
+      }
+    } catch {}
+    try {
+      if (this.floorCeilingMapTexture && this.floorCeilingMapTexture !== Texture.WHITE) {
+        this.floorCeilingMapTexture.destroy(true);
+      }
+    } catch {}
+    try {
+      if (this.floorCeilingMesh) {
+        this.floorCeilingMesh.destroy({ children: true });
+      }
+    } catch {}
+    try {
+      if (this.mobileControls) {
+        this.mobileControls.dispose();
+      }
+    } catch {}
+    try {
+      if (this.weaponView) {
+        this.weaponView.dispose();
+      }
+    } catch {}
+    try {
+      if (this.hud) {
+        this.hud.dispose();
+      }
+    } catch {}
+    try {
+      if (this.pickupManager) {
+        this.pickupManager.dispose();
+      }
+    } catch {}
+    try {
+      if (this.breakableManager) {
+        this.breakableManager.dispose();
+      }
+    } catch {}
+    try {
+      if (this.destructableWallManager) {
+        this.destructableWallManager.dispose();
+      }
+    } catch {}
+    try {
+      if (this.enemyManager) {
+        this.enemyManager.dispose();
+      }
+    } catch {}
+    try {
+      if (this.playerController) {
+        this.playerController.dispose();
+      }
+    } catch {}
+    try {
+      if (this.stairsManager) {
+        this.stairsManager.destroy();
+      }
+    } catch {}
+    try {
+      if (this.detonatorManager) {
+        this.detonatorManager.dispose();
+      }
+    } catch {}
+    try {
+      if (this.entityContainer && !(this.entityContainer as any).destroyed) {
+        this.entityContainer.removeChildren();
+        this.entityContainer.destroy({ children: true });
+      }
+    } catch {}
+    try {
+      if (this.worldContainer && !(this.worldContainer as any).destroyed) {
+        this.worldContainer.removeChildren();
+        this.worldContainer.destroy({ children: true });
+      }
+    } catch {}
     this.thinWallSpritePool = [];
     this.objectSpritePool = [];
     this.objectSpritePoolIndex = 0;
-    for (const slices of Object.values(this.columnTextures)) {
-      for (const tex of slices) {
-        tex.destroy(false);
+    try {
+      for (const slices of Object.values(this.columnTextures)) {
+        for (const tex of slices) {
+          tex.destroy(false);
+        }
       }
-    }
-    for (const arr of this.doorColumnTextures) {
-      for (const t of arr) {
-        t.destroy(false);
+    } catch {}
+    try {
+      for (const arr of this.doorColumnTextures) {
+        for (const t of arr) {
+          t.destroy(false);
+        }
       }
-    }
+    } catch {}
     this.doorColumnTextures = [];
-    for (const arr of this.thinWallColumnTextures) {
-      for (const t of arr) {
-        t.destroy(false);
+    try {
+      for (const arr of this.thinWallColumnTextures) {
+        for (const t of arr) {
+          t.destroy(false);
+        }
       }
-    }
+    } catch {}
     this.thinWallColumnTextures = [];
     this.columnTextures = {};
-    window.removeEventListener("keydown", this.keyDownHandler);
-    window.removeEventListener("keyup", this.keyUpHandler);
-    window.removeEventListener("mousemove", this.mouseMoveHandler);
-    window.removeEventListener("mousedown", this.mouseDownHandler);
-    window.removeEventListener("mouseup", this.mouseUpHandler);
-    window.removeEventListener("contextmenu", this.contextMenuHandler);
-    window.removeEventListener("blur", this.blurHandler);
-    window.removeEventListener("wheel", this.wheelHandler);
-    if (this.detonatorManager) {
-      this.detonatorManager.dispose();
-    }
-    document.removeEventListener(
-      "pointerlockchange",
-      this.pointerLockChangeHandler
-    );
+    try {
+      this.removeChildren();
+      this.destroy({ children: true });
+    } catch {}
   }
 
   private isMobileDevice(): boolean {
@@ -1819,7 +1903,7 @@ export class RaycastScene extends BaseScene {
     }
 
     if (!this.isMobileDevice()) {
-      // If pointer is not locked yet, request pointer lock on click on desktop
+      // If pointer is not locked yet, request pointer lock on click on desktop (do not shoot on capture click)
       if (!document.pointerLockElement) {
         try {
           const p: any = (document.body as any).requestPointerLock?.();
@@ -1827,6 +1911,7 @@ export class RaycastScene extends BaseScene {
             p.catch(() => {});
           }
         } catch (err) {}
+        return;
       }
 
       if (e.button === 0) {
@@ -2322,57 +2407,51 @@ export class RaycastScene extends BaseScene {
       }
     }
 
-    // 4. Check level finish trigger zones
-    this.checkLevelFinish();
   }
 
-  private checkLevelFinish(): void {
-    if (this.isLevelTransitioning) return;
-    if (!this.levelFinishZones || this.levelFinishZones.length === 0) return;
-
+  public getActiveLevelFinishZone(): LevelFinishZone | null {
+    if (!this.levelFinishZones || this.levelFinishZones.length === 0) return null;
     const px = this.player.x;
     const py = this.player.y;
-
     for (const zone of this.levelFinishZones) {
       if (px >= zone.x1 && px <= zone.x2 && py >= zone.y1 && py <= zone.y2) {
-        this.triggerLevelTransition(zone.targetLevel);
-        break;
+        return zone;
       }
     }
+    return null;
   }
 
-  private triggerLevelTransition(targetLevel: string): void {
+  private finishLevel(targetLevel: string): void {
     if (this.isLevelTransitioning) return;
     this.isLevelTransitioning = true;
+    this.removeControls();
 
-    this.hud?.showToast(`Entering ${targetLevel}...`, 0x00ffff);
+    const kills = this.enemyManager ? this.enemyManager.killedEnemies : 0;
+    const total = this.enemyManager ? this.enemyManager.totalEnemies : 0;
+
+    this.hud?.setPrompt(null);
+    this.hud?.showToast(`[★] Sector Cleared! (${kills}/${total} Hostiles)`, 0x00ffcc);
     try {
       sound.play("door_1", { volume: 0.5 });
     } catch {}
 
-    const wipe = this.stairsManager?.getWipeTransition();
-    if (wipe) {
-      wipe.start(
-        this.worldContainer,
-        this.getWeaponView(),
-        {
-          duration: 0.75,
-          wipeType: 0.0,
-          wipeDir: { x: 1, y: 0 },
-          lineColor: [0.0, 1.0, 0.8],
-          onTeleport: async () => {
-            await this.loadLevel(targetLevel);
-          },
-          onComplete: () => {
-            this.isLevelTransitioning = false;
-          },
-        }
-      );
-    } else {
-      this.loadLevel(targetLevel).then(() => {
-        this.isLevelTransitioning = false;
-      });
-    }
+    // Unlock mouse cursor so player can interact with LevelEnd buttons
+    try {
+      if (document.exitPointerLock) {
+        document.exitPointerLock();
+      }
+    } catch {}
+
+    // Save progress to LocalStorage via RaycastSaveManager (setting currentLevel to targetLevel)
+    RaycastSaveManager.saveProgress(
+      this.currentLevel,
+      targetLevel,
+      this.playerController,
+      kills,
+      total
+    );
+
+    this.emit(Scene.Change, Scene.LevelEnd, targetLevel);
   }
 
   private tryMove(newX: number, newY: number): boolean {
@@ -2474,12 +2553,21 @@ export class RaycastScene extends BaseScene {
   }
 
   private updateInteractionPrompt(): void {
-    if (!this.hud || !this.stairsManager) return;
+    if (!this.hud) return;
 
-    if (this.stairsManager.isTransitioning()) {
+    if ((this.stairsManager && this.stairsManager.isTransitioning()) || this.isLevelTransitioning) {
       this.hud.setPrompt(null);
       return;
     }
+
+    // 1. Check if player is standing in a LevelFinish zone
+    const finishZone = this.getActiveLevelFinishZone();
+    if (finishZone) {
+      this.hud.setPrompt("[★] PRESS [E] TO FINISH LEVEL", 0x00ffcc);
+      return;
+    }
+
+    if (!this.stairsManager) return;
 
     const lookX = Math.floor(this.player.x + this.player.dirX * 1.1);
     const lookY = Math.floor(this.player.y + this.player.dirY * 1.1);
@@ -2516,14 +2604,21 @@ export class RaycastScene extends BaseScene {
   }
 
   private tryOpenDoor() {
-    if (this.stairsManager && this.stairsManager.isTransitioning()) return;
+    if ((this.stairsManager && this.stairsManager.isTransitioning()) || this.isLevelTransitioning) return;
+
+    // 1. Prioritize level finish if standing in the finish zone
+    const finishZone = this.getActiveLevelFinishZone();
+    if (finishZone) {
+      this.finishLevel(finishZone.targetLevel);
+      return;
+    }
 
     const px = Math.floor(this.player.x);
     const py = Math.floor(this.player.y);
     const lookX = Math.floor(this.player.x + this.player.dirX * 1.1);
     const lookY = Math.floor(this.player.y + this.player.dirY * 1.1);
 
-    // 1. Prioritize stairs if player is facing them
+    // 2. Prioritize stairs if player is facing them
     if (this.stairsManager && this.stairsManager.tryInteractStairs(lookX, lookY)) {
       return;
     }

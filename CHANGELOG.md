@@ -2,6 +2,56 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-21] - Level End Debriefing Scene, LocalStorage Progress Persistence, Cinematic Fade Transitions, Button Audio, & Ultra-Sharp Typography
+
+### 1. Level Completion, Progression & Save System
+- **Level Finish Trigger & User Prompt** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added support for `LevelFinish` object layers in Tiled map JSON files (`level1.json`, `test_level.json`), identifying end zones and target level transitions.
+  - Replaced automatic instant transitions with an interactive HUD prompt: `[★] PRESS [E] TO FINISH SECTOR`.
+  - Prioritizes level completion when standing in a finish zone upon pressing the action key `[E]`.
+- **LocalStorage Save Architecture (`RaycastSaveManager`)** ([`src/scenes/raycast/RaycastSaveManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastSaveManager.ts)):
+  - Created modular save manager storing complete game state under `star_wars_raycast_save` in LocalStorage.
+  - Persists operative health, max health, shields, max shields, equipped weapon, ammunition counts, weapon inventory, and sector clear history.
+  - Implemented automatic level advancement: when a level finishes, `currentLevel` promotes to `nextLevel` in storage so launching or restarting the game resumes in the newly unlocked sector.
+  - **Keycard Reset Mechanism**: Keycards secured in the cleared sector are archived into `securedKeycards` for the tactical debriefing report and reset (`player.keycards = []`) so each sector starts with zero security clearance.
+
+### 2. Mission Debriefing & Sector Secured Scene (`LevelEndScene`)
+- **Imperial Command Post UI & Visual Theming** ([`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`assets/common/imperial_base_background.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_base_background.jpg)):
+  - Created dedicated end-of-level scene backed by `imperial_base_background.jpg` with a glassmorphism terminal panel, glowing cyan accent line, and sector clear headers.
+  - **Tactical Status Report**: Displays live operative diagnostics including health, shields, hostiles neutralized kill ratio (`[⚔] HOSTILES NEUTRALIZED: X / Y (% ELIMINATED)` with dynamic color-coding), preserved weapons & ammo list, and secured clearance keycards (`RESET FOR NEXT SECTOR`).
+  - **Interactive Action Buttons**: Added styled "Main Menu" and "Next Level" buttons with pointer hover states and full keyboard navigation (`Enter` / `Space` / `E` to proceed, `Escape` for Main Menu).
+  - **Pointer Lock Release**: Automatically exits pointer lock (`document.exitPointerLock()`) and restores the default mouse cursor upon entering the debriefing screen.
+- **Victory Audio Theme** ([`assets/sounds/end_level.mp3`](file:///D:/Projects/side-scroller/assets/sounds/end_level.mp3), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Registered `end_level.mp3` in the asset manifest.
+  - Configured `LevelEndScene` to play `end_level` upon reaching the debriefing terminal (leaving `end_theme` reserved for death / game over).
+
+### 3. Cinematic Scene Fade In & Fade Out Transitions
+- **Global Transition Overlay Engine** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Implemented a fullscreen black transition overlay on `app.stage` (`zIndex: 999999`) that smoothly animates across all scene changes.
+  - **Fade Out**: When changing scenes, screen smoothly fades to black over ~280ms while capturing all pointer events (`eventMode = "static"`), preventing accidental clicks or input leakage.
+  - **Seamless Scene Swap**: Old scene is disposed and new scene constructed while the screen is 100% black, completely hiding any texture or geometry pop-in.
+  - **Fade In**: Screen smoothly reveals the new scene over ~280ms and restores normal input processing.
+  - Added smooth initial fade-in on game launch.
+
+### 4. Button Audio Feedback & Blaster Sound Fix
+- **Button Click Sound Effect** ([`assets/sounds/button_click.mp3`](file:///D:/Projects/side-scroller/assets/sounds/button_click.mp3), [`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`src/scenes/MainMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/MainMenu.ts)):
+  - Integrated `button_click.mp3` with resilient fallback loading.
+  - Wired click sounds across `LevelEndScene` buttons ("Main Menu", "Next Level") and `MainMenu` buttons ("Play", "Change Ship", "Raycast 3D").
+- **Resolution of Unintended Blaster Sound on Button Click**:
+  - **Pointer-Lock Capture Isolation** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)): Modified `mouseDownHandler` so clicking on the desktop to capture pointer lock (`!document.pointerLockElement`) acquires lock and returns immediately without firing a weapon shot.
+  - **Controls Detachment (`removeControls`)** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)): Extracted controls removal and executed it immediately upon `finishLevel()` and at line 1 of `dispose()`, preventing zombie window listeners if any downstream resource destruction threw.
+  - **Button Event Normalization** ([`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`src/scenes/MainMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/MainMenu.ts)): Switched buttons to use `pointertap` only with an `isNavigating` guard and `e.stopPropagation()`, stopping double execution and mouse-held-down leaks into newly loaded scenes.
+
+### 5. High-Resolution Text & Typography Overhaul
+- **Supersampled Text Canvas Rendering** ([`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts)):
+  - Created `createSharpText` helper rasterizing text canvases at **3x–4x supersampled resolution** (`Math.max(3, Math.min(Math.round(dpr * 2), 4))`).
+  - Explicitly assigned `SCALE_MODES.LINEAR` to text base textures, eliminating pixelation artifacts caused by the engine's global `NEAREST` scale mode.
+  - Enforced `roundPixels = true` and `Math.round()` coordinates to eliminate subpixel sampling blur.
+  - Switched font family to `"Segoe UI, Arial, sans-serif"`, providing crisp, native typography on Windows PC displays.
+- **Bitmap Font & Button Text Sharpness** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/misc/Button.ts`](file:///D:/Projects/side-scroller/src/misc/Button.ts)):
+  - Upgraded `BitmapFont` resolution to `dpr * 2` and assigned `SCALE_MODES.LINEAR` to font page textures in `registerFonts()`.
+  - Added `roundPixels = true` and integer pixel centering to [`Button.ts`](file:///D:/Projects/side-scroller/src/misc/Button.ts).
+
 ## [2026-09-21] - Player Sprint Mechanics, Dynamic Footstep Audio System, HUD Sprint Badge & Mobile Toggle Controls
 
 ### 1. Player Sprint System & Enhanced Movement Dynamics

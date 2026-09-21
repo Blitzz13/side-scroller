@@ -85,6 +85,11 @@ export class RaycastPlayerController {
     this.hud.flashScreen(toastColor, 0.25);
   }
 
+  public resetKeycards(): void {
+    this.state.keycards.clear();
+    this.hud.clearKeycards();
+  }
+
   public get isWeaponEquipped(): boolean {
     return this.state.equippedWeapon !== null && this.state.weaponConfig !== null;
   }
@@ -428,6 +433,83 @@ export class RaycastPlayerController {
       this.stepDistance -= this.STEP_DISTANCE_THRESHOLD;
       this.playFootstep();
     }
+  }
+
+  public getStateSnapshot(): {
+    health: number;
+    maxHealth: number;
+    shield: number;
+    maxShield: number;
+    equippedWeapon: RaycastWeaponType | null;
+    ammo: number;
+    weapons: Array<{ type: RaycastWeaponType; ammo: number }>;
+    keycards: string[];
+  } {
+    if (this.state.equippedWeapon !== null) {
+      this.inventory.set(this.state.equippedWeapon, this.state.ammo);
+    }
+    const weapons: Array<{ type: RaycastWeaponType; ammo: number }> = [];
+    this.inventory.forEach((ammo, type) => {
+      weapons.push({ type, ammo });
+    });
+    return {
+      health: this.state.health,
+      maxHealth: this.state.maxHealth,
+      shield: this.state.shield,
+      maxShield: this.state.maxShield,
+      equippedWeapon: this.state.equippedWeapon,
+      ammo: this.state.ammo,
+      weapons,
+      keycards: Array.from(this.state.keycards),
+    };
+  }
+
+  public restoreState(save: {
+    health: number;
+    maxHealth?: number;
+    shield: number;
+    maxShield?: number;
+    equippedWeapon?: RaycastWeaponType | null;
+    ammo?: number;
+    weapons?: Array<{ type: RaycastWeaponType; ammo: number }>;
+    keycards?: string[];
+  }): void {
+    if (save.maxHealth) this.state.maxHealth = save.maxHealth;
+    this.state.health = Math.max(1, Math.min(this.state.maxHealth, save.health));
+    if (save.maxShield) this.state.maxShield = save.maxShield;
+    this.state.shield = Math.max(0, Math.min(this.state.maxShield, save.shield));
+
+    if (save.weapons && save.weapons.length > 0) {
+      this.inventory.clear();
+      for (const w of save.weapons) {
+        this.inventory.set(w.type, w.ammo);
+      }
+    }
+
+    const targetWeaponType = save.equippedWeapon ?? RaycastWeaponType.DH17;
+    const weaponConfig = getRaycastWeaponConfig(targetWeaponType);
+    if (weaponConfig) {
+      const savedAmmo = save.ammo ?? this.inventory.get(targetWeaponType) ?? weaponConfig.defaultAmmo;
+      this.state.equippedWeapon = targetWeaponType;
+      this.state.weaponConfig = weaponConfig;
+      this.state.maxAmmo = weaponConfig.maxAmmo;
+      this.state.ammo = savedAmmo;
+      this.inventory.set(targetWeaponType, savedAmmo);
+      this.weaponView.equip(weaponConfig);
+      this.hud.setWeapon(weaponConfig.name, savedAmmo);
+    }
+
+    this.state.keycards.clear();
+    this.hud.clearKeycards();
+    if (save.keycards && save.keycards.length > 0) {
+      for (const k of save.keycards) {
+        this.state.keycards.add(k);
+        this.hud.addKeycard(k);
+      }
+    }
+
+    this.hud.setHealth(this.state.health, this.state.maxHealth);
+    this.hud.setShield(this.state.shield, this.state.maxShield);
   }
 
   public dispose(): void {

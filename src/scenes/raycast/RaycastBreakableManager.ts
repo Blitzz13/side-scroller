@@ -667,9 +667,6 @@ export class RaycastBreakableManager {
       }
     }
     this.brokenColumnTextures = {};
-    for (const tex of Object.values(this.brokenTextures)) {
-      tex.destroy(false);
-    }
     this.brokenTextures = {};
   }
 }
