@@ -588,6 +588,7 @@ export class RaycastScene extends BaseScene {
         { id: 25, image: "assets/raycast/textures/stairs_up.png", type: "Tile", properties: [{ name: "tileType", value: "stairs" }, { name: "stairType", value: "up" }] },
         { id: 26, image: "assets/raycast/textures/stairs_down.png", type: "Tile", properties: [{ name: "tileType", value: "stairs" }, { name: "stairType", value: "down" }] },
         { id: 27, image: "dh_17_item.png", type: "PickupItem", properties: [{ name: "amount", value: 20 }, { name: "object", value: { anchor: "floor", scale: 0.2 } }, { name: "type", value: "weapon" }, { name: "weaponType", value: "dh_17" }] },
+        { id: 28, image: "assets/raycast/enemies/phase1_dark_trooper.png", type: "Tile" },
       ];
     }
   }

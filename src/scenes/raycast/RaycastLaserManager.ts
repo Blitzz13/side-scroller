@@ -6,6 +6,7 @@ import {
   Sprite,
   Texture,
 } from "pixi.js";
+import { sound } from "@pixi/sound";
 import { gameConfig } from "../../configs/GameConfig";
 import { RaycastEnemy } from "./RaycastEnemy";
 
@@ -427,6 +428,11 @@ export class RaycastLaserManager {
         }
 
         if (hitEnemy) {
+          if (hitEnemy.isShielding) {
+            this.deflectLaser(laser, hitEnemy, player, onPlayerHit);
+            continue;
+          }
+
           hitEnemy.takeDamage(
             laser.damage,
             laser.onEnemyKilled,
@@ -516,6 +522,55 @@ export class RaycastLaserManager {
         this.impactGraphicsPool.push(imp.graphics);
         this.impacts.splice(i, 1);
       }
+    }
+  }
+
+  public deflectLaser(
+    laser: ActiveLaser,
+    enemy: RaycastEnemy,
+    player?: { x: number; y: number; z?: number },
+    onPlayerHit?: (damage: number) => void
+  ): void {
+    // 1. Deflection visual spark impact at shield
+    this.spawnImpact(laser.currentX, laser.currentY, laser.currentZ);
+
+    // 2. Play deflection / ricochet sound
+    try {
+      if (sound.exists("phase1_dark_trooper_step_1")) {
+        sound.play("phase1_dark_trooper_step_1", { volume: 0.7 });
+      } else if (sound.exists("repair_sound")) {
+        sound.play("repair_sound", { volume: 0.7 });
+      }
+    } catch {}
+
+    // 3. Deflect laser directly towards the player!
+    if (player) {
+      laser.source = "enemy";
+      laser.targetEnemy = null;
+      laser.startX = laser.currentX;
+      laser.startY = laser.currentY;
+      laser.startZ = laser.currentZ;
+      laser.targetX = player.x;
+      laser.targetY = player.y;
+      laser.targetZ = player.z ?? 0.5;
+
+      const dx = laser.targetX - laser.startX;
+      const dy = laser.targetY - laser.startY;
+      const dz = laser.targetZ - laser.startZ;
+      const dist = Math.max(0.1, Math.hypot(dx, dy, dz));
+
+      laser.vx = dx / dist;
+      laser.vy = dy / dist;
+      laser.vz = dz / dist;
+      laser.totalDistance = dist;
+      laser.distanceTraveled = 0;
+      laser.speed = 34.0;
+      laser.sprite.tint = 0xff3322; // Deflected laser turns red
+      if (onPlayerHit && !laser.onPlayerHit) {
+        laser.onPlayerHit = onPlayerHit;
+      }
+    } else {
+      laser.alive = false;
     }
   }
 

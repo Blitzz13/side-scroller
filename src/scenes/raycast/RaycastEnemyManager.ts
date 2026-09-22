@@ -72,6 +72,14 @@ export class RaycastEnemyManager {
     officer_commando_no_use_hiding: "assets/raycast/sfx/imperial_officer_commando/officer_commando_no_use_hiding.mp3",
     officer_commando_show_yourself: "assets/raycast/sfx/imperial_officer_commando/officer_commando_show_yourself.mp3",
     officer_commando_throw_down_your_weapons: "assets/raycast/sfx/imperial_officer_commando/officer_commando_throw_down_your_weapons.mp3",
+    phase1_dark_trooper_damage_1: "assets/raycast/sfx/phase1_dark_trooper/damage_1.mp3",
+    phase1_dark_trooper_death: "assets/raycast/sfx/phase1_dark_trooper/death.mp3",
+    phase1_dark_trooper_hit_flesh: "assets/raycast/sfx/phase1_dark_trooper/hit_flesh.mp3",
+    phase1_dark_trooper_step_1: "assets/raycast/sfx/phase1_dark_trooper/robot_step_1.mp3",
+    phase1_dark_trooper_step_2: "assets/raycast/sfx/phase1_dark_trooper/robot_step_2.mp3",
+    phase1_dark_trooper_slashing_1: "assets/raycast/sfx/phase1_dark_trooper/slashing_1.mp3",
+    phase1_dark_trooper_slashing_2: "assets/raycast/sfx/phase1_dark_trooper/slashing_2.mp3",
+    phase1_dark_trooper_spoted_enemy: "assets/raycast/sfx/phase1_dark_trooper/spoted_enemy.mp3",
   };
 
   constructor(container: Container) {
@@ -203,6 +211,9 @@ export class RaycastEnemyManager {
           if (imgLower.includes("commando")) {
             return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_COMMANDO];
           }
+          if (imgLower.includes("phase1") || imgLower.includes("dark_trooper") || imgLower.includes("darktrooper")) {
+            return raycastEnemyConfigs[RaycastEnemyType.PHASE1_DARK_TROOPER];
+          }
           if (imgLower.includes("storm") || imgLower.includes("trooper")) {
             return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
           }
@@ -246,6 +257,9 @@ export class RaycastEnemyManager {
               if (imgLower.includes("commando")) {
                 return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_COMMANDO];
               }
+              if (imgLower.includes("phase1") || imgLower.includes("dark_trooper") || imgLower.includes("darktrooper")) {
+                return raycastEnemyConfigs[RaycastEnemyType.PHASE1_DARK_TROOPER];
+              }
               if (imgLower.includes("storm") || imgLower.includes("trooper")) {
                 return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
               }
@@ -261,6 +275,15 @@ export class RaycastEnemyManager {
     }
 
     // 3. Fallback tile ID mappings from StarWarsTileset
+    if (localTileId === 28) {
+      return raycastEnemyConfigs[RaycastEnemyType.PHASE1_DARK_TROOPER];
+    }
+    if (localTileId === 24) {
+      return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_COMMANDO];
+    }
+    if (localTileId === 23) {
+      return raycastEnemyConfigs[RaycastEnemyType.IMPERIAL_OFFICER];
+    }
     if (localTileId === 22) {
       return raycastEnemyConfigs[RaycastEnemyType.VIPER_DROID];
     }
@@ -829,6 +852,23 @@ export class RaycastEnemyManager {
         return;
       }
 
+      // Handle melee attack (e.g. Phase 1 Dark Trooper with sword)
+      if (enemy.config.isMelee) {
+        const isHit = Math.random() <= accuracy;
+        if (isHit) {
+          playerController.takeDamage(damage);
+          if (enemy.config.meleeHitSound) {
+            try {
+              sound.play(enemy.config.meleeHitSound.src, {
+                volume: enemy.config.meleeHitSound.volume ?? 0.9,
+                loop: false,
+              });
+            } catch {}
+          }
+        }
+        return;
+      }
+
       if (!laserManager) {
         // Fallback hitscan if no laser manager
         const effectiveAccuracy = Math.max(
@@ -1100,6 +1140,9 @@ export class RaycastEnemyManager {
       if (vOffset > 0) {
         renderY -= vOffset * baseHeight;
       }
+      if (enemy.isDead && enemy.config.deathVOffset !== undefined) {
+        renderY += enemy.config.deathVOffset * baseHeight;
+      }
       if (enemy.config.floatingBob && !enemy.isDead) {
         renderY -= Math.sin((Date.now() + enemy.id * 500) / 350) * 0.03 * baseHeight;
       }
@@ -1170,6 +1213,9 @@ export class RaycastEnemyManager {
     }
 
     if (closestEnemy) {
+      if (closestEnemy.isShielding) {
+        return closestEnemy;
+      }
       closestEnemy.takeDamage(damage, onEnemyKilled, playerX, playerY);
       return closestEnemy;
     }

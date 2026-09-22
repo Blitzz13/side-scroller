@@ -260,6 +260,38 @@ export const manifest: AssetsManifest = {
           {
             alias: "officer_commando_throw_down_your_weapons",
             src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_throw_down_your_weapons.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_damage_1",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/damage_1.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_death",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/death.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_hit_flesh",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/hit_flesh.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_step_1",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/robot_step_1.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_step_2",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/robot_step_2.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_slashing_1",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/slashing_1.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_slashing_2",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/slashing_2.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_spoted_enemy",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/spoted_enemy.mp3"
           }
         ]
       },
@@ -374,6 +406,10 @@ export const manifest: AssetsManifest = {
           {
             name: "imperial_commando",
             src: "./assets/raycast/enemies/imperial_commando.json",
+          },
+          {
+            name: "phase1_dark_trooper",
+            src: "./assets/raycast/enemies/phase1_dark_trooper.json",
           }
         ],
       },

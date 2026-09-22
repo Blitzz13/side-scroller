@@ -19,6 +19,11 @@ export interface IRaycastEnemyAnimationConfig {
   standingPrefix?: string;
   shootingPrefix?: string;
   deathPrefix?: string;
+  meleePrefix?: string;
+  meleeAnimation?: IRaycastEnemyAnimationSequence;
+  shieldPrefix?: string;
+  shieldFrame?: string;
+  damagePrefix?: string;
 }
 
 export interface IRaycastEnemyConfig {
@@ -53,4 +58,12 @@ export interface IRaycastEnemyConfig {
   coverClearanceOffset?: number; // Extra offset distance to step out past cover edges into open space (default: 1.5)
   stepOutFrames?: number; // Duration in ticks/frames the enemy continues moving out into the open upon spotting player (default: 30)
   animationConfig?: IRaycastEnemyAnimationConfig;
+  isMelee?: boolean; // True if enemy fights with sword/melee instead of ranged blaster
+  shieldDuration?: number; // Duration in ticks the enemy stops and holds shield (e.g. 120 ticks = 2s)
+  shieldInterval?: number; // Period/cooldown in ticks between using shield (e.g. 240 ticks = 4s)
+  meleeHitSound?: ISoundConfig; // Sound played when melee strike hits player (e.g. hit_flesh)
+  stepSounds?: ISoundConfig[]; // Periodic footstep sounds while moving
+  deflectSound?: ISoundConfig; // Sound played when deflecting projectile
+  deathAnchorY?: number; // Custom anchor Y for dead sprite frame (e.g. 0.65 for fallen horizontal corpse, default: 1.0)
+  deathVOffset?: number; // Normalized vertical offset applied when dead (positive lowers towards floor, default: 0)
 }

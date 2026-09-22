@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="28" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="29" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -155,5 +155,8 @@
  </tile>
  <tile id="27">
   <image source="player_spawn.webp" width="350" height="350"/>
+ </tile>
+ <tile id="28">
+  <image source="assets/raycast/enemies/phase1_dark_trooper.png" width="48" height="98"/>
  </tile>
 </tileset>

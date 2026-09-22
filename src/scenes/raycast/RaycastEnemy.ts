@@ -29,6 +29,13 @@ export class RaycastEnemy {
   public lastShotTime: number = 0;
   public hasDroppedLoot: boolean = false;
 
+  // Melee & Shield state
+  public isShielding: boolean = false;
+  public shieldTimer: number = 0;
+  public shieldCooldownTimer: number = 0;
+  public meleeTimer: number = 0;
+  public stepSoundTimer: number = 0;
+
   // Voiceline & awareness tracking
   public wasSeeingPlayer: boolean = false;
   public lastSpottedTime: number = 0;
@@ -143,6 +150,9 @@ export class RaycastEnemy {
     this.dirX = 0;
     this.dirY = 1;
     this.currentVOffset = config.vOffset ?? 0;
+    if (config.shieldInterval) {
+      this.shieldCooldownTimer = config.shieldInterval * (0.8 + Math.random() * 0.4);
+    }
 
     if (spritesheet) {
       this.initAnimatedSprite(spritesheet);
@@ -213,10 +223,20 @@ export class RaycastEnemy {
     const standPrefix = animConfig?.standingPrefix ?? "storm_trooper/standing";
     const deathPrefix = animConfig?.deathPrefix ?? "storm_trooper/death_1";
     const shootName = animConfig?.shootingPrefix ?? "storm_trooper/shooting";
+    const meleePrefix = animConfig?.meleePrefix ?? "melee_attack";
+    const meleeCount = animConfig?.meleeAnimation?.count ?? 5;
+    const shieldName = animConfig?.shieldFrame ?? "shield";
     const deathCount = animConfig?.deathAnimation?.count ?? 8;
     const shootCount = animConfig?.shootingAnimation?.count ?? 6;
 
     const hasSingleShoot = Boolean(texs[`${shootName}.png`] || texs[shootName]);
+    const hasMelee = Boolean(
+      texs[`${meleePrefix}_1.png`] ||
+      texs[`${meleePrefix}_1`] ||
+      texs[`${meleePrefix}1.png`] ||
+      texs[`${meleePrefix}1`]
+    );
+    const hasShield = Boolean(texs[`${shieldName}.png`] || texs[shieldName]);
 
     this.animations = {
       // 1. Walking animations (up to 6 frames each)
@@ -236,13 +256,28 @@ export class RaycastEnemy {
       // 3. Shooting pose (supports single frame or multi-frame sequence)
       shooting: hasSingleShoot ? getSingle(shootName) : getFrames(shootName, shootCount),
 
-      // 4. Death animations (supports up to deathCount frames)
+      // 4. Melee attack animation
+      ...(hasMelee ? { melee_attack: getFrames(meleePrefix, meleeCount) } : {}),
+
+      // 5. Shield stance
+      ...(hasShield ? { shield: getSingle(shieldName) } : {}),
+
+      // 6. Death animations (supports up to deathCount frames)
       death_1: getFrames(deathPrefix, deathCount),
       death_2: getFrames(deathPrefix.replace("_1", "_2"), deathCount),
 
-      // 5. Optional damage / hit reaction pose
+      // 7. Optional damage / hit reaction pose
       ...((texs["damage.png"] || texs["damage"] || texs["damage_1.png"] || texs["damage_1"])
         ? { damage: (texs["damage.png"] || texs["damage"]) ? getSingle("damage") : getFrames("damage", 2) }
+        : (texs["damage_towards.png"] || texs["damage_towards"])
+        ? {
+            damage: getSingle("damage_towards"),
+            damage_towards: getSingle("damage_towards"),
+            damage_towards_left_diagonal: getSingle("damage_left_diagonal"),
+            damage_left: getSingle("damage_left"),
+            damage_away_left_diagonal: getSingle("damage_away_left_diagonal"),
+            damage_away: getSingle("damage_away"),
+          }
         : {}),
     };
 
@@ -284,6 +319,9 @@ export class RaycastEnemy {
     if (this.health <= 0) {
       this.state = "dead";
       this.isMoving = false;
+      this.isShielding = false;
+      this.shieldTimer = 0;
+      this.meleeTimer = 0;
 
       // Stop any active sounds (voicelines, attacks, pain) immediately
       this.stopActiveSounds();
@@ -431,6 +469,30 @@ export class RaycastEnemy {
     if (this.shootingTimer > 0) {
       this.shootingTimer = Math.max(0, this.shootingTimer - delta);
     }
+    if (this.meleeTimer > 0) {
+      this.meleeTimer = Math.max(0, this.meleeTimer - delta);
+    }
+
+    // Update periodic shield logic
+    const hasShield = Boolean(this.animations.shield || this.config.shieldDuration);
+    if (hasShield) {
+      if (this.isShielding) {
+        this.shieldTimer -= delta;
+        this.isMoving = false;
+        if (this.shieldTimer <= 0) {
+          this.isShielding = false;
+          const baseInterval = this.config.shieldInterval ?? 240;
+          this.shieldCooldownTimer = baseInterval * (0.8 + Math.random() * 0.4);
+        }
+      } else if (this.state === "chase" || this.state === "attack") {
+        this.shieldCooldownTimer -= delta;
+        if (this.shieldCooldownTimer <= 0 && this.meleeTimer <= 0) {
+          this.isShielding = true;
+          this.shieldTimer = this.config.shieldDuration ?? 120;
+          this.isMoving = false;
+        }
+      }
+    }
 
     const dx = playerX - this.x;
     const dy = playerY - this.y;
@@ -507,6 +569,34 @@ export class RaycastEnemy {
       }
     }
 
+    // While shielding, enemy stops moving and continuously faces player
+    if (this.isShielding) {
+      this.isMoving = false;
+      this.stepSoundTimer = 0;
+      if (dist > 0.001) {
+        this.dirX = dx / dist;
+        this.dirY = dy / dist;
+      }
+      return;
+    }
+
+    // Footstep audio while moving
+    if (this.isMoving && this.config.stepSounds && this.config.stepSounds.length > 0 && !this.isDead) {
+      this.stepSoundTimer += delta;
+      if (this.stepSoundTimer >= 22) {
+        this.stepSoundTimer = 0;
+        const snd = this.config.stepSounds[
+          Math.floor(Math.random() * this.config.stepSounds.length)
+        ];
+        try {
+          const falloff = Math.max(0.1, Math.min(0.65, (1 - dist / 14) * 0.65));
+          sound.play(snd.src, { volume: falloff, loop: false });
+        } catch {}
+      }
+    } else {
+      this.stepSoundTimer = 0;
+    }
+
     // State Machine
     if (this.state === "idle") {
       this.isMoving = false;
@@ -580,12 +670,16 @@ export class RaycastEnemy {
         const actualMovedDist = Math.hypot(this.x - oldX, this.y - oldY);
         this.isMoving = moved && actualMovedDist > 0.0001;
 
-        // While stepping out from cover into full view, can fire if within attack range
+        // While stepping out from cover into full view, can fire or strike if within attack range
         if (los && lof && dist <= this.config.attackRange) {
           const now = Date.now();
           if (now - this.lastShotTime >= this.config.rateOfFire) {
             this.lastShotTime = now;
-            this.shootingTimer = 12;
+            if (this.config.isMelee) {
+              this.meleeTimer = 22;
+            } else {
+              this.shootingTimer = 12;
+            }
 
             if (this.config.attackSounds && this.config.attackSounds.length > 0) {
               const snd = this.config.attackSounds[
@@ -605,9 +699,10 @@ export class RaycastEnemy {
       }
     } else if (this.state === "attack") {
       this.isMoving = false;
-      if (dist > this.config.attackRange + 1.2 || !los || !lof) {
+      const attackExitDist = this.config.attackRange + (this.config.isMelee ? 0.35 : 1.2);
+      if (dist > attackExitDist || !los || !lof) {
         this.state = "chase";
-      } else if (!fullVisibility) {
+      } else if (!fullVisibility && !this.config.isMelee) {
         // Partially occluded by corner cover -> step out into the open
         const speed = this.config.speed * delta * 0.8;
         let stepX = 0;
@@ -644,13 +739,17 @@ export class RaycastEnemy {
         }
       }
 
-      // Fire at player on cooldown
+      // Fire or strike at player on cooldown
       const now = Date.now();
       if (now - this.lastShotTime >= this.config.rateOfFire) {
         this.lastShotTime = now;
-        this.shootingTimer = 12; // Show shooting frame for ~12 ticks
+        if (this.config.isMelee) {
+          this.meleeTimer = 22;
+        } else {
+          this.shootingTimer = 12; // Show shooting frame for ~12 ticks
+        }
 
-        // Play blaster attack sound
+        // Play blaster or sword attack sound
         if (this.config.attackSounds && this.config.attackSounds.length > 0) {
           const snd = this.config.attackSounds[
             Math.floor(Math.random() * this.config.attackSounds.length)
@@ -676,11 +775,18 @@ export class RaycastEnemy {
       if (this.state === "dead") {
         const deathSpeed = this.config.animationConfig.deathAnimation?.speed ?? 0.14;
         this.playAnimation("death_1", false, deathSpeed);
-        if (this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1) {
+        const isLastFrame = this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1;
+        if (isLastFrame) {
           this.animatedSprite.gotoAndStop(this.animatedSprite.totalFrames - 1);
         }
+        const targetAnchorY = (isLastFrame && this.config.deathAnchorY !== undefined)
+          ? this.config.deathAnchorY
+          : 1.0;
+        this.animatedSprite.anchor.set(0.5, targetAnchorY);
         return;
       }
+
+      this.animatedSprite.anchor.set(0.5, 1.0);
 
       if (this.shootingTimer > 0) {
         const shootSpeed = this.config.animationConfig.shootingAnimation?.speed ?? 0.16;
@@ -698,15 +804,29 @@ export class RaycastEnemy {
       this.isFlipped = false;
       this.playAnimation("death_1", false, deathSpeed);
       // Stay on last frame if complete
-      if (this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1) {
+      const isLastFrame = this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1;
+      if (isLastFrame) {
         this.animatedSprite.gotoAndStop(this.animatedSprite.totalFrames - 1);
       }
+      const targetAnchorY = (isLastFrame && this.config.deathAnchorY !== undefined)
+        ? this.config.deathAnchorY
+        : 1.0;
+      this.animatedSprite.anchor.set(0.5, targetAnchorY);
       return;
     }
 
-    if (this.painTimer > 0 && this.animations.damage && this.animations.damage[0] !== Texture.WHITE) {
+    this.animatedSprite.anchor.set(0.5, 1.0);
+
+    if (this.isShielding && this.animations.shield) {
       this.isFlipped = false;
-      this.playAnimation("damage", false);
+      this.playAnimation("shield", false);
+      return;
+    }
+
+    if (this.meleeTimer > 0 && this.animations.melee_attack) {
+      const meleeSpeed = this.config.animationConfig?.meleeAnimation?.speed ?? 0.18;
+      this.isFlipped = false;
+      this.playAnimation("melee_attack", false, meleeSpeed);
       return;
     }
 
@@ -755,6 +875,16 @@ export class RaycastEnemy {
 
     this.lastAnimDir = dirName;
     this.isFlipped = dirName !== "towards" && dirName !== "away" && deg < 0;
+
+    if (this.painTimer > 0) {
+      if (this.animations[`damage_${dirName}`]) {
+        this.playAnimation(`damage_${dirName}`, false);
+        return;
+      } else if (this.animations.damage && this.animations.damage[0] !== Texture.WHITE) {
+        this.playAnimation("damage", false);
+        return;
+      }
+    }
 
     if (this.state === "chase" && this.isMoving) {
       this.playAnimation(`walking_${dirName}`, true, 0.16);

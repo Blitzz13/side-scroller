@@ -254,6 +254,103 @@ const imperialCommandoAttackSounds: ISoundConfig[] = [
   },
 ];
 
+const phase1DarkTrooperPainSounds: ISoundConfig[] = [
+  {
+    src: "phase1_dark_trooper_damage_1",
+    loop: false,
+    volume: 0.85,
+  },
+];
+
+const phase1DarkTrooperDeathSounds: ISoundConfig[] = [
+  {
+    src: "phase1_dark_trooper_death",
+    loop: false,
+    volume: 0.95,
+  },
+];
+
+const phase1DarkTrooperAttackSounds: ISoundConfig[] = [
+  {
+    src: "phase1_dark_trooper_slashing_1",
+    loop: false,
+    volume: 0.85,
+  },
+  {
+    src: "phase1_dark_trooper_slashing_2",
+    loop: false,
+    volume: 0.85,
+  },
+];
+
+const phase1DarkTrooperStepSounds: ISoundConfig[] = [
+  {
+    src: "phase1_dark_trooper_step_1",
+    loop: false,
+    volume: 0.5,
+  },
+  {
+    src: "phase1_dark_trooper_step_2",
+    loop: false,
+    volume: 0.5,
+  },
+];
+
+export const phase1DarkTrooperConfig: IRaycastEnemyConfig = {
+  type: RaycastEnemyType.PHASE1_DARK_TROOPER,
+  name: "Phase 1 Dark Trooper",
+  maxHealth: 500,
+  speed: 0.024,
+  sightRange: 14,
+  attackRange: 1.25,
+  minDistance: 0.75,
+  rateOfFire: 850,
+  damage: 20,
+  accuracy: 0.85,
+  scale: 0.85,
+  referenceHeight: 98,
+  spritesheet: "assets/raycast/enemies/phase1_dark_trooper.json",
+  deathAnchorY: 0.65,
+  isMelee: true,
+  shieldDuration: 120, // ~2 seconds at 60fps
+  shieldInterval: 180, // ~4 seconds between shielding
+  shoulderOffset: 0.35,
+  coverClearanceOffset: 1.5,
+  stepOutFrames: 25,
+  painSounds: phase1DarkTrooperPainSounds,
+  deathSounds: phase1DarkTrooperDeathSounds,
+  attackSounds: phase1DarkTrooperAttackSounds,
+  meleeHitSound: {
+    src: "phase1_dark_trooper_hit_flesh",
+    loop: false,
+    volume: 0.9,
+  },
+  stepSounds: phase1DarkTrooperStepSounds,
+  voicelines: {
+    spotted: ["phase1_dark_trooper_spoted_enemy"],
+  },
+  animationConfig: {
+    walkingPrefix: "walking",
+    standingPrefix: "standing",
+    deathPrefix: "death_1",
+    deathAnimation: {
+      prefix: "death_1",
+      count: 5,
+      speed: 0.14,
+      loop: false,
+    },
+    meleePrefix: "melee_attack",
+    meleeAnimation: {
+      prefix: "melee_attack",
+      count: 5,
+      speed: 0.18,
+      loop: false,
+    },
+    shieldFrame: "shield",
+    damagePrefix: "damage",
+  },
+};
+
 export const imperialCommandoConfig: IRaycastEnemyConfig = {
   type: RaycastEnemyType.IMPERIAL_COMMANDO,
   name: "Imperial Commando",
@@ -319,6 +416,7 @@ export const raycastEnemyConfigs: Record<RaycastEnemyType, IRaycastEnemyConfig> 
   [RaycastEnemyType.VIPER_DROID]: viperDroidRaycastConfig,
   [RaycastEnemyType.IMPERIAL_OFFICER]: imperialOfficerConfig,
   [RaycastEnemyType.IMPERIAL_COMMANDO]: imperialCommandoConfig,
+  [RaycastEnemyType.PHASE1_DARK_TROOPER]: phase1DarkTrooperConfig,
 };
 
 export function getRaycastEnemyConfig(
@@ -336,6 +434,8 @@ export function getRaycastEnemyConfig(
       typeStr === normalized ||
       nameStr.includes(normalized) ||
       normalized.includes(typeStr) ||
+      (normalized.includes("darktrooper") && typeStr.includes("dark_trooper")) ||
+      (normalized.includes("phase1") && typeStr.includes("phase1")) ||
       (normalized.includes("officer") && typeStr.includes("officer")) ||
       (normalized.includes("commando") && typeStr.includes("commando"))
     ) {
