@@ -2,6 +2,37 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-22] - Mobile GPU Floor/Ceiling Precision Fix, 120 FPS Fillrate Optimization, & Unified Diagonal Movement
+
+### 1. Mobile GPU Fragment Shader Precision (`highp float`)
+- **Shader Float Precision Upgrade** ([`src/scenes/raycast/shaders/floorCeiling.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.frag)):
+  - Replaced hardcoded `precision mediump float;` with conditional high precision:
+    ```glsl
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
+    precision highp float;
+    #else
+    precision mediump float;
+    #endif
+    ```
+  - **Root Cause & Fix**: On desktop GPUs, `mediump` is automatically promoted to 32-bit `highp` (`fp32`), but mobile GPUs (Qualcomm Adreno, ARM Mali) execute `mediump` strictly in 16-bit half precision (`fp16`) with only 10 bits of mantissa. At typical world coordinates ($X, Y \in [16, 64]$), `fp16` quantization step sizes are $0.03125$ units—corresponding to **8 full texels** on a $256 \times 256$ texture. When walking diagonally, both coordinates changed continuously across scanlines, causing floor and ceiling textures to discretely step, staircase, and snap left/right. Compiling with `highp` restores 24-bit mantissa precision, providing sub-texel smoothness (<0.001 texel) on all mobile devices.
+
+### 2. High-DPI Mobile GPU Fillrate & 120 FPS Optimization
+- **PixiJS Canvas Resolution Cap** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Adjusted canvas backing resolution from `Math.min(window.devicePixelRatio || 1, 3)` to `Math.min(window.devicePixelRatio || 1, 2)`.
+  - **100 FPS vs 120 FPS Discrepancy Explained**:
+    - Modern flagship phones have QHD+/4K displays with device pixel ratios between $2.75$ and $3.5$. A cap of `3` scaled the $1280 \times 720$ canvas buffer to a massive $3840 \times 2160$ (8.3 million pixels per frame).
+    - Running per-pixel perspective raycasting (`floorCeiling.frag` with 2 texture lookups per pixel) across 8.3 million pixels at 120 FPS required shading nearly **1 billion fragments/second**, saturating mobile GPU fillrate and dragging performance down to ~100 FPS.
+    - Older or 1080p phones had a native DPR of $2.0$ ($2560 \times 1440 = 3.68$ million pixels—less than 45% the workload), allowing them to hit a locked 120 FPS.
+    - Capping `resolution` at `2` cuts GPU fragment load by 56% on flagship phones while retaining full 1440p clarity (~500 PPI on mobile displays). This prevents thermal throttling, restores steady 120 FPS, and eliminates VSync judder.
+
+### 3. Unified Diagonal Movement & Wall Sliding
+- **Consolidated Movement Vector** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Refactored `updatePlayer()` to compute forward/backward and strafe displacement into a single combined vector before testing collision, replacing sequential two-pass movement.
+  - Normalized diagonal input magnitude so walking diagonally no longer provides an unnatural $\sqrt{2} \approx 1.41\times$ speed boost.
+  - Improved collision sliding against walls to independently test unblocked axes for smooth sliding without zig-zagging.
+
+---
+
 ## [2026-09-21] - Fix Enemy Weapon Drop Discrimination & Ground Texture Overwrite
 
 ### 1. Distinct Weapon Ground Pickup Textures & Slicing

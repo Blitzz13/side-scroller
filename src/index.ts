@@ -22,7 +22,7 @@ const app = new Application<HTMLCanvasElement>({
   width: gameConfig.width,
   height: gameConfig.height,
   autoDensity: true,
-  resolution: Math.max(1, Math.min(window.devicePixelRatio || 1, 3)),
+  resolution: Math.max(1, Math.min(window.devicePixelRatio || 1, 2)),
   antialias: true,
 });
 

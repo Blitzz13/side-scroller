@@ -2339,61 +2339,63 @@ export class RaycastScene extends BaseScene {
     const joyX = joyVector.x;
     const joyY = joyVector.y; // Negative is forward, positive is backward
 
-    // 1. Forward / Backward Movement
-    if (this.keys.w || joyY < -0.15) {
-      const intensity = this.keys.w ? 1 : Math.min(1, -joyY);
-      const newX = this.player.x + this.player.dirX * moveSpeed * intensity;
-      const newY = this.player.y + this.player.dirY * moveSpeed * intensity;
-      if (this.tryMove(newX, newY)) {
-        this.player.x = newX;
-        this.player.y = newY;
-      } else {
-        if (this.tryMove(newX, this.player.y)) {
-          this.player.x = newX;
-        } else if (this.tryMove(this.player.x, newY)) {
-          this.player.y = newY;
-        }
-      }
-    } else if (this.keys.s || joyY > 0.15) {
-      const intensity = this.keys.s ? 1 : Math.min(1, joyY);
-      const newX = this.player.x - this.player.dirX * moveSpeed * intensity;
-      const newY = this.player.y - this.player.dirY * moveSpeed * intensity;
-      if (this.tryMove(newX, newY)) {
-        this.player.x = newX;
-        this.player.y = newY;
-      } else {
-        if (this.tryMove(newX, this.player.y)) {
-          this.player.x = newX;
-        } else if (this.tryMove(this.player.x, newY)) {
-          this.player.y = newY;
-        }
-      }
+    // Unified Movement Vector (Forward/Backward + Strafe Left/Right)
+    let fwd = 0;
+    if (this.keys.w) {
+      fwd += 1;
+    } else if (joyY < -0.15) {
+      fwd += Math.min(1, -joyY);
     }
 
-    // 2. Strafe Left / Right Movement
-    if (this.keys.a || this.keys.d || Math.abs(joyX) > 0.15) {
+    if (this.keys.s) {
+      fwd -= 1;
+    } else if (joyY > 0.15) {
+      fwd -= Math.min(1, joyY);
+    }
+
+    let strafe = 0;
+    if (this.keys.d) {
+      strafe += 1;
+    } else if (joyX > 0.15) {
+      strafe += Math.min(1, joyX);
+    }
+
+    if (this.keys.a) {
+      strafe -= 1;
+    } else if (joyX < -0.15) {
+      strafe -= Math.min(1, -joyX);
+    }
+
+    if (fwd !== 0 || strafe !== 0) {
+      // Normalize combined movement vector if length > 1 (prevents diagonal speed boost)
+      const inputMag = Math.hypot(fwd, strafe);
+      let normFwd = fwd;
+      let normStrafe = strafe;
+      if (inputMag > 1) {
+        normFwd /= inputMag;
+        normStrafe /= inputMag;
+      }
+
       const strafeDirX = this.player.dirY;
       const strafeDirY = -this.player.dirX;
-      let sign = 0;
-      let intensity = 1;
-      if (this.keys.a) {
-        sign = -1;
-      } else if (this.keys.d) {
-        sign = 1;
+
+      const dx = (this.player.dirX * normFwd + strafeDirX * normStrafe) * moveSpeed;
+      const dy = (this.player.dirY * normFwd + strafeDirY * normStrafe) * moveSpeed;
+
+      const targetX = this.player.x + dx;
+      const targetY = this.player.y + dy;
+
+      if (this.tryMove(targetX, targetY)) {
+        this.player.x = targetX;
+        this.player.y = targetY;
       } else {
-        sign = Math.sign(joyX);
-        intensity = Math.min(1, Math.abs(joyX));
-      }
-      const newX = this.player.x + strafeDirX * moveSpeed * sign * intensity;
-      const newY = this.player.y + strafeDirY * moveSpeed * sign * intensity;
-      if (this.tryMove(newX, newY)) {
-        this.player.x = newX;
-        this.player.y = newY;
-      } else {
-        if (this.tryMove(newX, this.player.y)) {
-          this.player.x = newX;
-        } else if (this.tryMove(this.player.x, newY)) {
-          this.player.y = newY;
+        // Wall sliding: test X-axis and Y-axis movements independently
+        const origX = this.player.x;
+        const origY = this.player.y;
+        if (this.tryMove(targetX, origY)) {
+          this.player.x = targetX;
+        } else if (this.tryMove(origX, targetY)) {
+          this.player.y = targetY;
         }
       }
     }
