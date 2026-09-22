@@ -6,7 +6,6 @@ import { IRaycastWeaponConfig, RaycastWeaponType, getRaycastWeaponConfig } from 
 export class RaycastWeaponView extends Container {
   private weaponSprite: Sprite;
   private muzzleFlash: Graphics;
-  private crosshair: Graphics;
   private currentWeapon: IRaycastWeaponConfig | null = null;
 
   // Animation states
@@ -32,12 +31,7 @@ export class RaycastWeaponView extends Container {
   constructor() {
     super();
 
-    // 1. Crosshair in screen center
-    this.crosshair = new Graphics();
-    this.drawCrosshair();
-    this.addChild(this.crosshair);
-
-    // 2. Muzzle flash effect (procedural graphics + optional sprite)
+    // 1. Muzzle flash effect (procedural graphics + optional sprite)
     this.muzzleFlash = new Graphics();
     this.muzzleFlash.visible = false;
     this.addChild(this.muzzleFlash);
@@ -70,75 +64,6 @@ export class RaycastWeaponView extends Container {
     this.addChild(this.weaponSprite);
   }
 
-  private drawCrosshair(): void {
-    const cx = gameConfig.width / 2;
-    const cy = gameConfig.height / 2;
-    const size = 14;
-    const gap = 5;
-    const thickness = 2.5;
-    const halfThick = thickness / 2;
-    const outline = 1.2;
-
-    this.crosshair.clear();
-
-    // 1. Black outer contrast border (visible on bright walls, sky, dark floors)
-    const shadowColor = 0x000000;
-    const shadowAlpha = 0.85;
-
-    // Center dot outline
-    this.crosshair.beginFill(shadowColor, shadowAlpha);
-    this.crosshair.drawCircle(cx, cy, 2.5 + outline);
-    this.crosshair.endFill();
-
-    // 4 bars outline
-    this.crosshair.beginFill(shadowColor, shadowAlpha);
-    // Top
-    this.crosshair.drawRect(
-      cx - halfThick - outline,
-      cy - gap - size - outline,
-      thickness + outline * 2,
-      size + outline * 2
-    );
-    // Bottom
-    this.crosshair.drawRect(
-      cx - halfThick - outline,
-      cy + gap - outline,
-      thickness + outline * 2,
-      size + outline * 2
-    );
-    // Left
-    this.crosshair.drawRect(
-      cx - gap - size - outline,
-      cy - halfThick - outline,
-      size + outline * 2,
-      thickness + outline * 2
-    );
-    // Right
-    this.crosshair.drawRect(
-      cx + gap - outline,
-      cy - halfThick - outline,
-      size + outline * 2,
-      thickness + outline * 2
-    );
-    this.crosshair.endFill();
-
-    // 2. Bright Cyan crosshair bars and center dot (solid 100% opacity)
-    const crossColor = 0x00ffff;
-    const crossAlpha = 0.95;
-
-    this.crosshair.beginFill(crossColor, crossAlpha);
-    // Top bar
-    this.crosshair.drawRect(cx - halfThick, cy - gap - size, thickness, size);
-    // Bottom bar
-    this.crosshair.drawRect(cx - halfThick, cy + gap, thickness, size);
-    // Left bar
-    this.crosshair.drawRect(cx - gap - size, cy - halfThick, size, thickness);
-    // Right bar
-    this.crosshair.drawRect(cx + gap, cy - halfThick, size, thickness);
-    // Center dot
-    this.crosshair.drawCircle(cx, cy, 2);
-    this.crosshair.endFill();
-  }
 
   public equip(
     weapon: RaycastWeaponType | IRaycastWeaponConfig | string,

@@ -2,6 +2,24 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-22] - Dynamic Damage Crosshair & Enemy Target Snapping
+
+### 1. Dynamic HUD Crosshair with Damage State Indication
+- **Centralized Crosshair Architecture** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Migrated the crosshair renderer from `RaycastWeaponView` into `RaycastHUD`, ensuring the targeting reticle stays layered above weapons and directly controlled by the HUD.
+  - **Damage Target Indicator**: The crosshair dynamically transitions from default cyan (`0x00ffff`) to bright blaster red (`0xff2222`) whenever pointing at a target within line-of-sight that can break or take damage (active living enemies, unbroken breakables, and destructible wall blocks).
+  - **Star Wars Targeting Corner Brackets**: When locked on a damagable/breakable target, the reticle spawns high-tech red corner brackets and an enlarged center bead for instant visual acquisition.
+
+### 2. Enemy Target Magnetic Snapping & Return to Center
+- **Smooth Magnetic Enemy Snapping** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Extended `RaycastEnemy` and `RaycastEnemyManager.render()` to record exact projected screen coordinates (`screenX`, `screenY`) for all visible enemies each frame.
+  - When an enemy enters the weapon's aim cone, the crosshair smoothly and magnetically snaps directly to the enemy's torso/chest on screen, tracking their movement in real time.
+  - When the enemy is neutralized or the player looks away, the crosshair automatically glides back to the default center position (`gameConfig.width / 2, gameConfig.height / 2`) and resets to cyan.
+- **Unified Target Acquisition** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Created `RaycastScene.getAimTarget()`, unifying target detection across live crosshair tracking and blaster firearm firing in `tryShoot()`. Ensuring 100% visual parity between where the crosshair locks and where laser bolts fly.
+
+---
+
 ## [2026-09-22] - Mobile GPU Floor/Ceiling Precision Fix, 120 FPS Fillrate Optimization, & Unified Diagonal Movement
 
 ### 1. Mobile GPU Fragment Shader Precision (`highp float`)

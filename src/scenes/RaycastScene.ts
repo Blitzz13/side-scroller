@@ -1985,82 +1985,7 @@ export class RaycastScene extends BaseScene {
     const didShoot = this.playerController.tryShoot(undefined, isAutoFire);
     if (didShoot) {
       const damage = currentCfg.damage ?? 25;
-      const centerCol = Math.floor(gameConfig.width / 2);
-      const wallDistance = this.zBuffer[centerCol] || this.MAX_RENDER_DISTANCE;
-
-      // Find distance to obstacle (solid wall, door, or door protector) along aim vector
-      const aimBarrierDist = this.enemyManager.findRayWallDistance(
-        this.player.x,
-        this.player.y,
-        this.player.dirX,
-        this.player.dirY,
-        wallDistance,
-        this.mapFlat,
-        this.mapWidth,
-        this.mapHeight,
-        this.doorStatesFlat,
-        this.allThinWalls
-      );
-      const effectiveWallDist = Math.min(wallDistance, aimBarrierDist);
-
-      // Find closest breakable furniture or destructible wall hit along aiming vector
-      let breakableHit = this.breakableManager.findClosestHit(
-        this.player.x,
-        this.player.y,
-        this.player.dirX,
-        this.player.dirY,
-        effectiveWallDist
-      );
-
-      // Check if center screen ray directly struck an unbroken destructible wall block
-      const centerHits = this.hitCounts[centerCol] || 0;
-      const centerPool = this.hitPool[centerCol];
-      for (let j = 0; j < centerHits; j++) {
-        const ray = centerPool[j];
-        const b = this.breakableManager.getBreakableAtGrid(ray.mapX, ray.mapY);
-        if (b && !b.isBroken) {
-          if (!breakableHit || ray.distance < breakableHit.distance) {
-            breakableHit = { breakable: b, distance: ray.distance };
-          }
-          break;
-        }
-      }
-
-      const maxTargetDist = breakableHit ? breakableHit.distance : effectiveWallDist;
-
-      // Find closest enemy along aiming cone
-      let targetEnemy: RaycastEnemy | null = null;
-      let closestEnemyDist = maxTargetDist;
-      const hitRadius = 0.55;
-
-      for (const enemy of this.enemyManager.activeEnemies) {
-        if (enemy.isDead) continue;
-
-        // Block targeting enemies through door protectors or thin wall barriers
-        if (
-          this.enemyManager.isBlockedByDoorProtector(
-            this.player.x,
-            this.player.y,
-            enemy.x,
-            enemy.y,
-            this.allThinWalls
-          )
-        ) {
-          continue;
-        }
-
-        const dx = enemy.x - this.player.x;
-        const dy = enemy.y - this.player.y;
-        const t = dx * this.player.dirX + dy * this.player.dirY;
-
-        if (t > 0.1 && t < closestEnemyDist) {
-          const perpDist = Math.abs(dx * -this.player.dirY + dy * this.player.dirX);
-          if (perpDist <= hitRadius) {
-            closestEnemyDist = t;
-            targetEnemy = enemy;
-          }
-        }
-      }
+      const { targetEnemy, breakableHit, effectiveWallDist } = this.getAimTarget();
 
       // Determine 3D target coordinates
       let targetX: number;
@@ -2114,6 +2039,135 @@ export class RaycastScene extends BaseScene {
         },
         this.allThinWalls
       );
+    }
+  }
+
+  public getAimTarget(): {
+    targetEnemy: RaycastEnemy | null;
+    breakableHit: { breakable: RaycastBreakable; distance: number } | null;
+    effectiveWallDist: number;
+  } {
+    const centerCol = Math.floor(gameConfig.width / 2);
+    const wallDistance = this.zBuffer[centerCol] || this.MAX_RENDER_DISTANCE;
+
+    // Find distance to obstacle (solid wall, door, or door protector) along aim vector
+    const aimBarrierDist = this.enemyManager.findRayWallDistance(
+      this.player.x,
+      this.player.y,
+      this.player.dirX,
+      this.player.dirY,
+      wallDistance,
+      this.mapFlat,
+      this.mapWidth,
+      this.mapHeight,
+      this.doorStatesFlat,
+      this.allThinWalls
+    );
+    const effectiveWallDist = Math.min(wallDistance, aimBarrierDist);
+
+    // Find closest breakable furniture or destructible wall hit along aiming vector
+    let breakableHit = this.breakableManager.findClosestHit(
+      this.player.x,
+      this.player.y,
+      this.player.dirX,
+      this.player.dirY,
+      effectiveWallDist
+    );
+
+    // Check if center screen ray directly struck an unbroken destructible wall block
+    const centerHits = this.hitCounts[centerCol] || 0;
+    const centerPool = this.hitPool[centerCol];
+    for (let j = 0; j < centerHits; j++) {
+      const ray = centerPool[j];
+      const b = this.breakableManager.getBreakableAtGrid(ray.mapX, ray.mapY);
+      if (b && !b.isBroken) {
+        if (!breakableHit || ray.distance < breakableHit.distance) {
+          breakableHit = { breakable: b, distance: ray.distance };
+        }
+        break;
+      }
+    }
+
+    const maxTargetDist = breakableHit ? breakableHit.distance : effectiveWallDist;
+
+    // Find closest enemy along aiming cone
+    let targetEnemy: RaycastEnemy | null = null;
+    let closestEnemyDist = maxTargetDist;
+    const hitRadius = 0.55;
+
+    for (const enemy of this.enemyManager.activeEnemies) {
+      if (enemy.isDead) continue;
+
+      // Enemy must not be occluded by full-height wall columns
+      if (enemy.animatedSprite && !enemy.animatedSprite.visible) continue;
+
+      // Block targeting enemies through door protectors or thin wall barriers
+      if (
+        this.enemyManager.isBlockedByDoorProtector(
+          this.player.x,
+          this.player.y,
+          enemy.x,
+          enemy.y,
+          this.allThinWalls
+        )
+      ) {
+        continue;
+      }
+
+      const dx = enemy.x - this.player.x;
+      const dy = enemy.y - this.player.y;
+      const t = dx * this.player.dirX + dy * this.player.dirY;
+
+      if (t > 0.1 && t < closestEnemyDist) {
+        const perpDist = Math.abs(dx * -this.player.dirY + dy * this.player.dirX);
+        if (perpDist <= hitRadius) {
+          closestEnemyDist = t;
+          targetEnemy = enemy;
+        }
+      }
+    }
+
+    return { targetEnemy, breakableHit, effectiveWallDist };
+  }
+
+  private updateCrosshair(delta: number): void {
+    if (!this.hud) return;
+
+    if ((this.stairsManager && this.stairsManager.isTransitioning()) || this.isLevelTransitioning) {
+      this.hud.updateCrosshairTarget(false, undefined, undefined, delta);
+      return;
+    }
+
+    const { targetEnemy, breakableHit } = this.getAimTarget();
+
+    if (targetEnemy) {
+      // Valid enemy that will take damage: turn red and snap crosshair to enemy screen position
+      let snapX = targetEnemy.screenX;
+      let snapY = targetEnemy.screenY;
+
+      // Fallback projection if screen coordinates were not yet rendered or offscreen
+      if (snapX <= 0 || snapY <= 0 || snapX > gameConfig.width) {
+        const invDet = 1.0 / (this.player.planeX * this.player.dirY - this.player.dirX * this.player.planeY);
+        const dx = targetEnemy.x - this.player.x;
+        const dy = targetEnemy.y - this.player.y;
+        const transformX = invDet * (this.player.dirY * dx - this.player.dirX * dy);
+        const transformY = invDet * (-this.player.planeY * dx + this.player.planeX * dy);
+        if (transformY > 0.1) {
+          snapX = (gameConfig.width / 2) * (1 + transformX / transformY);
+          snapY = gameConfig.height / 2;
+        } else {
+          snapX = gameConfig.width / 2;
+          snapY = gameConfig.height / 2;
+        }
+      }
+
+      this.hud.updateCrosshairTarget(true, snapX, snapY, delta);
+    } else if (breakableHit && !breakableHit.breakable.isBroken) {
+      // Valid breakable target that will break: turn red at default center position
+      this.hud.updateCrosshairTarget(true, gameConfig.width / 2, gameConfig.height / 2, delta);
+    } else {
+      // Nothing to break or damage: return to default cyan at default center position
+      this.hud.updateCrosshairTarget(false, undefined, undefined, delta);
     }
   }
 
@@ -2305,6 +2359,8 @@ export class RaycastScene extends BaseScene {
     this.updateInteractionPrompt();
 
     this.renderScene();
+
+    this.updateCrosshair(delta);
   }
 
   private updatePlayer(delta: number) {

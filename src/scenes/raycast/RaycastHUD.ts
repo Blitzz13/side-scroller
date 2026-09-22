@@ -49,6 +49,17 @@ export class RaycastHUD extends Container {
   private promptText: Text;
   private currentPromptText: string = "";
 
+  // Dynamic Crosshair (Screen center default, enemy snapping, damageable target red indicator)
+  private crosshairContainer: Container;
+  private crosshairGraphics: Graphics;
+  private defaultCrosshairX: number;
+  private defaultCrosshairY: number;
+  private crosshairX: number;
+  private crosshairY: number;
+  private targetCrosshairX: number;
+  private targetCrosshairY: number;
+  private isCrosshairTargetLocked: boolean = false;
+
   constructor() {
     super();
 
@@ -322,6 +333,22 @@ export class RaycastHUD extends Container {
     this.promptContainer.addChild(this.promptText);
 
     this.addChild(this.promptContainer);
+
+    // 8. Dynamic Crosshair in screen center (supports target snapping and red damage indicator)
+    this.defaultCrosshairX = screenW / 2;
+    this.defaultCrosshairY = screenH / 2;
+    this.crosshairX = this.defaultCrosshairX;
+    this.crosshairY = this.defaultCrosshairY;
+    this.targetCrosshairX = this.defaultCrosshairX;
+    this.targetCrosshairY = this.defaultCrosshairY;
+
+    this.crosshairContainer = new Container();
+    this.crosshairContainer.position.set(this.crosshairX, this.crosshairY);
+
+    this.crosshairGraphics = new Graphics();
+    this.drawCrosshair(false);
+    this.crosshairContainer.addChild(this.crosshairGraphics);
+    this.addChild(this.crosshairContainer);
   }
 
   public addKeycard(color: string, customTexture?: Texture): void {
@@ -569,6 +596,143 @@ export class RaycastHUD extends Container {
       if (sprinting) {
         this.sprintContainer.alpha = 1;
       }
+    }
+  }
+
+  private drawCrosshair(isLocked: boolean): void {
+    const size = 14;
+    const gap = isLocked ? 4 : 5;
+    const thickness = 2.5;
+    const halfThick = thickness / 2;
+    const outline = 1.2;
+
+    this.crosshairGraphics.clear();
+
+    // 1. Black outer contrast border
+    const shadowColor = 0x000000;
+    const shadowAlpha = 0.85;
+
+    // Center dot outline
+    this.crosshairGraphics.beginFill(shadowColor, shadowAlpha);
+    this.crosshairGraphics.drawCircle(0, 0, 2.5 + outline);
+    this.crosshairGraphics.endFill();
+
+    // 4 bars outline
+    this.crosshairGraphics.beginFill(shadowColor, shadowAlpha);
+    // Top
+    this.crosshairGraphics.drawRect(
+      -halfThick - outline,
+      -gap - size - outline,
+      thickness + outline * 2,
+      size + outline * 2
+    );
+    // Bottom
+    this.crosshairGraphics.drawRect(
+      -halfThick - outline,
+      gap - outline,
+      thickness + outline * 2,
+      size + outline * 2
+    );
+    // Left
+    this.crosshairGraphics.drawRect(
+      -gap - size - outline,
+      -halfThick - outline,
+      size + outline * 2,
+      thickness + outline * 2
+    );
+    // Right
+    this.crosshairGraphics.drawRect(
+      gap - outline,
+      -halfThick - outline,
+      size + outline * 2,
+      thickness + outline * 2
+    );
+    this.crosshairGraphics.endFill();
+
+    // 2. Bars and center dot: Red (0xff2222) if pointing at target that can break or take damage, Cyan (0x00ffff) otherwise
+    const crossColor = isLocked ? 0xff2222 : 0x00ffff;
+    const crossAlpha = 0.95;
+
+    this.crosshairGraphics.beginFill(crossColor, crossAlpha);
+    // Top bar
+    this.crosshairGraphics.drawRect(-halfThick, -gap - size, thickness, size);
+    // Bottom bar
+    this.crosshairGraphics.drawRect(-halfThick, gap, thickness, size);
+    // Left bar
+    this.crosshairGraphics.drawRect(-gap - size, -halfThick, size, thickness);
+    // Right bar
+    this.crosshairGraphics.drawRect(gap, -halfThick, size, thickness);
+    // Center dot
+    this.crosshairGraphics.drawCircle(0, 0, isLocked ? 2.5 : 2);
+    this.crosshairGraphics.endFill();
+
+    // 3. Star Wars targeting corner brackets when locked on target that can break or take damage
+    if (isLocked) {
+      this.crosshairGraphics.lineStyle(1.6, 0xff2222, 0.85);
+      const bDist = 18;
+      const bLen = 6;
+      // Top-Left bracket
+      this.crosshairGraphics.moveTo(-bDist, -bDist + bLen);
+      this.crosshairGraphics.lineTo(-bDist, -bDist);
+      this.crosshairGraphics.lineTo(-bDist + bLen, -bDist);
+      // Top-Right bracket
+      this.crosshairGraphics.moveTo(bDist - bLen, -bDist);
+      this.crosshairGraphics.lineTo(bDist, -bDist);
+      this.crosshairGraphics.lineTo(bDist, -bDist + bLen);
+      // Bottom-Left bracket
+      this.crosshairGraphics.moveTo(-bDist, bDist - bLen);
+      this.crosshairGraphics.lineTo(-bDist, bDist);
+      this.crosshairGraphics.lineTo(-bDist + bLen, bDist);
+      // Bottom-Right bracket
+      this.crosshairGraphics.moveTo(bDist - bLen, bDist);
+      this.crosshairGraphics.lineTo(bDist, bDist);
+      this.crosshairGraphics.lineTo(bDist, bDist - bLen);
+    }
+  }
+
+  public updateCrosshairTarget(
+    canDamage: boolean,
+    targetScreenX?: number,
+    targetScreenY?: number,
+    delta: number = 1
+  ): void {
+    if (this.isCrosshairTargetLocked !== canDamage) {
+      this.isCrosshairTargetLocked = canDamage;
+      this.drawCrosshair(canDamage);
+    }
+
+    if (canDamage && targetScreenX !== undefined && targetScreenY !== undefined) {
+      this.targetCrosshairX = Math.max(20, Math.min(gameConfig.width - 20, targetScreenX));
+      this.targetCrosshairY = Math.max(20, Math.min(gameConfig.height - 20, targetScreenY));
+    } else {
+      this.targetCrosshairX = this.defaultCrosshairX;
+      this.targetCrosshairY = this.defaultCrosshairY;
+    }
+
+    // Snappy magnetic interpolation towards target position (or default center)
+    const lerpFactor = Math.min(1, 0.45 * delta);
+    this.crosshairX += (this.targetCrosshairX - this.crosshairX) * lerpFactor;
+    this.crosshairY += (this.targetCrosshairY - this.crosshairY) * lerpFactor;
+
+    if (Math.hypot(this.targetCrosshairX - this.crosshairX, this.targetCrosshairY - this.crosshairY) < 0.5) {
+      this.crosshairX = this.targetCrosshairX;
+      this.crosshairY = this.targetCrosshairY;
+    }
+
+    this.crosshairContainer.position.set(this.crosshairX, this.crosshairY);
+  }
+
+  public getCrosshairPosition(): { x: number; y: number } {
+    return { x: this.crosshairX, y: this.crosshairY };
+  }
+
+  public isTargetLocked(): boolean {
+    return this.isCrosshairTargetLocked;
+  }
+
+  public setCrosshairVisible(visible: boolean): void {
+    if (this.crosshairContainer) {
+      this.crosshairContainer.visible = visible;
     }
   }
 

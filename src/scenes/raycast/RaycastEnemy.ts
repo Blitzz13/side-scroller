@@ -57,6 +57,10 @@ export class RaycastEnemy {
   public clearanceTimer: number = 0;
   private lastAnimDir: string = "";
 
+  // Screen projection coordinates (updated each frame by RaycastEnemyManager.render)
+  public screenX: number = -9999;
+  public screenY: number = -9999;
+
   // Sound instance tracking to allow immediate stopping on death
   public onDeathCallback?: (enemy: RaycastEnemy) => void;
   private activeSoundInstances: Set<IMediaInstance> = new Set();

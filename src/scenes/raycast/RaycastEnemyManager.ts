@@ -1033,6 +1033,8 @@ export class RaycastEnemyManager {
       // Frustum culling: must be in front of player and within max render distance
       if (transformY <= 0.1 || transformY > maxRenderDistance) {
         sprite.visible = false;
+        enemy.screenX = -9999;
+        enemy.screenY = -9999;
         continue;
       }
 
@@ -1067,6 +1069,8 @@ export class RaycastEnemyManager {
 
       if (drawStartX > drawEndX) {
         sprite.visible = false;
+        enemy.screenX = -9999;
+        enemy.screenY = -9999;
         continue;
       }
 
@@ -1129,6 +1133,8 @@ export class RaycastEnemyManager {
 
         if (!hasDrawnAnyRun && drawStartX <= drawEndX) {
           sprite.visible = false;
+          enemy.screenX = -9999;
+          enemy.screenY = -9999;
           continue;
         }
       }
@@ -1149,6 +1155,8 @@ export class RaycastEnemyManager {
       sprite.y = Math.floor(renderY);
       sprite.width = spriteWidth;
       sprite.height = spriteHeight;
+      enemy.screenX = spriteScreenX;
+      enemy.screenY = Math.floor(renderY - spriteHeight * 0.55);
 
       // Re-apply flipX scale after dimension updates
       if (enemy.isFlipped) {
