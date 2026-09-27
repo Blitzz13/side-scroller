@@ -48,6 +48,7 @@ export interface IRaycastEnemyConfig {
   painSounds?: ISoundConfig[];
   deathSounds?: ISoundConfig[];
   attackSounds?: ISoundConfig[];
+  emergeSound?: ISoundConfig; // Sound played when emerging / coming out of water
   idleSound?: ISoundConfig; // Looping idle/hover sound
   hoverSound?: ISoundConfig; // Looping hover sound
   voicelines?: IEnemyVoicePool;

@@ -80,6 +80,10 @@ export class RaycastEnemyManager {
     phase1_dark_trooper_slashing_1: "assets/raycast/sfx/phase1_dark_trooper/slashing_1.mp3",
     phase1_dark_trooper_slashing_2: "assets/raycast/sfx/phase1_dark_trooper/slashing_2.mp3",
     phase1_dark_trooper_spoted_enemy: "assets/raycast/sfx/phase1_dark_trooper/spoted_enemy.mp3",
+    diagona_coming_out: "assets/raycast/sfx/diagona/coming_out.mp3",
+    diagona_attack: "assets/raycast/sfx/diagona/attack.mp3",
+    diagona_damage_1: "assets/raycast/sfx/diagona/damage_1.mp3",
+    diagona_die: "assets/raycast/sfx/diagona/die.mp3",
   };
 
   constructor(container: Container) {
@@ -214,6 +218,9 @@ export class RaycastEnemyManager {
           if (imgLower.includes("phase1") || imgLower.includes("dark_trooper") || imgLower.includes("darktrooper")) {
             return raycastEnemyConfigs[RaycastEnemyType.PHASE1_DARK_TROOPER];
           }
+          if (imgLower.includes("diagona") || imgLower.includes("dianoga")) {
+            return raycastEnemyConfigs[RaycastEnemyType.DIAGONA];
+          }
           if (imgLower.includes("storm") || imgLower.includes("trooper")) {
             return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
           }
@@ -228,8 +235,7 @@ export class RaycastEnemyManager {
     if (mapData?.tilesets) {
       for (const tileset of mapData.tilesets) {
         const fgid = tileset.firstgid ?? firstgid;
-        const count = tileset.tilecount ?? Infinity;
-        if (tileGid >= fgid && tileGid < fgid + count && tileset.tiles) {
+        if (tileGid >= fgid && tileset.tiles) {
           const tId = tileGid - fgid;
           const tileDef = tileset.tiles.find((t) => t.id === tId);
           if (tileDef) {
@@ -260,6 +266,9 @@ export class RaycastEnemyManager {
               if (imgLower.includes("phase1") || imgLower.includes("dark_trooper") || imgLower.includes("darktrooper")) {
                 return raycastEnemyConfigs[RaycastEnemyType.PHASE1_DARK_TROOPER];
               }
+              if (imgLower.includes("diagona") || imgLower.includes("dianoga")) {
+                return raycastEnemyConfigs[RaycastEnemyType.DIAGONA];
+              }
               if (imgLower.includes("storm") || imgLower.includes("trooper")) {
                 return raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
               }
@@ -275,6 +284,9 @@ export class RaycastEnemyManager {
     }
 
     // 3. Fallback tile ID mappings from StarWarsTileset
+    if (localTileId === 30 || localTileId === 29) {
+      return raycastEnemyConfigs[RaycastEnemyType.DIAGONA];
+    }
     if (localTileId === 28) {
       return raycastEnemyConfigs[RaycastEnemyType.PHASE1_DARK_TROOPER];
     }
@@ -802,7 +814,9 @@ export class RaycastEnemyManager {
     thinWalls: Array<{ x1: number; y1: number; x2: number; y2: number }>,
     playerController: RaycastPlayerController,
     pickupManager: RaycastPickupManager,
-    laserManager?: RaycastLaserManager
+    laserManager?: RaycastLaserManager,
+    playerDirX?: number,
+    playerDirY?: number
   ): void {
     const losChecker = (x1: number, y1: number, x2: number, y2: number) =>
       this.checkLineOfSight(
@@ -966,7 +980,9 @@ export class RaycastEnemyManager {
         losChecker,
         moveChecker,
         onShootPlayer,
-        lofChecker
+        lofChecker,
+        playerDirX,
+        playerDirY
       );
 
       // Trigger stormtrooper voicelines based on visibility & proximity

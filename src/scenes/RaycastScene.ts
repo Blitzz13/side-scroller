@@ -589,6 +589,7 @@ export class RaycastScene extends BaseScene {
         { id: 26, image: "assets/raycast/textures/stairs_down.png", type: "Tile", properties: [{ name: "tileType", value: "stairs" }, { name: "stairType", value: "down" }] },
         { id: 27, image: "dh_17_item.png", type: "PickupItem", properties: [{ name: "amount", value: 20 }, { name: "object", value: { anchor: "floor", scale: 0.2 } }, { name: "type", value: "weapon" }, { name: "weaponType", value: "dh_17" }] },
         { id: 28, image: "assets/raycast/enemies/phase1_dark_trooper.png", type: "Tile" },
+        { id: 29, image: "assets/raycast/enemies/diagona.png", type: "Tile" },
       ];
     }
   }
@@ -782,6 +783,13 @@ export class RaycastScene extends BaseScene {
 
     if (mapData.tilesets) {
       for (const tileset of mapData.tilesets) {
+        if (
+          (!tileset.source && tileset.name === "StarWarsTileset") ||
+          (tileset.source && tileset.tiles && tileset.tiles.length < 30)
+        ) {
+          tileset.source = tileset.source || "StarWarsTileset/StarWarsTileset.tsx";
+          delete tileset.tiles;
+        }
         if (!tileset.tiles && tileset.source) {
           await this.loadExternalTileset(tileset);
         }
@@ -2334,7 +2342,9 @@ export class RaycastScene extends BaseScene {
       allThinWalls,
       this.playerController,
       this.pickupManager,
-      this.laserManager
+      this.laserManager,
+      this.player.dirX,
+      this.player.dirY
     );
 
     // Check for item pickups

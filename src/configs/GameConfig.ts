@@ -292,6 +292,22 @@ export const manifest: AssetsManifest = {
           {
             alias: "phase1_dark_trooper_spoted_enemy",
             src: "./assets/raycast/sfx/phase1_dark_trooper/spoted_enemy.mp3"
+          },
+          {
+            alias: "diagona_coming_out",
+            src: "./assets/raycast/sfx/diagona/coming_out.mp3"
+          },
+          {
+            alias: "diagona_attack",
+            src: "./assets/raycast/sfx/diagona/attack.mp3"
+          },
+          {
+            alias: "diagona_damage_1",
+            src: "./assets/raycast/sfx/diagona/damage_1.mp3"
+          },
+          {
+            alias: "diagona_die",
+            src: "./assets/raycast/sfx/diagona/die.mp3"
           }
         ]
       },
@@ -410,6 +426,10 @@ export const manifest: AssetsManifest = {
           {
             name: "phase1_dark_trooper",
             src: "./assets/raycast/enemies/phase1_dark_trooper.json",
+          },
+          {
+            name: "diagona",
+            src: "./assets/raycast/enemies/diagona.json",
           }
         ],
       },

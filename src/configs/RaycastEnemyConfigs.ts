@@ -406,6 +406,67 @@ export const imperialCommandoConfig: IRaycastEnemyConfig = {
   },
 };
 
+const diagonaPainSounds: ISoundConfig[] = [
+  {
+    src: "diagona_damage_1",
+    loop: false,
+    volume: 0.85,
+  },
+];
+
+const diagonaDeathSounds: ISoundConfig[] = [
+  {
+    src: "diagona_die",
+    loop: false,
+    volume: 0.95,
+  },
+];
+
+const diagonaAttackSounds: ISoundConfig[] = [
+  {
+    src: "diagona_attack",
+    loop: false,
+    volume: 0.9,
+  },
+];
+
+const diagonaEmergeSound: ISoundConfig = {
+  src: "diagona_coming_out",
+  loop: false,
+  volume: 0.9,
+};
+
+export const diagonaConfig: IRaycastEnemyConfig = {
+  type: RaycastEnemyType.DIAGONA,
+  name: "Dianoga",
+  maxHealth: 250,
+  speed: 0.016,
+  sightRange: 6.0,
+  attackRange: 1.35,
+  minDistance: 0.75,
+  rateOfFire: 950,
+  damage: 18,
+  accuracy: 0.85,
+  scale: 0.8,
+  referenceHeight: 55,
+  spritesheet: "assets/raycast/enemies/diagona.json",
+  shootHeight: 0.35,
+  isMelee: true,
+  painSounds: diagonaPainSounds,
+  deathSounds: diagonaDeathSounds,
+  attackSounds: diagonaAttackSounds,
+  emergeSound: diagonaEmergeSound,
+  animationConfig: {
+    omniDirectional: true,
+    deathAnimation: {
+      prefix: "death",
+      count: 7,
+      speed: 0.14,
+      loop: false,
+    },
+  },
+};
+
 /**
  * Global registry of Raycast enemy configs indexed by RaycastEnemyType.
  * Additional enemy types can easily be added here with their custom stats,
@@ -417,6 +478,7 @@ export const raycastEnemyConfigs: Record<RaycastEnemyType, IRaycastEnemyConfig> 
   [RaycastEnemyType.IMPERIAL_OFFICER]: imperialOfficerConfig,
   [RaycastEnemyType.IMPERIAL_COMMANDO]: imperialCommandoConfig,
   [RaycastEnemyType.PHASE1_DARK_TROOPER]: phase1DarkTrooperConfig,
+  [RaycastEnemyType.DIAGONA]: diagonaConfig,
 };
 
 export function getRaycastEnemyConfig(
@@ -437,7 +499,8 @@ export function getRaycastEnemyConfig(
       (normalized.includes("darktrooper") && typeStr.includes("dark_trooper")) ||
       (normalized.includes("phase1") && typeStr.includes("phase1")) ||
       (normalized.includes("officer") && typeStr.includes("officer")) ||
-      (normalized.includes("commando") && typeStr.includes("commando"))
+      (normalized.includes("commando") && typeStr.includes("commando")) ||
+      (normalized.includes("diagona") || normalized.includes("dianoga"))
     ) {
       return cfg;
     }

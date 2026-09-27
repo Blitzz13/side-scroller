@@ -1,8 +1,18 @@
 import { AnimatedSprite, Graphics, SCALE_MODES, Spritesheet, Texture } from "pixi.js";
 import { sound, IMediaInstance } from "@pixi/sound";
 import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
+import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
 
 export type EnemyAIState = "idle" | "chase" | "attack" | "dead";
+export type DiagonaPhase =
+  | "hidden"
+  | "emerging"
+  | "peeking"
+  | "stalking"
+  | "hiding"
+  | "full_emerging"
+  | "surfaced"
+  | "biting";
 
 export class RaycastEnemy {
   public id: number;
@@ -15,6 +25,15 @@ export class RaycastEnemy {
   public maxHealth: number;
   public state: EnemyAIState = "idle";
   public isMoving: boolean = false;
+
+  // Diagona specific state
+  public diagonaPhase: DiagonaPhase = "hidden";
+  public diagonaBlinkTimer: number = 0;
+  public diagonaBlinkDuration: number = 0;
+  public diagonaAnimTimer: number = 0;
+  public diagonaSubmergedTimer: number = 0;
+  public diagonaResetToIdleAfterHide: boolean = false;
+  private diagonaHasPlayedEmergeSound: boolean = false;
 
   // Animated sprite
   public animatedSprite!: AnimatedSprite;
@@ -138,6 +157,26 @@ export class RaycastEnemy {
     }
   }
 
+  private playDiagonaSound(name: string, dist?: number): void {
+    const alias = name.startsWith("diagona_") ? name : `diagona_${name}`;
+    try {
+      const targetSound = sound.exists(alias) ? alias : sound.exists(name) ? name : null;
+      if (!targetSound) return;
+
+      let volume = 0.85;
+      if (dist !== undefined) {
+        const maxDist = Math.max(14, this.config.sightRange || 14);
+        const falloff = Math.max(0.1, Math.min(1.0, 1.0 - dist / maxDist));
+        volume *= falloff;
+      }
+
+      const res = sound.play(targetSound, { volume, loop: false });
+      this.trackSoundInstance(res);
+    } catch (e) {
+      console.warn(`Failed to play diagona sound ${alias}:`, e);
+    }
+  }
+
   constructor(
     id: number,
     config: IRaycastEnemyConfig,
@@ -156,6 +195,11 @@ export class RaycastEnemy {
     this.currentVOffset = config.vOffset ?? 0;
     if (config.shieldInterval) {
       this.shieldCooldownTimer = config.shieldInterval * (0.8 + Math.random() * 0.4);
+    }
+    if (config.type === RaycastEnemyType.DIAGONA) {
+      this.diagonaPhase = "hidden";
+      this.diagonaAnimTimer = 0;
+      this.diagonaBlinkTimer = 150 + Math.random() * 150;
     }
 
     if (spritesheet) {
@@ -194,6 +238,36 @@ export class RaycastEnemy {
       }
       return [Texture.WHITE];
     };
+
+    if (this.config.type === RaycastEnemyType.DIAGONA) {
+      const hidingFrames = getFrames("hiding", 2);
+      this.animations = {
+        coming_out: getFrames("coming_out", 4),
+        idle_1: getSingle("idle_1"),
+        idle_2: getSingle("idle_2"),
+        hiding: hidingFrames,
+        hiding_last: [hidingFrames[hidingFrames.length - 1] || getSingle("hiding_2")[0] || Texture.WHITE],
+        full_come_out: getFrames("full_come_out", 4),
+        full_idle: getSingle("full_idle"),
+        attack: getSingle("attack"),
+        death_1: getFrames("death", 7),
+      };
+
+      const initialTextures = this.animations.hiding_last || [Texture.WHITE];
+      this.animatedSprite = new AnimatedSprite(initialTextures);
+      this.animatedSprite.anchor.set(0.5, 1.0);
+      this.animatedSprite.animationSpeed = 0.08;
+      this.animatedSprite.roundPixels = true;
+      this.animatedSprite.visible = false;
+      this.currentAnimKey = "hiding_last";
+      this.diagonaPhase = "hidden";
+      this.diagonaAnimTimer = 0;
+      this.diagonaBlinkTimer = 120 + Math.random() * 120;
+      this.diagonaBlinkDuration = 0;
+      this.animatedSprite.loop = false;
+      this.animatedSprite.gotoAndStop(0);
+      return;
+    }
 
     const animConfig = this.config.animationConfig;
 
@@ -306,8 +380,66 @@ export class RaycastEnemy {
   ): boolean {
     if (this.isDead) return false;
 
+    // Diagona is immune to damage while submerged or coming out
+    if (this.config.type === RaycastEnemyType.DIAGONA) {
+      if (
+        this.diagonaPhase === "hidden" ||
+        this.diagonaPhase === "full_emerging" ||
+        this.diagonaPhase === "emerging" ||
+        this.diagonaPhase === "hiding"
+      ) {
+        return false;
+      }
+    }
+
     this.health = Math.max(0, this.health - amount);
     this.painTimer = 8; // Flash red for ~8 frames
+
+    if (this.config.type === RaycastEnemyType.DIAGONA) {
+      if (this.health <= 0) {
+        this.state = "dead";
+        this.diagonaPhase = "surfaced";
+        this.isMoving = false;
+        this.stopActiveSounds();
+
+        if (this.onDeathCallback) {
+          this.onDeathCallback(this);
+        }
+        if (onDeath) {
+          onDeath(this);
+        }
+
+        this.playAnimation("death_1", false, 0.14);
+        this.playDiagonaSound("diagona_die");
+        return true;
+      }
+
+      if (this.diagonaPhase === "peeking" || this.diagonaPhase === "stalking") {
+        this.state = "chase";
+        const distToSource =
+          sourceX !== undefined && sourceY !== undefined
+            ? Math.hypot(sourceX - this.x, sourceY - this.y)
+            : 999;
+        if (distToSource <= 2.2) {
+          this.diagonaPhase = "full_emerging";
+          this.diagonaAnimTimer = 44;
+          this.playAnimation("full_come_out", false, 0.09);
+          this.playDiagonaSound("diagona_coming_out", distToSource);
+        } else {
+          this.diagonaPhase = "stalking";
+          this.diagonaSubmergedTimer = 240;
+        }
+      }
+      if (sourceX !== undefined && sourceY !== undefined) {
+        this.lastKnownPlayerX = sourceX;
+        this.lastKnownPlayerY = sourceY;
+        this.hasTarget = true;
+        this.searchTimer = 600;
+      }
+
+      this.playDiagonaSound("diagona_damage_1");
+      return false;
+    }
 
     // Instantly alert enemy to player / attacker
     if (this.state === "idle") {
@@ -457,7 +589,9 @@ export class RaycastEnemy {
     hasLineOfSight: (x1: number, y1: number, x2: number, y2: number) => boolean,
     tryMoveEnemy: (enemy: RaycastEnemy, newX: number, newY: number) => boolean,
     onShootPlayer: (enemy: RaycastEnemy, damage: number, accuracy: number, distance: number) => void,
-    hasLineOfFire?: (x1: number, y1: number, x2: number, y2: number) => boolean
+    hasLineOfFire?: (x1: number, y1: number, x2: number, y2: number) => boolean,
+    playerDirX?: number,
+    playerDirY?: number
   ): void {
     if (this.painTimer > 0) {
       this.painTimer = Math.max(0, this.painTimer - delta);
@@ -467,6 +601,21 @@ export class RaycastEnemy {
       if (this.currentVOffset > 0) {
         this.currentVOffset = Math.max(0, this.currentVOffset - 0.015 * delta);
       }
+      return;
+    }
+
+    if (this.config.type === RaycastEnemyType.DIAGONA) {
+      this.updateDiagona(
+        delta,
+        playerX,
+        playerY,
+        hasLineOfSight,
+        tryMoveEnemy,
+        onShootPlayer,
+        hasLineOfFire,
+        playerDirX,
+        playerDirY
+      );
       return;
     }
 
@@ -771,8 +920,358 @@ export class RaycastEnemy {
     }
   }
 
+  private updateDiagona(
+    delta: number,
+    playerX: number,
+    playerY: number,
+    hasLineOfSight: (x1: number, y1: number, x2: number, y2: number) => boolean,
+    tryMoveEnemy: (enemy: RaycastEnemy, newX: number, newY: number) => boolean,
+    onShootPlayer: (enemy: RaycastEnemy, damage: number, accuracy: number, distance: number) => void,
+    hasLineOfFire?: (x1: number, y1: number, x2: number, y2: number) => boolean,
+    playerDirX?: number,
+    playerDirY?: number
+  ): void {
+    if (this.shootingTimer > 0) {
+      this.shootingTimer = Math.max(0, this.shootingTimer - delta);
+    }
+    if (this.meleeTimer > 0) {
+      this.meleeTimer = Math.max(0, this.meleeTimer - delta);
+    }
+
+    const dx = playerX - this.x;
+    const dy = playerY - this.y;
+    const dist = Math.hypot(dx, dy);
+    const los = hasLineOfSight(this.x, this.y, playerX, playerY);
+    const lof = hasLineOfFire ? hasLineOfFire(this.x, this.y, playerX, playerY) : los;
+
+    if (dist > 0.001) {
+      this.dirX = dx / dist;
+      this.dirY = dy / dist;
+    }
+
+    switch (this.diagonaPhase) {
+      case "hidden": {
+        this.isMoving = false;
+        this.state = "idle";
+        this.playAnimation("hiding_last", false);
+
+        // Spotting player triggers coming out
+        let playerLookingAtEnemy = true;
+        if (playerDirX !== undefined && playerDirY !== undefined && dist > 0.001) {
+          const toEnemyX = this.x - playerX;
+          const toEnemyY = this.y - playerY;
+          const dot = (toEnemyX * playerDirX + toEnemyY * playerDirY) / dist;
+          playerLookingAtEnemy = dot > 0.15; // Within forward ~150-degree field of view
+        }
+
+        const effectiveSightRange = this.config.sightRange ?? 6.0;
+        const canSpotPlayer =
+          ((dist <= effectiveSightRange && los && playerLookingAtEnemy) ||
+           (dist <= 2.8 && los) ||
+           this.painTimer > 0);
+
+        if (canSpotPlayer) {
+          this.hasTarget = true;
+          this.lastKnownPlayerX = playerX;
+          this.lastKnownPlayerY = playerY;
+          this.searchTimer = 600;
+
+          // Stop playing hiding animation and play coming out!
+          this.diagonaPhase = "emerging";
+          this.state = "chase";
+          this.diagonaAnimTimer = 36; // ~600ms to rise out of water
+          this.playAnimation("coming_out", false, 0.11);
+          this.playDiagonaSound("diagona_coming_out", dist);
+        }
+        break;
+      }
+
+      case "emerging": {
+        this.isMoving = false;
+        this.state = "chase";
+        this.diagonaAnimTimer = Math.max(0, this.diagonaAnimTimer - delta);
+        if (this.diagonaAnimTimer <= 0) {
+          if (dist <= 2.2) {
+            // Already close to player -> fully come out!
+            this.diagonaPhase = "full_emerging";
+            this.diagonaAnimTimer = 44;
+            this.playAnimation("full_come_out", false, 0.09);
+            this.playDiagonaSound("diagona_coming_out", dist);
+          } else {
+            // Approaches player with head out
+            this.diagonaPhase = "stalking";
+            this.diagonaSubmergedTimer = 240;
+            this.diagonaBlinkTimer = 140 + Math.random() * 120;
+            this.diagonaBlinkDuration = 0;
+            this.playAnimation("idle_1", false);
+          }
+        }
+        break;
+      }
+
+      case "peeking": {
+        this.isMoving = false;
+        this.state = "idle";
+
+        // Handle blinking: idle_1 (open eye) to idle_2 (blink) spaced out
+        if (this.diagonaBlinkDuration > 0) {
+          this.diagonaBlinkDuration -= delta;
+          if (this.diagonaBlinkDuration <= 0) {
+            this.playAnimation("idle_1", false);
+            this.diagonaBlinkTimer = 160 + Math.random() * 180;
+          } else {
+            this.playAnimation("idle_2", false);
+          }
+        } else {
+          this.diagonaBlinkTimer -= delta;
+          if (this.diagonaBlinkTimer <= 0) {
+            this.playAnimation("idle_2", false);
+            this.diagonaBlinkDuration = 16; // ~260ms blink
+          } else {
+            this.playAnimation("idle_1", false);
+          }
+        }
+
+        const effectiveSightRange = this.config.sightRange ?? 6.0;
+        const canSpotPlayer =
+          ((dist <= effectiveSightRange && los) ||
+           (dist <= 2.8 && los) ||
+           this.painTimer > 0);
+
+        if (canSpotPlayer) {
+          this.hasTarget = true;
+          this.lastKnownPlayerX = playerX;
+          this.lastKnownPlayerY = playerY;
+          this.searchTimer = 600;
+
+          if (dist <= 2.2) {
+            this.diagonaPhase = "full_emerging";
+            this.diagonaAnimTimer = 44;
+            this.playAnimation("full_come_out", false, 0.09);
+            this.playDiagonaSound("diagona_coming_out", dist);
+          } else {
+            this.diagonaPhase = "stalking";
+            this.state = "chase";
+            this.diagonaSubmergedTimer = 240;
+          }
+        }
+        break;
+      }
+
+      case "stalking": {
+        this.state = "chase";
+
+        // Head/eyestalk is out while moving: keep showing idle_1 with spaced out blinks
+        if (this.diagonaBlinkDuration > 0) {
+          this.diagonaBlinkDuration -= delta;
+          if (this.diagonaBlinkDuration <= 0) {
+            this.playAnimation("idle_1", false);
+            this.diagonaBlinkTimer = 160 + Math.random() * 180;
+          } else {
+            this.playAnimation("idle_2", false);
+          }
+        } else {
+          this.diagonaBlinkTimer -= delta;
+          if (this.diagonaBlinkTimer <= 0) {
+            this.playAnimation("idle_2", false);
+            this.diagonaBlinkDuration = 16;
+          } else {
+            this.playAnimation("idle_1", false);
+          }
+        }
+
+        this.diagonaSubmergedTimer = Math.max(0, this.diagonaSubmergedTimer - delta);
+
+        const stalkSpeed = 0.026 * delta;
+        const oldX = this.x;
+        const oldY = this.y;
+        const moved = this.moveTowards(playerX, playerY, stalkSpeed, tryMoveEnemy);
+        this.isMoving = moved && Math.hypot(this.x - oldX, this.y - oldY) > 0.0001;
+
+        // When it approaches the player, it fully comes out!
+        const reachedCloseRange = dist <= 2.2;
+        const stuckNearPlayer = !moved && dist <= 3.2;
+        const stalkTimeout = this.diagonaSubmergedTimer <= 0;
+
+        if (reachedCloseRange || stuckNearPlayer || stalkTimeout) {
+          this.diagonaPhase = "full_emerging";
+          this.diagonaAnimTimer = 44; // ~730ms dramatic full emergence sequence
+          this.playAnimation("full_come_out", false, 0.09);
+          this.playDiagonaSound("diagona_coming_out", dist);
+          this.isMoving = false;
+        }
+        break;
+      }
+
+      case "hiding": {
+        this.isMoving = false;
+        this.diagonaAnimTimer = Math.max(0, this.diagonaAnimTimer - delta);
+        if (this.diagonaAnimTimer <= 0) {
+          this.diagonaPhase = "hidden";
+          this.state = "idle";
+          this.diagonaResetToIdleAfterHide = false;
+          this.playAnimation("hiding_last", false);
+        }
+        break;
+      }
+
+      case "full_emerging": {
+        this.isMoving = false;
+        this.diagonaAnimTimer = Math.max(0, this.diagonaAnimTimer - delta);
+        if (this.diagonaAnimTimer <= 0) {
+          this.diagonaPhase = "surfaced";
+          this.state = "chase";
+          this.playAnimation("full_idle", true);
+        }
+        break;
+      }
+
+      case "surfaced": {
+        this.state = "chase";
+
+        if (dist <= this.config.attackRange && los && lof) {
+          this.diagonaPhase = "biting";
+          this.state = "attack";
+          this.isMoving = false;
+          return;
+        }
+
+        if (los) {
+          this.lastKnownPlayerX = playerX;
+          this.lastKnownPlayerY = playerY;
+          this.hasTarget = true;
+          this.searchTimer = 600;
+        } else if (this.hasTarget) {
+          this.searchTimer = Math.max(0, this.searchTimer - delta);
+          if (this.searchTimer <= 0) {
+            // Lost player, duck down into hiding then return to idle
+            this.diagonaPhase = "hiding";
+            this.diagonaResetToIdleAfterHide = true;
+            this.diagonaAnimTimer = 18;
+            this.playAnimation("hiding", false, 0.12);
+            this.hasTarget = false;
+            this.isMoving = false;
+            return;
+          }
+        } else {
+          this.diagonaPhase = "hiding";
+          this.diagonaResetToIdleAfterHide = true;
+          this.diagonaAnimTimer = 18;
+          this.playAnimation("hiding", false, 0.12);
+          this.isMoving = false;
+          return;
+        }
+
+        const tx = los ? playerX : this.lastKnownPlayerX;
+        const ty = los ? playerY : this.lastKnownPlayerY;
+        const speed = this.config.speed * delta;
+        const oldX = this.x;
+        const oldY = this.y;
+        const moved = this.moveTowards(tx, ty, speed, tryMoveEnemy);
+        this.isMoving = moved && Math.hypot(this.x - oldX, this.y - oldY) > 0.0001;
+        this.playAnimation("full_idle", true);
+        break;
+      }
+
+      case "biting": {
+        this.isMoving = false;
+        this.state = "attack";
+
+        const attackExitDist = this.config.attackRange + 0.45;
+        if (dist > attackExitDist || !los || !lof) {
+          this.diagonaPhase = "surfaced";
+          this.state = "chase";
+          return;
+        }
+
+        const now = Date.now();
+        if (now - this.lastShotTime >= this.config.rateOfFire) {
+          this.lastShotTime = now;
+          this.meleeTimer = 18; // ~300ms showing attack frame
+          this.playAnimation("attack", false);
+          this.playDiagonaSound("diagona_attack", dist);
+          onShootPlayer(this, this.config.damage, this.config.accuracy, dist);
+        }
+
+        if (this.meleeTimer > 0) {
+          this.playAnimation("attack", false);
+        } else {
+          this.playAnimation("full_idle", true);
+        }
+        break;
+      }
+    }
+  }
+
   public updateAnimation(playerX: number, playerY: number): void {
     if (!this.animatedSprite) return;
+
+    if (this.config.type === RaycastEnemyType.DIAGONA) {
+      this.isFlipped = false;
+      this.animatedSprite.anchor.set(0.5, 1.0);
+
+      if (this.state === "dead") {
+        this.playAnimation("death_1", false, 0.14);
+        const isLastFrame =
+          this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1;
+        if (isLastFrame) {
+          this.animatedSprite.gotoAndStop(this.animatedSprite.totalFrames - 1);
+        }
+        return;
+      }
+
+      switch (this.diagonaPhase) {
+        case "hidden":
+          this.playAnimation("hiding_last", false);
+          break;
+        case "emerging":
+          this.playAnimation("coming_out", false, 0.11);
+          if (
+            this.animatedSprite &&
+            this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1
+          ) {
+            this.animatedSprite.gotoAndStop(this.animatedSprite.totalFrames - 1);
+          }
+          break;
+        case "peeking":
+        case "stalking":
+          if (this.diagonaBlinkDuration > 0) {
+            this.playAnimation("idle_2", false);
+          } else {
+            this.playAnimation("idle_1", false);
+          }
+          break;
+        case "hiding":
+          this.playAnimation("hiding", false, 0.08);
+          if (
+            this.animatedSprite &&
+            this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1
+          ) {
+            this.animatedSprite.gotoAndStop(this.animatedSprite.totalFrames - 1);
+          }
+          break;
+        case "full_emerging":
+          this.playAnimation("full_come_out", false, 0.09);
+          if (
+            this.animatedSprite &&
+            this.animatedSprite.currentFrame >= this.animatedSprite.totalFrames - 1
+          ) {
+            this.animatedSprite.gotoAndStop(this.animatedSprite.totalFrames - 1);
+          }
+          break;
+        case "surfaced":
+          this.playAnimation("full_idle", true);
+          break;
+        case "biting":
+          if (this.meleeTimer > 0) {
+            this.playAnimation("attack", false);
+          } else {
+            this.playAnimation("full_idle", true);
+          }
+          break;
+      }
+      return;
+    }
 
     if (this.config.animationConfig?.omniDirectional) {
       this.isFlipped = false;
