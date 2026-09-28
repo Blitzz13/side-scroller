@@ -24,6 +24,10 @@ export class RaycastEnemyManager {
   private nextEnemyId: number = 1;
   private voicelineManager: EnemyVoicelineManager;
   private onKillCallback?: (killedEnemy: RaycastEnemy, killedCount: number, totalCount: number) => void;
+  private cachedMapFlat?: Int32Array;
+  private cachedMapWidth: number = 0;
+  private cachedMapHeight: number = 0;
+  private cachedDoorStatesFlat?: Float64Array;
 
   public get totalEnemies(): number {
     return this.enemies.length;
@@ -448,8 +452,22 @@ export class RaycastEnemyManager {
               dirY = Math.round(Math.cos(rad));
             }
           }
+          let customVisionCone: number | undefined;
+          if (obj.properties) {
+            const coneProp = obj.properties.find(
+              (p: any) =>
+                p.name === "visionConeAngle" ||
+                p.name === "fov" ||
+                p.name === "visionCone" ||
+                p.name === "coneAngle"
+            );
+            if (coneProp && typeof coneProp.value === "number") {
+              customVisionCone = coneProp.value;
+            }
+          }
+
           if (config) {
-            this.spawnEnemy(config, x, y, dirX, dirY);
+            this.spawnEnemy(config, x, y, dirX, dirY, undefined, customVisionCone);
           }
         }
       }
@@ -462,7 +480,8 @@ export class RaycastEnemyManager {
     y: number,
     dirX: number = 0,
     dirY: number = 1,
-    spritesheet?: Spritesheet
+    spritesheet?: Spritesheet,
+    visionConeAngle?: number
   ): RaycastEnemy {
     const sheet =
       spritesheet ||
@@ -473,7 +492,7 @@ export class RaycastEnemyManager {
       (Assets.cache.has(config.spritesheet) ? Assets.get(config.spritesheet) : undefined) ||
       this.spritesheets["assets/raycast/enemies/storm_trooper.json"] ||
       this.spritesheets["storm_trooper"];
-    const enemy = new RaycastEnemy(this.nextEnemyId++, config, x, y, sheet);
+    const enemy = new RaycastEnemy(this.nextEnemyId++, config, x, y, sheet, visionConeAngle);
     enemy.dirX = dirX;
     enemy.dirY = dirY;
     enemy.wanderDirX = dirX;
@@ -818,6 +837,11 @@ export class RaycastEnemyManager {
     playerDirX?: number,
     playerDirY?: number
   ): void {
+    this.cachedMapFlat = mapFlat;
+    this.cachedMapWidth = mapWidth;
+    this.cachedMapHeight = mapHeight;
+    this.cachedDoorStatesFlat = doorStatesFlat;
+
     const losChecker = (x1: number, y1: number, x2: number, y2: number) =>
       this.checkLineOfSight(
         x1,
@@ -866,9 +890,19 @@ export class RaycastEnemyManager {
         return;
       }
 
+      // Calculate initial sight / target acquisition accuracy penalty
+      const { multiplier: acqMultiplier } = enemy.getTargetAcquisitionMultiplier();
+      const shotsFired = enemy.shotsFiredAtTarget ?? 0;
+      enemy.shotsFiredAtTarget = shotsFired + 1;
+
       // Handle melee attack (e.g. Phase 1 Dark Trooper with sword)
       if (enemy.config.isMelee) {
-        const isHit = Math.random() <= accuracy;
+        // First melee strike after spotting has a hesitation / whiff chance
+        if (shotsFired < 1) {
+          return;
+        }
+        const effectiveMeleeAccuracy = accuracy * acqMultiplier;
+        const isHit = Math.random() <= effectiveMeleeAccuracy;
         if (isHit) {
           playerController.takeDamage(damage);
           if (enemy.config.meleeHitSound) {
@@ -883,49 +917,54 @@ export class RaycastEnemyManager {
         return;
       }
 
-      if (!laserManager) {
-        // Fallback hitscan if no laser manager
-        const effectiveAccuracy = Math.max(
-          0.2,
-          Math.min(0.9, accuracy - (distance / 20) * 0.3)
-        );
-        if (Math.random() <= effectiveAccuracy) {
-          playerController.takeDamage(damage);
-        }
-        return;
-      }
-
       // Calculate direction from enemy to player
       const dx = playerX - enemy.x;
       const dy = playerY - enemy.y;
       const dist = Math.hypot(dx, dy);
       if (dist <= 0.001) return;
 
+      // Ranged Attack Hit Calculation:
+      // 1. First shot after spotting player is ALWAYS a warning shot / miss
+      // 2. Subsequent shots scale with acquisition ramp
+      let isHit = false;
+      if (shotsFired >= 1) {
+        const distancePenalty = (dist / 20) * 0.20;
+        const baseEffectiveAccuracy = Math.max(
+          0.08,
+          Math.min(0.65, accuracy - distancePenalty)
+        );
+        const effectiveAccuracy = Math.max(0.03, baseEffectiveAccuracy * acqMultiplier);
+        isHit = Math.random() <= effectiveAccuracy;
+      }
+
+      if (!laserManager) {
+        // Fallback hitscan if no laser manager
+        if (isHit) {
+          playerController.takeDamage(damage);
+        }
+        return;
+      }
+
       const normX = dx / dist;
       const normY = dy / dist;
       const perpX = -normY;
       const perpY = normX;
 
-      const effectiveAccuracy = Math.max(
-        0.25,
-        Math.min(0.85, accuracy - (dist / 20) * 0.25)
-      );
-      const isHit = Math.random() <= effectiveAccuracy;
-
       let aimDirX: number;
       let aimDirY: number;
 
       if (isHit) {
-        // Direct shot towards player with tiny organic jitter (+/- 0.06)
-        const jitter = (Math.random() - 0.5) * 0.06;
+        // Direct shot towards player with slight organic jitter (+/- 0.04)
+        const jitter = (Math.random() - 0.5) * 0.04;
         aimDirX = normX + perpX * jitter;
         aimDirY = normY + perpY * jitter;
       } else {
-        // Inaccurate shot: purposefully aims slightly wide to whiz past player
+        // Inaccurate warning / suppression shot: purposefully aims wide past the player
+        // Offset 0.85 - 1.6 tiles off to the side so it clearly whizzes past and impacts the backdrop
         const side = Math.random() > 0.5 ? 1 : -1;
-        const missOffset = side * (0.35 + Math.random() * 0.45);
-        aimDirX = normX + perpX * (missOffset / dist);
-        aimDirY = normY + perpY * (missOffset / dist);
+        const missOffset = side * (0.85 + Math.random() * 0.75);
+        aimDirX = normX + perpX * (missOffset / Math.max(1.0, dist));
+        aimDirY = normY + perpY * (missOffset / Math.max(1.0, dist));
       }
 
       // Normalize aim vector
@@ -963,7 +1002,8 @@ export class RaycastEnemyManager {
         damage,
         (dmg) => {
           playerController.takeDamage(dmg);
-        }
+        },
+        isHit // CRUCIAL: Only shots where isHit === true can damage the player!
       );
     };
 
@@ -972,6 +1012,7 @@ export class RaycastEnemyManager {
       const dy = playerY - enemy.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const los = losChecker(enemy.x, enemy.y, playerX, playerY);
+      const canSee = los && enemy.isPointInVisionCone(playerX, playerY);
 
       enemy.update(
         delta,
@@ -990,9 +1031,12 @@ export class RaycastEnemyManager {
         enemy,
         playerX,
         playerY,
-        los,
+        canSee,
         dist
       );
+
+      // Clear one-frame just-spotted flag
+      enemy.justSpottedPlayer = false;
 
       // Handle weapon drop on death
       if (enemy.isDead && !enemy.hasDroppedLoot && enemy.config.dropWeapon !== undefined) {
@@ -1017,6 +1061,188 @@ export class RaycastEnemyManager {
 
     // Update queue, concurrency, and spacing for stormtrooper voicelines
     this.voicelineManager.update(delta, playerX, playerY);
+  }
+
+  /**
+   * Sets the vision cone angle (in degrees) for a specific enemy.
+   * Note: Viper Probe Droid is exempt and will always retain 360-degree vision.
+   */
+  public setEnemyVisionCone(enemyId: number, angleDegrees: number): void {
+    const enemy = this.enemies.find((e) => e.id === enemyId);
+    if (enemy && enemy.config.type !== RaycastEnemyType.VIPER_DROID) {
+      enemy.visionConeAngle = angleDegrees;
+    }
+  }
+
+  /**
+   * Sets the vision cone angle (in degrees) for all active enemies.
+   * Note: Viper Probe Droid is exempt and will always retain 360-degree vision.
+   */
+  public setAllEnemiesVisionCone(angleDegrees: number): void {
+    for (const enemy of this.enemies) {
+      if (enemy.config.type !== RaycastEnemyType.VIPER_DROID) {
+        enemy.visionConeAngle = angleDegrees;
+      }
+    }
+  }
+
+  /**
+   * Sets the vision cone angle (in degrees) for all enemies of a given type.
+   * Note: Viper Probe Droid is exempt and will always retain 360-degree vision.
+   */
+  public setVisionConeByType(
+    enemyType: RaycastEnemyType | string,
+    angleDegrees: number
+  ): void {
+    if (enemyType === RaycastEnemyType.VIPER_DROID || enemyType === "viper_droid") {
+      return; // Viper Droid is exempt from cone restriction
+    }
+    for (const enemy of this.enemies) {
+      if (enemy.config.type === enemyType) {
+        enemy.visionConeAngle = angleDegrees;
+      }
+    }
+  }
+
+  /**
+   * Sets target acquisition accuracy ramp parameters for a specific enemy.
+   */
+  public setEnemyAccuracyRamp(
+    enemyId: number,
+    initialMultiplier?: number,
+    rampTimeMs?: number,
+    firstShotsCount?: number,
+    reactionDelayMs?: number
+  ): void {
+    const enemy = this.enemies.find((e) => e.id === enemyId);
+    if (enemy) {
+      if (initialMultiplier !== undefined) enemy.config.initialAccuracyMultiplier = initialMultiplier;
+      if (rampTimeMs !== undefined) enemy.config.accuracyRampTime = rampTimeMs;
+      if (firstShotsCount !== undefined) enemy.config.firstShotsInaccuracyCount = firstShotsCount;
+      if (reactionDelayMs !== undefined) enemy.config.initialReactionDelay = reactionDelayMs;
+    }
+  }
+
+  /**
+   * Sets target acquisition accuracy ramp parameters for all enemies.
+   */
+  public setAllEnemiesAccuracyRamp(
+    initialMultiplier?: number,
+    rampTimeMs?: number,
+    firstShotsCount?: number,
+    reactionDelayMs?: number
+  ): void {
+    for (const enemy of this.enemies) {
+      if (initialMultiplier !== undefined) enemy.config.initialAccuracyMultiplier = initialMultiplier;
+      if (rampTimeMs !== undefined) enemy.config.accuracyRampTime = rampTimeMs;
+      if (firstShotsCount !== undefined) enemy.config.firstShotsInaccuracyCount = firstShotsCount;
+      if (reactionDelayMs !== undefined) enemy.config.initialReactionDelay = reactionDelayMs;
+    }
+  }
+
+  /**
+   * Sets target acquisition accuracy ramp parameters for all enemies of a given type.
+   */
+  public setAccuracyRampByType(
+    enemyType: RaycastEnemyType | string,
+    initialMultiplier?: number,
+    rampTimeMs?: number,
+    firstShotsCount?: number,
+    reactionDelayMs?: number
+  ): void {
+    for (const enemy of this.enemies) {
+      if (enemy.config.type === enemyType) {
+        if (initialMultiplier !== undefined) enemy.config.initialAccuracyMultiplier = initialMultiplier;
+        if (rampTimeMs !== undefined) enemy.config.accuracyRampTime = rampTimeMs;
+        if (firstShotsCount !== undefined) enemy.config.firstShotsInaccuracyCount = firstShotsCount;
+        if (reactionDelayMs !== undefined) enemy.config.initialReactionDelay = reactionDelayMs;
+      }
+    }
+  }
+
+  /**
+   * Called when the player shoots a weapon.
+   * Alerts any enemies that:
+   * 1. Are within hearing distance of the gunshot (direct acoustic or wall-muffled).
+   * 2. Are close to the trajectory of the bullet/laser (near-miss along line segment).
+   * 3. Are close to where the bullet/laser hits (impact radius).
+   */
+  public onPlayerShoot(
+    shooterX: number,
+    shooterY: number,
+    targetX: number,
+    targetY: number,
+    gunshotRadius: number = 14.0,
+    nearMissRadius: number = 3.5,
+    impactRadius: number = 4.0
+  ): void {
+    const segDx = targetX - shooterX;
+    const segDy = targetY - shooterY;
+    const segLenSq = segDx * segDx + segDy * segDy;
+
+    for (const enemy of this.enemies) {
+      if (enemy.isDead) continue;
+
+      const distToShooter = Math.hypot(enemy.x - shooterX, enemy.y - shooterY);
+      const distToImpact = Math.hypot(enemy.x - targetX, enemy.y - targetY);
+
+      // Check distance from enemy to laser trajectory line segment
+      let distToLaser = distToShooter;
+      if (segLenSq > 0.0001) {
+        const t = Math.max(
+          0,
+          Math.min(1, ((enemy.x - shooterX) * segDx + (enemy.y - shooterY) * segDy) / segLenSq)
+        );
+        const projX = shooterX + t * segDx;
+        const projY = shooterY + t * segDy;
+        distToLaser = Math.hypot(enemy.x - projX, enemy.y - projY);
+      }
+
+      // Acoustic check: if map geometry is cached, check if sound has direct line-of-sight
+      let hasDirectAcoustic = true;
+      if (this.cachedMapFlat && this.cachedDoorStatesFlat) {
+        hasDirectAcoustic = this.checkLineOfSight(
+          shooterX,
+          shooterY,
+          enemy.x,
+          enemy.y,
+          this.cachedMapFlat,
+          this.cachedMapWidth,
+          this.cachedMapHeight,
+          this.cachedDoorStatesFlat
+        );
+      }
+      const effectiveGunshotRadius = hasDirectAcoustic ? gunshotRadius : gunshotRadius * 0.65; // ~9.1 tiles through solid walls
+
+      const heardGunshot = distToShooter <= effectiveGunshotRadius;
+      const nearMiss = distToLaser <= nearMissRadius;
+      const nearImpact = distToImpact <= impactRadius;
+
+      if (heardGunshot || nearMiss || nearImpact) {
+        enemy.alert(shooterX, shooterY, true);
+        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY);
+      }
+    }
+  }
+
+  /**
+   * Alerts any enemies within impact radius of where a projectile hit a wall, floor, or object.
+   */
+  public onLaserImpact(
+    impactX: number,
+    impactY: number,
+    shooterX: number,
+    shooterY: number,
+    alertRadius: number = 4.0
+  ): void {
+    for (const enemy of this.enemies) {
+      if (enemy.isDead) continue;
+      const distToImpact = Math.hypot(enemy.x - impactX, enemy.y - impactY);
+      if (distToImpact <= alertRadius) {
+        enemy.alert(shooterX, shooterY, true);
+        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY);
+      }
+    }
   }
 
   public render(
@@ -1274,6 +1500,9 @@ export class RaycastEnemyManager {
         const damage = Math.max(15, Math.round(maxDamage * falloff));
         enemy.takeDamage(damage, onEnemyKilled, centerX, centerY);
         hitEnemies.push(enemy);
+      } else if (dist <= 20.0) {
+        enemy.alert(centerX, centerY, true);
+        this.voicelineManager.onGunfireHeard(enemy, centerX, centerY);
       }
     }
     return hitEnemies;

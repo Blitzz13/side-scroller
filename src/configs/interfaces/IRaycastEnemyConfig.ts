@@ -32,11 +32,17 @@ export interface IRaycastEnemyConfig {
   maxHealth: number;
   speed: number; // Base movement speed per delta (e.g. 0.018)
   sightRange: number; // Maximum detection distance in tiles (e.g. 12)
+  visionConeAngle?: number; // Total field of view angle in degrees (e.g. 90, 110, 120, 180, 360). Default: 120 for normal enemies, 360 for Viper Droid.
+  fov?: number; // Optional alias for visionConeAngle
   attackRange: number; // Range at which enemy stops chasing and fires (e.g. 5.5)
   minDistance: number; // Minimum distance to maintain from player (e.g. 2.0)
   rateOfFire: number; // Attack cooldown in ms between blaster shots (e.g. 900)
   damage: number; // Damage dealt to player per shot (e.g. 10)
   accuracy: number; // Hit chance 0..1 (e.g. 0.65)
+  initialAccuracyMultiplier?: number; // Hit chance multiplier when first acquiring player (e.g. 0.35). Default: 0.35
+  accuracyRampTime?: number; // Duration in ms of continuous sight before reaching full accuracy (e.g. 2500ms). Default: 2500
+  firstShotsInaccuracyCount?: number; // Number of initial shots guaranteed to have reduced accuracy (e.g. 2). Default: 2
+  initialReactionDelay?: number; // Delay in ms before enemy takes their very first shot after spotting player (e.g. 400ms). Default: 400
   scale: number; // Height scale relative to standard wall (e.g. 0.9)
   scaleX?: number;
   scaleY?: number;

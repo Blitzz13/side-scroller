@@ -2,6 +2,83 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-09-28] - Vision Cones, Gunfire Acoustic Alertness, Target Acquisition Aim Ramp & Non-Lethal Warning Fire
+
+### 1. Directional Vision Cones (Field of View / FOV)
+- **Configurable Angular Vision Cones** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Implemented `isPointInVisionCone(targetX, targetY)` using normalized vector dot products against enemy facing direction (`minDot = cos(halfAngleRad)`).
+  - Replaced 360-degree omniscient peripheral sight with realistic angular vision cones (default 120° for Stormtroopers, Officers, Commandos, and Dark Troopers; 140° for Dianoga).
+  - Enemies can now be snuck up on from behind or flanked around corners.
+  - **Viper Probe Droid Exemption**: The Viper Probe Droid is explicitly configured with a 360° omnidirectional optic sensor suite and is exempt from cone restrictions.
+- **Dynamic Vision Cone Management API** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added runtime adjustment methods: `setEnemyVisionCone(enemyId, angle)`, `setAllEnemiesVisionCone(angle)`, and `setVisionConeByType(type, angle)` with built-in immunity for Viper Probe Droids.
+
+### 2. Gunfire Acoustics & Ballistic Alert System
+- **Gunshot Acoustic Awareness** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Firing firearms triggers `onPlayerShoot(playerX, playerY, weaponType, thinWalls)`. Enemies within direct hearing range (up to 25.0 tiles) alert and turn towards the gunshot origin.
+  - Geometry-aware wall occlusion applies a 45% dampening penalty when obstacles block sound, requiring closer proximity to alert hostiles behind thick partitions.
+- **Near-Miss Ballistic Trajectory Feelers** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Blaster bolts passing within 2.5 tiles of unaware enemies alert them via point-to-segment distance feelers, waking them into chase/search states.
+- **Projectile & Detonator Impact Alerting** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Wired `onLaserImpactAlert` in `RaycastLaserManager` to alert hostiles within 14.0 tiles when laser bolts impact walls, doors, or furniture.
+  - Thermal detonator area explosions alert all enemies within a 20.0 tile radius.
+- **Acoustic Suspicion Voicelines** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Unseen enemies hearing gunfire or near-misses shout atmospheric suspicion voicelines ("I hear something", "He must be here", "Show yourself").
+
+### 3. Target Acquisition Inaccuracy Ramp & Reaction Delays
+- **Initial Target Acquisition Reaction Delays** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Added `initialReactionDelay` (500ms–750ms), preventing frame-zero instant shots when the player first rounds a corner into sight.
+- **Continuous Sight Ramp & Shot Counter** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added continuous sight tracking (`timeTargetVisible`) and shot counter (`shotsFiredAtTarget`).
+  - Added `getTargetAcquisitionMultiplier()`: initial hit chance starts with a steep penalty (`initialAccuracyMultiplier` 0.15–0.25) and ramps up over 2.0s–3.0s of sustained line-of-sight.
+- **Cover Memory Reset** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Breaking line of sight behind walls or cover for >1.0s (`sightLostTimer`) completely resets target tracking and shot counts, rewarding peek-shooting and tactical repositioning.
+- **Star Wars Canon Accuracy Rebalancing** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Re-tuned base accuracy across all enemies to match canon combat feel:
+    - **Imperial Stormtrooper**: Base accuracy reduced to `0.35` (down from 0.65), initial multiplier `0.15`, 750ms reaction delay.
+    - **Imperial Officer**: Base accuracy `0.40` (down from 0.70), initial multiplier `0.20`, 600ms reaction delay.
+    - **Imperial Commando**: Base accuracy `0.45` (down from 0.70), initial multiplier `0.25`, 500ms reaction delay.
+    - **Viper Probe Droid**: Base accuracy `0.40` (down from 0.65), initial multiplier `0.20`, 600ms reaction delay.
+    - **Phase 1 Dark Trooper**: Base accuracy `0.60` (down from 0.85), initial multiplier `0.25`, 600ms reaction delay.
+    - **Dianoga**: Base accuracy `0.55` (down from 0.85), initial multiplier `0.25`, 600ms reaction delay.
+
+### 4. Non-Lethal Cosmetic Misses & Guaranteed First-Shot Warning
+- **Non-Lethal Laser Collision Filtering (`canHitPlayer`)** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Root Cause & Fix**: Previously, every enemy laser projectile was lethal, checking `distToPlayer < 0.42`. When enemies rolled a "miss" and aimed slightly wide, players strafing or dodging walked directly into the off-target lasers and took damage, making enemies feel falsely accurate.
+  - Added `canHitPlayer` property to `ActiveLaser` and `fireEnemyLaser`. Whenever the AI rolls a miss (`isHit === false`), the laser bolt is flagged `canHitPlayer = false`.
+  - Non-lethal lasers travel, spark, impact walls, and play near-miss audio, but can never damage the player regardless of movement.
+- **Guaranteed First-Shot Warning** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - The very first ranged shot after acquiring sight is unconditionally forced to be a warning shot (`shotsFired < 1 => isHit = false`, `canHitPlayer = false`), guaranteeing zero damage upon initial enemy detection.
+  - Melee hostiles also whiff/hesitate on their first strike when acquiring the player.
+- **Safe Warning Shot Offset Spread** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Wide miss offsets (0.85 to 1.6 tiles off-target) ensure warning shots visibly and audibly bypass the player and impact the environment.
+- **Voiceline Race Condition Fix** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Added `justSpottedPlayer` single-frame flag to resolve a timing bug where `enemy.wasSeeingPlayer` was overwritten before `EnemyVoicelineManager` checked it, guaranteeing spotted reaction voicelines fire properly.
+- **Runtime Accuracy Tuning API** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added `setEnemyAccuracyRamp()`, `setAllEnemiesAccuracyRamp()`, and `setAccuracyRampByType()`.
+
+---
+
+## [2026-09-27] - Dianoga Sewer Creature Implementation
+
+### 1. Dianoga Subterranean Lurker Enemy Architecture
+- **Multi-Phase Behavioral State Machine** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Implemented Dianoga creature AI with state machine phases: `hidden` (fully submerged in waste water), `emerging` (dramatic rising sequence), `peeking` (stationary eyestalk observation), `stalking` (silent submerged tracking with visible eye), `full_emerging` (full-body surface reveal), `surfaced` (coiled aggressive posture), `biting` (ambush strike), and `hiding` (retreating underwater).
+- **Procedural Eyestalk Animation & Random Blinking** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Integrated randomized organic eye-blinking cycles transitioning between open-eye observation (`idle_1`) and eyelid blink (`idle_2`).
+- **Player Gaze & Proximity Triggering** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Emerging triggers when the player looks in the Dianoga's direction within forward field-of-view, approaches within 2.8 tiles, or damages it with weaponry.
+- **Ambush Melee Bite Strike** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Heavy melee bite attack delivering 18 damage at close range (1.35 tiles) with custom attack timing.
+- **Audio & Sound FX Suite** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Registered sound effects: `diagona_coming_out` (water bubbling and surfacing), `diagona_attack` (violent jaw snap), `diagona_damage_1` (flesh impact screech), and `diagona_die` (death gurgle).
+- **Spritesheet & Tile Integration** ([`assets/raycast/enemies/diagona.json`](file:///D:/Projects/side-scroller/assets/raycast/enemies/diagona.json), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Created spritesheet animation mapping for `hiding_last`, `coming_out`, `idle_1`, `idle_2`, `hiding`, `full_come_out`, `full_idle`, `attack`, and `death_1`.
+  - Added tile ID recognition (tiles 29 and 30 in `StarWarsTileset.tsx` and `test_level.json`) to spawn Dianoga enemies from map data.
+  - Registered `RaycastEnemyType.DIAGONA` in enemy enums and configuration registries.
+
+---
+
 ## [2026-09-22] - Dynamic Damage Crosshair & Enemy Target Snapping
 
 ### 1. Dynamic HUD Crosshair with Damage State Indication

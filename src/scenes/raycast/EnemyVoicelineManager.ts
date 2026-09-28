@@ -319,9 +319,11 @@ export class EnemyVoicelineManager {
     const now = Date.now();
     const pool = this.getVoicePool(enemy);
 
-    if (hasLos && distance <= enemy.config.sightRange) {
+    const seesPlayer = hasLos && enemy.isPointInVisionCone(playerX, playerY);
+
+    if (seesPlayer && distance <= enemy.config.sightRange) {
       // Enemy sees the player
-      const justSpotted = !enemy.wasSeeingPlayer;
+      const justSpotted = enemy.justSpottedPlayer || !enemy.wasSeeingPlayer;
       const cooldownElapsed = now - enemy.lastSpottedTime >= this.config.spottedCooldown;
       const globalCooldownElapsed = now - this.lastSpottedTime >= 4000;
 
@@ -387,6 +389,54 @@ export class EnemyVoicelineManager {
         }
       }
     }
+  }
+
+  /**
+   * Called when an enemy is alerted by gunfire noise, bullet near-miss, or impact.
+   * Plays a suspicious or spotted voiceline if cooldowns allow.
+   */
+  public onGunfireHeard(
+    enemy: RaycastEnemy,
+    shooterX: number,
+    shooterY: number
+  ): void {
+    if (enemy.isDead || this.deadEnemyIds.has(enemy.id)) return;
+
+    const now = Date.now();
+    const cooldownElapsed = now - (enemy.lastSuspiciousTime ?? 0) >= 3000;
+    const globalCooldownElapsed = now - this.lastSuspiciousTime >= 2500;
+
+    if (!cooldownElapsed || !globalCooldownElapsed) return;
+
+    const pool = this.getVoicePool(enemy);
+
+    // If enemy can see the shooter in their vision cone, prefer a spotted line
+    const canSee = enemy.isPointInVisionCone(shooterX, shooterY);
+    const lines = canSee && pool.spotted && pool.spotted.length > 0 ? pool.spotted : pool.suspicious;
+    if (!lines || lines.length === 0) return;
+
+    enemy.lastSuspiciousTime = now;
+    this.lastSuspiciousTime = now;
+    if (canSee) {
+      enemy.lastSpottedTime = now;
+      this.lastSpottedTime = now;
+    }
+
+    const alias = lines[Math.floor(Math.random() * lines.length)];
+    this.requestVoiceline(
+      {
+        alias,
+        category: canSee ? VoicelineCategory.SPOTTED : VoicelineCategory.SUSPICIOUS,
+        priority: 2, // Elevated priority for gunfire reactions
+        enemyId: enemy.id,
+        sourceX: enemy.x,
+        sourceY: enemy.y,
+        timestamp: now,
+        maxAgeMs: 3500,
+      },
+      shooterX,
+      shooterY
+    );
   }
 
   /**

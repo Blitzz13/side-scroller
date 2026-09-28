@@ -406,6 +406,9 @@ export class RaycastScene extends BaseScene {
     this.worldContainer.addChild(this.laserContainer);
 
     this.laserManager = new RaycastLaserManager(this.laserContainer);
+    this.laserManager.onLaserImpactAlert = (impactX, impactY, shooterX, shooterY) => {
+      this.enemyManager.onLaserImpact(impactX, impactY, shooterX, shooterY);
+    };
 
     // First-person equipped weapon view (rendered in front of 3D world, behind HUD)
     this.weaponView = new RaycastWeaponView();
@@ -2019,6 +2022,14 @@ export class RaycastScene extends BaseScene {
         targetY = this.player.y + this.player.dirY * effectiveWallDist;
         targetZ = 0.5;
       }
+
+      // Alert enemies around the shooter (gunshot noise), near the bullet path (near-miss), and near the impact
+      this.enemyManager.onPlayerShoot(
+        this.player.x,
+        this.player.y,
+        targetX,
+        targetY
+      );
 
       // Get precise weapon barrel muzzle screen position
       const muzzleScreenPos = this.weaponView.getMuzzlePosition();

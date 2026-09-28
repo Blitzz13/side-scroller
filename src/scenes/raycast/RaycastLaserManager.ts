@@ -34,6 +34,7 @@ export interface ActiveLaser {
   onEnemyKilled?: (enemy: RaycastEnemy) => void;
   onBreakableDestroyed?: (b: any) => void;
   onPlayerHit?: (damage: number) => void;
+  canHitPlayer?: boolean;
   tint?: number;
   sprite: Sprite;
   alive: boolean;
@@ -57,6 +58,7 @@ export class RaycastLaserManager {
   private laserSpritePool: Sprite[] = [];
   private impactGraphicsPool: Graphics[] = [];
   private nextLaserId: number = 1;
+  public onLaserImpactAlert?: (impactX: number, impactY: number, shooterX: number, shooterY: number) => void;
 
   constructor(container: Container) {
     this.container = container;
@@ -251,7 +253,8 @@ export class RaycastLaserManager {
     targetY: number,
     targetZ: number,
     damage: number,
-    onPlayerHit?: (damage: number) => void
+    onPlayerHit?: (damage: number) => void,
+    canHitPlayer: boolean = true
   ): void {
     const dx = targetX - startX;
     const dy = targetY - startY;
@@ -301,6 +304,7 @@ export class RaycastLaserManager {
       targetEnemy: null,
       targetBreakable: null,
       onPlayerHit,
+      canHitPlayer,
       sprite,
       alive: true,
     };
@@ -455,14 +459,15 @@ export class RaycastLaserManager {
             );
           }
           this.spawnImpact(laser.targetX, laser.targetY, laser.targetZ);
+          this.onLaserImpactAlert?.(laser.targetX, laser.targetY, laser.startX, laser.startY);
           laser.alive = false;
           this.destroyLaser(laser, i);
           continue;
         }
       } else {
-        // Enemy laser: check collision against player
+        // Enemy laser: check collision against player (only if this laser was intended to hit)
         let hitPlayer = false;
-        if (player) {
+        if (laser.canHitPlayer !== false && player) {
           const playerZ = player.z ?? 0.5;
           const distToPlayer = Math.hypot(
             player.x - laser.currentX,

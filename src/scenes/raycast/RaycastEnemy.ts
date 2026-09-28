@@ -26,6 +26,135 @@ export class RaycastEnemy {
   public state: EnemyAIState = "idle";
   public isMoving: boolean = false;
 
+  // Vision cone settings (degrees) - adjustable per enemy, except Viper Probe Droid (always 360)
+  public static defaultVisionConeAngle: number = 120;
+  private _visionConeAngle: number = 120;
+
+  public get visionConeAngle(): number {
+    if (this.config.type === RaycastEnemyType.VIPER_DROID) {
+      return 360; // Viper Probe Droid has 360-degree omnidirectional sensor vision
+    }
+    return this._visionConeAngle;
+  }
+
+  public set visionConeAngle(angle: number) {
+    if (this.config.type === RaycastEnemyType.VIPER_DROID) {
+      return; // Viper Droid is exempt from cone restriction and retains 360-degree vision
+    }
+    this._visionConeAngle = Math.max(0, Math.min(360, angle));
+  }
+
+  public get fov(): number {
+    return this.visionConeAngle;
+  }
+
+  public set fov(angle: number) {
+    this.visionConeAngle = angle;
+  }
+
+  public setVisionCone(angleDegrees: number): void {
+    this.visionConeAngle = angleDegrees;
+  }
+
+  /**
+   * Checks whether the target position lies within this enemy's forward vision cone.
+   * For the Viper Probe Droid, this always returns true as it has 360-degree omnidirectional vision.
+   */
+  public isPointInVisionCone(targetX: number, targetY: number): boolean {
+    if (this.config.type === RaycastEnemyType.VIPER_DROID) {
+      return true; // Viper Probe Droid has 360-degree omnidirectional vision
+    }
+
+    const angle = this.visionConeAngle;
+    if (angle >= 360) {
+      return true;
+    }
+    if (angle <= 0) {
+      return false;
+    }
+
+    const dx = targetX - this.x;
+    const dy = targetY - this.y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq < 0.000001) {
+      return true;
+    }
+
+    const dist = Math.sqrt(distSq);
+    const toTargetX = dx / dist;
+    const toTargetY = dy / dist;
+
+    const dirLen = Math.hypot(this.dirX, this.dirY);
+    const fx = dirLen > 0.0001 ? this.dirX / dirLen : 0;
+    const fy = dirLen > 0.0001 ? this.dirY / dirLen : 1;
+
+    // Dot product gives cos(theta) between enemy facing direction and vector to target
+    const dot = fx * toTargetX + fy * toTargetY;
+
+    // Half of the total cone angle in radians
+    const halfAngleRad = ((angle / 2) * Math.PI) / 180;
+    const minDot = Math.cos(halfAngleRad);
+
+    return dot >= minDot;
+  }
+
+  /**
+   * Checks whether this enemy can visually detect the player, taking into account
+   * distance, vision cone FOV, and map geometry line-of-sight.
+   */
+  public canSeePlayer(
+    playerX: number,
+    playerY: number,
+    hasLineOfSight: (x1: number, y1: number, x2: number, y2: number) => boolean,
+    distance?: number
+  ): boolean {
+    const dist = distance !== undefined ? distance : Math.hypot(playerX - this.x, playerY - this.y);
+    const sightRange = this.config.sightRange ?? 12;
+    if (dist > sightRange) {
+      return false;
+    }
+    if (!this.isPointInVisionCone(playerX, playerY)) {
+      return false;
+    }
+    return hasLineOfSight(this.x, this.y, playerX, playerY);
+  }
+
+  /**
+   * Alerts the enemy to suspicious noise, gunfire, or projectile near-misses/impacts.
+   * Wakes the enemy from idle into chase/search state and turns towards the source of the disturbance.
+   */
+  public alert(sourceX: number, sourceY: number, forceFaceSource: boolean = true): void {
+    if (this.isDead) return;
+
+    if (this.config.type === RaycastEnemyType.DIAGONA) {
+      if (this.diagonaPhase === "hidden" || this.diagonaPhase === "peeking") {
+        this.diagonaPhase = "emerging";
+        this.state = "chase";
+        this.diagonaAnimTimer = 36;
+        this.playAnimation("coming_out", false, 0.11);
+        const dist = Math.hypot(sourceX - this.x, sourceY - this.y);
+        this.playDiagonaSound("diagona_coming_out", dist);
+      }
+    } else if (this.state === "idle") {
+      this.state = "chase";
+    }
+
+    this.lastKnownPlayerX = sourceX;
+    this.lastKnownPlayerY = sourceY;
+    this.hasTarget = true;
+    this.searchTimer = 600; // ~10 seconds of active searching / investigation
+
+    if (forceFaceSource) {
+      const dx = sourceX - this.x;
+      const dy = sourceY - this.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.001) {
+        this.dirX = dx / dist;
+        this.dirY = dy / dist;
+      }
+    }
+  }
+
   // Diagona specific state
   public diagonaPhase: DiagonaPhase = "hidden";
   public diagonaBlinkTimer: number = 0;
@@ -57,9 +186,38 @@ export class RaycastEnemy {
 
   // Voiceline & awareness tracking
   public wasSeeingPlayer: boolean = false;
+  public justSpottedPlayer: boolean = false;
   public lastSpottedTime: number = 0;
   public lastSuspiciousTime: number = 0;
   public lastGrenadeTime: number = 0;
+
+  // Target acquisition and initial sight accuracy ramp tracking
+  public timeTargetVisible: number = 0; // Duration in ms the enemy has maintained sight of the player
+  public sightLostTimer: number = 0; // Duration in ms since enemy lost sight of the player
+  public shotsFiredAtTarget: number = 0; // Number of shots fired since last acquiring player
+
+  /**
+   * Calculates the current accuracy multiplier for this enemy based on how long
+   * the player has been continuously visible and how many shots have been fired.
+   * Returns a multiplier between initialAccuracyMultiplier (default ~0.35) and 1.0.
+   */
+  public getTargetAcquisitionMultiplier(): { multiplier: number; rampProgress: number } {
+    const initialMultiplier = this.config.initialAccuracyMultiplier ?? 0.35;
+    const rampDuration = this.config.accuracyRampTime ?? 2500;
+    const rampProgress = Math.min(1.0, Math.max(0, this.timeTargetVisible / rampDuration));
+
+    let multiplier = initialMultiplier + (1.0 - initialMultiplier) * rampProgress;
+
+    const firstShotsCount = this.config.firstShotsInaccuracyCount ?? 2;
+    if (this.shotsFiredAtTarget <= 0) {
+      multiplier = Math.min(multiplier, initialMultiplier);
+    } else if (this.shotsFiredAtTarget < firstShotsCount) {
+      const intermediate = initialMultiplier + (1.0 - initialMultiplier) * 0.5;
+      multiplier = Math.min(multiplier, intermediate);
+    }
+
+    return { multiplier, rampProgress };
+  }
 
   // Target tracking & repositioning
   public lastKnownPlayerX: number = 0;
@@ -182,7 +340,8 @@ export class RaycastEnemy {
     config: IRaycastEnemyConfig,
     x: number,
     y: number,
-    spritesheet?: Spritesheet
+    spritesheet?: Spritesheet,
+    visionConeAngle?: number
   ) {
     this.id = id;
     this.config = config;
@@ -192,6 +351,15 @@ export class RaycastEnemy {
     this.maxHealth = config.maxHealth;
     this.dirX = 0;
     this.dirY = 1;
+    if (config.type === RaycastEnemyType.VIPER_DROID) {
+      this._visionConeAngle = 360; // Viper Probe Droid is exempt from cone restriction
+    } else {
+      this._visionConeAngle =
+        visionConeAngle ??
+        config.visionConeAngle ??
+        config.fov ??
+        RaycastEnemy.defaultVisionConeAngle;
+    }
     this.currentVOffset = config.vOffset ?? 0;
     if (config.shieldInterval) {
       this.shieldCooldownTimer = config.shieldInterval * (0.8 + Math.random() * 0.4);
@@ -441,15 +609,10 @@ export class RaycastEnemy {
       return false;
     }
 
-    // Instantly alert enemy to player / attacker
-    if (this.state === "idle") {
-      this.state = "chase";
-    }
     if (sourceX !== undefined && sourceY !== undefined) {
-      this.lastKnownPlayerX = sourceX;
-      this.lastKnownPlayerY = sourceY;
-      this.hasTarget = true;
-      this.searchTimer = 600;
+      this.alert(sourceX, sourceY, true);
+    } else if (this.state === "idle") {
+      this.state = "chase";
     }
 
     if (this.health <= 0) {
@@ -674,6 +837,8 @@ export class RaycastEnemy {
 
     const los = hasLineOfSight(this.x, this.y, playerX, playerY);
     const lof = hasLineOfFire ? hasLineOfFire(this.x, this.y, playerX, playerY) : los;
+    const inCone = this.isPointInVisionCone(playerX, playerY);
+    const seesPlayer = los && inCone && dist <= (this.config.sightRange ?? 12);
 
     const dirToPlayerX = dist > 0.001 ? dx / dist : 0;
     const dirToPlayerY = dist > 0.001 ? dy / dist : 1;
@@ -692,33 +857,62 @@ export class RaycastEnemy {
 
     const fullVisibility = los && losLeft && losRight && lof && lofLeft && lofRight;
 
-    if (los && !this.wasSeeingPlayer) {
+    if (seesPlayer && !this.wasSeeingPlayer) {
       this.stepOutFrames = defaultStepOut; // Step forward/out into open room/hallway when first acquiring target
+      this.justSpottedPlayer = true;
+      this.timeTargetVisible = 0;
+      this.shotsFiredAtTarget = 0;
+      this.sightLostTimer = 0;
+
+      // Delay initial shot after first spotting player so enemy does not instantly fire on frame 0
+      const reactionDelay = this.config.initialReactionDelay ?? 400;
+      const now = Date.now();
+      this.lastShotTime = Math.max(this.lastShotTime, now - this.config.rateOfFire + reactionDelay);
     }
-    this.wasSeeingPlayer = los;
+    this.wasSeeingPlayer = seesPlayer;
 
     if (this.stepOutFrames > 0) {
       this.stepOutFrames = Math.max(0, this.stepOutFrames - delta);
     }
 
     // Track sight / target knowledge
-    if (los) {
+    if (seesPlayer) {
+      this.timeTargetVisible += delta * (1000 / 60);
+      this.sightLostTimer = 0;
       this.lastKnownPlayerX = playerX;
       this.lastKnownPlayerY = playerY;
       this.hasTarget = true;
       this.searchTimer = 600; // Search/reposition for ~10 seconds at 60fps
-    } else if (this.searchTimer > 0) {
-      this.searchTimer = Math.max(0, this.searchTimer - delta);
-      if (this.searchTimer <= 0) {
-        this.hasTarget = false;
+    } else {
+      this.sightLostTimer += delta * (1000 / 60);
+      if (this.sightLostTimer > 1000) {
+        // Player broke line of sight for >1.0s -> reset target tracking and accuracy ramp
+        this.timeTargetVisible = 0;
+        this.shotsFiredAtTarget = 0;
+      }
+      if (this.searchTimer > 0) {
+        this.searchTimer = Math.max(0, this.searchTimer - delta);
+        if (this.searchTimer <= 0) {
+          this.hasTarget = false;
+        }
       }
     }
 
     if (dist > 0.001) {
       // Face towards player when active and not actively moving
       if (this.state !== "idle" && !this.isMoving) {
-        this.dirX = dx / dist;
-        this.dirY = dy / dist;
+        if (seesPlayer) {
+          this.dirX = dx / dist;
+          this.dirY = dy / dist;
+        } else if (this.hasTarget) {
+          const tdx = this.lastKnownPlayerX - this.x;
+          const tdy = this.lastKnownPlayerY - this.y;
+          const tdist = Math.hypot(tdx, tdy);
+          if (tdist > 0.001) {
+            this.dirX = tdx / tdist;
+            this.dirY = tdy / tdist;
+          }
+        }
       }
     }
 
@@ -753,12 +947,12 @@ export class RaycastEnemy {
     // State Machine
     if (this.state === "idle") {
       this.isMoving = false;
-      // Alerted by direct sight or close proximity
-      if ((dist <= this.config.sightRange && los) || (dist <= 3.2 && los)) {
+      // Alerted by direct sight within forward vision cone
+      if (seesPlayer) {
         this.state = dist <= this.config.attackRange && lof ? "attack" : "chase";
       }
     } else if (this.state === "chase") {
-      if (dist <= this.config.attackRange && fullVisibility && this.stepOutFrames <= 0) {
+      if (dist <= this.config.attackRange && fullVisibility && inCone && this.stepOutFrames <= 0) {
         this.state = "attack";
         this.isMoving = false;
       } else {
@@ -771,7 +965,7 @@ export class RaycastEnemy {
           this.clearanceTimer = Math.max(0, this.clearanceTimer - delta);
         }
 
-        if (los) {
+        if (seesPlayer) {
           // If we see player but are partially covered behind a corner, steer smoothly towards the clear shoulder
           if (!losLeft && losRight) {
             this.clearanceDir = 1;
@@ -824,7 +1018,7 @@ export class RaycastEnemy {
         this.isMoving = moved && actualMovedDist > 0.0001;
 
         // While stepping out from cover into full view, can fire or strike if within attack range
-        if (los && lof && dist <= this.config.attackRange) {
+        if (seesPlayer && lof && dist <= this.config.attackRange) {
           const now = Date.now();
           if (now - this.lastShotTime >= this.config.rateOfFire) {
             this.lastShotTime = now;
@@ -853,7 +1047,7 @@ export class RaycastEnemy {
     } else if (this.state === "attack") {
       this.isMoving = false;
       const attackExitDist = this.config.attackRange + (this.config.isMelee ? 0.35 : 1.2);
-      if (dist > attackExitDist || !los || !lof) {
+      if (dist > attackExitDist || !seesPlayer || !lof) {
         this.state = "chase";
       } else if (!fullVisibility && !this.config.isMelee) {
         // Partially occluded by corner cover -> step out into the open
@@ -943,8 +1137,21 @@ export class RaycastEnemy {
     const dist = Math.hypot(dx, dy);
     const los = hasLineOfSight(this.x, this.y, playerX, playerY);
     const lof = hasLineOfFire ? hasLineOfFire(this.x, this.y, playerX, playerY) : los;
+    const inCone = this.isPointInVisionCone(playerX, playerY);
+    const seesPlayer = los && inCone && dist <= (this.config.sightRange ?? 6.0);
 
-    if (dist > 0.001) {
+    if (seesPlayer) {
+      this.timeTargetVisible += delta * (1000 / 60);
+      this.sightLostTimer = 0;
+    } else {
+      this.sightLostTimer += delta * (1000 / 60);
+      if (this.sightLostTimer > 1000) {
+        this.timeTargetVisible = 0;
+        this.shotsFiredAtTarget = 0;
+      }
+    }
+
+    if (dist > 0.001 && this.diagonaPhase !== "hidden" && this.diagonaPhase !== "peeking") {
       this.dirX = dx / dist;
       this.dirY = dy / dist;
     }
@@ -964,13 +1171,26 @@ export class RaycastEnemy {
           playerLookingAtEnemy = dot > 0.15; // Within forward ~150-degree field of view
         }
 
+        const inCone = this.isPointInVisionCone(playerX, playerY);
         const effectiveSightRange = this.config.sightRange ?? 6.0;
         const canSpotPlayer =
-          ((dist <= effectiveSightRange && los && playerLookingAtEnemy) ||
-           (dist <= 2.8 && los) ||
+          ((dist <= effectiveSightRange && los && inCone && playerLookingAtEnemy) ||
+           (dist <= 2.8 && los && inCone) ||
            this.painTimer > 0);
 
         if (canSpotPlayer) {
+          if (dist > 0.001) {
+            this.dirX = dx / dist;
+            this.dirY = dy / dist;
+          }
+          this.justSpottedPlayer = true;
+          this.timeTargetVisible = 0;
+          this.shotsFiredAtTarget = 0;
+          this.sightLostTimer = 0;
+          const reactionDelay = this.config.initialReactionDelay ?? 400;
+          const now = Date.now();
+          this.lastShotTime = Math.max(this.lastShotTime, now - this.config.rateOfFire + reactionDelay);
+
           this.hasTarget = true;
           this.lastKnownPlayerX = playerX;
           this.lastKnownPlayerY = playerY;
@@ -1032,13 +1252,26 @@ export class RaycastEnemy {
           }
         }
 
+        const inCone = this.isPointInVisionCone(playerX, playerY);
         const effectiveSightRange = this.config.sightRange ?? 6.0;
         const canSpotPlayer =
-          ((dist <= effectiveSightRange && los) ||
-           (dist <= 2.8 && los) ||
+          ((dist <= effectiveSightRange && los && inCone) ||
+           (dist <= 2.8 && los && inCone) ||
            this.painTimer > 0);
 
         if (canSpotPlayer) {
+          if (dist > 0.001) {
+            this.dirX = dx / dist;
+            this.dirY = dy / dist;
+          }
+          this.justSpottedPlayer = true;
+          this.timeTargetVisible = 0;
+          this.shotsFiredAtTarget = 0;
+          this.sightLostTimer = 0;
+          const reactionDelay = this.config.initialReactionDelay ?? 400;
+          const now = Date.now();
+          this.lastShotTime = Math.max(this.lastShotTime, now - this.config.rateOfFire + reactionDelay);
+
           this.hasTarget = true;
           this.lastKnownPlayerX = playerX;
           this.lastKnownPlayerY = playerY;
