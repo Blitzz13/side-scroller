@@ -28,6 +28,7 @@ export class RaycastEnemyManager {
   private cachedMapWidth: number = 0;
   private cachedMapHeight: number = 0;
   private cachedDoorStatesFlat?: Float64Array;
+  private cachedThinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>;
 
   public get totalEnemies(): number {
     return this.enemies.length;
@@ -841,6 +842,7 @@ export class RaycastEnemyManager {
     this.cachedMapWidth = mapWidth;
     this.cachedMapHeight = mapHeight;
     this.cachedDoorStatesFlat = doorStatesFlat;
+    this.cachedThinWalls = thinWalls;
 
     const losChecker = (x1: number, y1: number, x2: number, y2: number) =>
       this.checkLineOfSight(
@@ -1012,6 +1014,8 @@ export class RaycastEnemyManager {
       const dy = playerY - enemy.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const los = losChecker(enemy.x, enemy.y, playerX, playerY);
+      const lof = lofChecker(enemy.x, enemy.y, playerX, playerY);
+      const isBehindWall = !lof;
       const canSee = los && enemy.isPointInVisionCone(playerX, playerY);
 
       enemy.update(
@@ -1032,7 +1036,8 @@ export class RaycastEnemyManager {
         playerX,
         playerY,
         canSee,
-        dist
+        dist,
+        isBehindWall
       );
 
       // Clear one-frame just-spotted flag
@@ -1220,7 +1225,21 @@ export class RaycastEnemyManager {
 
       if (heardGunshot || nearMiss || nearImpact) {
         enemy.alert(shooterX, shooterY, true);
-        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY);
+        const isBehindWall =
+          this.cachedMapFlat && this.cachedMapWidth && this.cachedMapHeight && this.cachedDoorStatesFlat
+            ? !this.hasLineOfFire(
+                enemy.x,
+                enemy.y,
+                shooterX,
+                shooterY,
+                this.cachedMapFlat,
+                this.cachedMapWidth,
+                this.cachedMapHeight,
+                this.cachedDoorStatesFlat,
+                this.cachedThinWalls
+              )
+            : false;
+        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY, isBehindWall);
       }
     }
   }
@@ -1240,7 +1259,21 @@ export class RaycastEnemyManager {
       const distToImpact = Math.hypot(enemy.x - impactX, enemy.y - impactY);
       if (distToImpact <= alertRadius) {
         enemy.alert(shooterX, shooterY, true);
-        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY);
+        const isBehindWall =
+          this.cachedMapFlat && this.cachedMapWidth && this.cachedMapHeight && this.cachedDoorStatesFlat
+            ? !this.hasLineOfFire(
+                enemy.x,
+                enemy.y,
+                shooterX,
+                shooterY,
+                this.cachedMapFlat,
+                this.cachedMapWidth,
+                this.cachedMapHeight,
+                this.cachedDoorStatesFlat,
+                this.cachedThinWalls
+              )
+            : false;
+        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY, isBehindWall);
       }
     }
   }
@@ -1502,7 +1535,22 @@ export class RaycastEnemyManager {
         hitEnemies.push(enemy);
       } else if (dist <= 20.0) {
         enemy.alert(centerX, centerY, true);
-        this.voicelineManager.onGunfireHeard(enemy, centerX, centerY);
+        const wallsToCheck = thinWalls || this.cachedThinWalls;
+        const isBehindWall =
+          this.cachedMapFlat && this.cachedMapWidth && this.cachedMapHeight && this.cachedDoorStatesFlat
+            ? !this.hasLineOfFire(
+                enemy.x,
+                enemy.y,
+                centerX,
+                centerY,
+                this.cachedMapFlat,
+                this.cachedMapWidth,
+                this.cachedMapHeight,
+                this.cachedDoorStatesFlat,
+                wallsToCheck
+              )
+            : false;
+        this.voicelineManager.onGunfireHeard(enemy, centerX, centerY, isBehindWall);
       }
     }
     return hitEnemies;

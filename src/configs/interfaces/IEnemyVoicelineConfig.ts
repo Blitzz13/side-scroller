@@ -17,8 +17,11 @@ export interface IEnemyVoicelineConfig {
   /** Master volume multiplier for voicelines (0.0 to 1.0, default: 0.90) */
   volume: number;
 
-  /** Maximum distance (in tiles) for "I hear something" when player is close but not seen (default: 7.0) */
+  /** Maximum distance (in tiles) for "I hear something" when player is close but not seen (default: 3.5) */
   hearingRange: number;
+
+  /** Maximum distance (in tiles) for suspicious voicelines when player is close and unoccluded by walls (default: 3.5) */
+  suspiciousRange?: number;
 
   /** Maximum distance (in tiles) for enemies to react to a thrown grenade (default: 25.0) */
   grenadeHearingRange: number;

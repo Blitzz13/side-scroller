@@ -312,7 +312,8 @@ export class EnemyVoicelineManager {
     playerX: number,
     playerY: number,
     hasLos: boolean,
-    distance: number
+    distance: number,
+    isBehindWall: boolean = false
   ): void {
     if (enemy.isDead || this.deadEnemyIds.has(enemy.id)) return;
 
@@ -357,8 +358,11 @@ export class EnemyVoicelineManager {
       // Enemy does NOT see the player
       enemy.wasSeeingPlayer = false;
 
-      // Player is close, but NOT seen -> "I hear something"
-      if (distance <= this.config.hearingRange) {
+      // Suspicious sounds ("I hear something") are played ONLY if:
+      // 1. The player is not behind some kind of wall (!isBehindWall)
+      // 2. The player is closer to them (distance <= maxSuspiciousDistance)
+      const maxSuspiciousDistance = this.config.suspiciousRange ?? this.config.hearingRange ?? 3.5;
+      if (!isBehindWall && distance <= maxSuspiciousDistance) {
         const cooldownElapsed = now - enemy.lastSuspiciousTime >= this.config.suspiciousCooldown;
         const globalCooldownElapsed = now - this.lastSuspiciousTime >= 6000;
 
@@ -398,7 +402,8 @@ export class EnemyVoicelineManager {
   public onGunfireHeard(
     enemy: RaycastEnemy,
     shooterX: number,
-    shooterY: number
+    shooterY: number,
+    isBehindWall: boolean = false
   ): void {
     if (enemy.isDead || this.deadEnemyIds.has(enemy.id)) return;
 
@@ -410,8 +415,16 @@ export class EnemyVoicelineManager {
 
     const pool = this.getVoicePool(enemy);
 
-    // If enemy can see the shooter in their vision cone, prefer a spotted line
-    const canSee = enemy.isPointInVisionCone(shooterX, shooterY);
+    // If enemy can see the shooter in their vision cone and not behind a wall, prefer a spotted line
+    const canSee = !isBehindWall && enemy.isPointInVisionCone(shooterX, shooterY);
+    if (!canSee) {
+      const dist = Math.hypot(shooterX - enemy.x, shooterY - enemy.y);
+      const maxSuspiciousDistance = this.config.suspiciousRange ?? this.config.hearingRange ?? 3.5;
+      if (isBehindWall || dist > maxSuspiciousDistance) {
+        return;
+      }
+    }
+
     const lines = canSee && pool.spotted && pool.spotted.length > 0 ? pool.spotted : pool.suspicious;
     if (!lines || lines.length === 0) return;
 
