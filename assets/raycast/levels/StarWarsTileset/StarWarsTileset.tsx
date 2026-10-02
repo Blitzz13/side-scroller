@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="31" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="32" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -159,10 +159,14 @@
  <tile id="28">
   <image source="assets/raycast/enemies/phase1_dark_trooper.png" width="48" height="98"/>
  </tile>
- <tile id="29">
-  <image source="assets/raycast/enemies/diagona.png" width="78" height="47"/>
- </tile>
  <tile id="30">
   <image source="assets/raycast/enemies/diagona.png" width="78" height="47"/>
+ </tile>
+ <tile id="31" type="Tile">
+  <properties>
+   <property name="surface" value="water"/>
+   <property name="tileType" propertytype="TileType" value="floor"/>
+  </properties>
+  <image source="assets/raycast/textures/dirty_water.jpg" width="1024" height="1024"/>
  </tile>
 </tileset>
