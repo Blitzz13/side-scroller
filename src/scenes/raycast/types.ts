@@ -124,6 +124,7 @@ export interface MapObject {
 export interface TileMeta {
   type?: string;
   tileType?: TileType;
+  surface?: string;
   open?: DoorOpen;
   scale?: number;
   scaleX?: number;

@@ -20,6 +20,7 @@ export class RaycastPlayerController {
   private stepDistance: number = 0.28;
   private stepIndex: number = 0;
   private readonly STEP_DISTANCE_THRESHOLD: number = 0.58;
+  private currentSurface: "default" | "water" = "default";
 
   constructor(weaponView: RaycastWeaponView, hud: RaycastHUD) {
     this.weaponView = weaponView;
@@ -379,22 +380,35 @@ export class RaycastPlayerController {
     this.setSprinting(false);
   }
 
+  public setSurface(surface: "default" | "water"): void {
+    this.currentSurface = surface;
+  }
+
+  public getSurface(): "default" | "water" {
+    return this.currentSurface;
+  }
+
   public update(
     delta: number,
     isMoving: boolean,
     moveIntensity: number = 1,
-    distMoved: number = 0
+    distMoved: number = 0,
+    surfaceType: "default" | "water" = "default"
   ): void {
+    this.currentSurface = surfaceType;
     const intensity = this.state.isSprinting && isMoving ? 1.65 : moveIntensity;
     this.weaponView.update(delta, isMoving, intensity);
     this.hud.update(delta);
 
     // Footstep audio processing
-    this.updateFootsteps(delta, isMoving, distMoved);
+    this.updateFootsteps(delta, isMoving, distMoved, surfaceType);
   }
 
-  public playFootstep(): void {
-    const stepSounds = ["step_1", "step_2"];
+  public playFootstep(surfaceType: "default" | "water" = this.currentSurface): void {
+    const stepSounds =
+      surfaceType === "water"
+        ? ["wet_step_1", "wet_step_2"]
+        : ["step_1", "step_2"];
     const alias = stepSounds[this.stepIndex % stepSounds.length];
     this.stepIndex++;
 
@@ -420,7 +434,12 @@ export class RaycastPlayerController {
     }
   }
 
-  private updateFootsteps(delta: number, isMoving: boolean, distMoved: number): void {
+  private updateFootsteps(
+    delta: number,
+    isMoving: boolean,
+    distMoved: number,
+    surfaceType: "default" | "water" = "default"
+  ): void {
     if (!isMoving || distMoved <= 0.0001) {
       if (!isMoving) {
         this.stepDistance = 0.28;
@@ -431,7 +450,7 @@ export class RaycastPlayerController {
     this.stepDistance += distMoved;
     if (this.stepDistance >= this.STEP_DISTANCE_THRESHOLD) {
       this.stepDistance -= this.STEP_DISTANCE_THRESHOLD;
-      this.playFootstep();
+      this.playFootstep(surfaceType);
     }
   }
 
@@ -516,5 +535,6 @@ export class RaycastPlayerController {
     this.state.isSprinting = false;
     this.stepDistance = 0.28;
     this.stepIndex = 0;
+    this.currentSurface = "default";
   }
 }

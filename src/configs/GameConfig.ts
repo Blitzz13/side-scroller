@@ -138,6 +138,14 @@ export const manifest: AssetsManifest = {
             src: "./assets/raycast/sfx/step_2.mp3"
           },
           {
+            alias: "wet_step_1",
+            src: "./assets/raycast/sfx/wet_step_1.mp3"
+          },
+          {
+            alias: "wet_step_2",
+            src: "./assets/raycast/sfx/wet_step_2.mp3"
+          },
+          {
             alias: "stormtrooper_pain_1",
             src: "./assets/raycast/sfx/storm_trooper/stormtrooper_pain_1.mp3"
           },
@@ -365,6 +373,10 @@ export const manifest: AssetsManifest = {
           {
             name: "computer_panel_destroyed",
             src: "./assets/raycast/textures/computer_panel_destroyed.jpg",
+          },
+          {
+            name: "dirty_water",
+            src: "./assets/raycast/textures/dirty_water.jpg",
           },
           {
             name: "level1",

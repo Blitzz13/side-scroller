@@ -593,6 +593,8 @@ export class RaycastScene extends BaseScene {
         { id: 27, image: "dh_17_item.png", type: "PickupItem", properties: [{ name: "amount", value: 20 }, { name: "object", value: { anchor: "floor", scale: 0.2 } }, { name: "type", value: "weapon" }, { name: "weaponType", value: "dh_17" }] },
         { id: 28, image: "assets/raycast/enemies/phase1_dark_trooper.png", type: "Tile" },
         { id: 29, image: "assets/raycast/enemies/diagona.png", type: "Tile" },
+        { id: 30, image: "assets/raycast/enemies/diagona.png", type: "Tile" },
+        { id: 31, image: "assets/raycast/textures/dirty_water.jpg", type: "Tile", properties: [{ name: "tileType", value: "floor" }, { name: "surface", value: "water" }] },
       ];
     }
   }
@@ -830,6 +832,13 @@ export class RaycastScene extends BaseScene {
                 })
                 .catch(() => {});
             }
+            if (fileName.includes("dirty_water")) {
+              return Assets.load("assets/raycast/textures/dirty_water.jpg")
+                .then((t) => {
+                  this.textures[parseInt(tileId)] = t;
+                })
+                .catch(() => {});
+            }
           });
       }
     );
@@ -1053,6 +1062,9 @@ export class RaycastScene extends BaseScene {
                 if (pName === "anchor" || pName === "position" || pName === "align" || pName === "valign") {
                   meta.anchor = String(pVal).toLowerCase();
                 }
+                if (pName === "surface" || pName === "surfacetype") {
+                  meta.surface = String(pVal).toLowerCase();
+                }
               });
             }
             if (tile.imageheight) {
@@ -1065,6 +1077,9 @@ export class RaycastScene extends BaseScene {
               meta.type = TileType.THICK_WALL;
               meta.tileType = TileType.THICK_WALL;
               this.tileTypes[gid] = TileType.THICK_WALL;
+            }
+            if (imgPath.toLowerCase().includes("dirty_water") || imgPath.toLowerCase().includes("water")) {
+              meta.surface = meta.surface || "water";
             }
             this.tileMeta[tile.id] = meta;
           });
@@ -2202,6 +2217,28 @@ export class RaycastScene extends BaseScene {
     );
   }
 
+  public getSurfaceTypeAt(x: number, y: number): "default" | "water" {
+    const gridX = Math.floor(x);
+    const gridY = Math.floor(y);
+    if (gridX < 0 || gridX >= this.mapWidth || gridY < 0 || gridY >= this.mapHeight) {
+      return "default";
+    }
+    const idx = gridY * this.mapWidth + gridX;
+    const floorTile = this.floorMapFlat ? this.floorMapFlat[idx] : (this.floorMap?.[gridY]?.[gridX] ?? -1);
+    if (floorTile < 0) return "default";
+
+    const meta = this.tileMeta[floorTile];
+    if (meta) {
+      if (meta.surface === "water" || meta.surface === "dirty_water") {
+        return "water";
+      }
+      if (meta.image && (meta.image.toLowerCase().includes("water") || meta.image.toLowerCase().includes("dirty_water"))) {
+        return "water";
+      }
+    }
+    return "default";
+  }
+
   private keyDownHandler = (e: KeyboardEvent) => {
     if (!this.bgMusicInstance) {
       this.playBackgroundMusic();
@@ -2375,7 +2412,8 @@ export class RaycastScene extends BaseScene {
       this.tryShoot(true);
     }
 
-    this.playerController.update(delta, isMoving, 1, this.lastFrameDistMoved);
+    const surfaceType = this.getSurfaceTypeAt(this.player.x, this.player.y);
+    this.playerController.update(delta, isMoving, 1, this.lastFrameDistMoved, surfaceType);
 
     this.updateInteractionPrompt();
 
