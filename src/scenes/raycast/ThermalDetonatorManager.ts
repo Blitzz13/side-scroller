@@ -62,6 +62,10 @@ export class ThermalDetonatorManager {
     damage: number
   ) => void;
 
+  public get activeDetonators(): readonly ActiveDetonator[] {
+    return this.detonators;
+  }
+
   constructor(container: Container) {
     this.container = container;
   }

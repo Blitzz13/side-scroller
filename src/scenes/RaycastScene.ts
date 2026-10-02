@@ -2392,7 +2392,8 @@ export class RaycastScene extends BaseScene {
       this.pickupManager,
       this.laserManager,
       this.player.dirX,
-      this.player.dirY
+      this.player.dirY,
+      this.detonatorManager?.activeDetonators
     );
 
     // Check for item pickups

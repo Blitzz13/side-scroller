@@ -754,7 +754,8 @@ export class RaycastEnemy {
     onShootPlayer: (enemy: RaycastEnemy, damage: number, accuracy: number, distance: number) => void,
     hasLineOfFire?: (x1: number, y1: number, x2: number, y2: number) => boolean,
     playerDirX?: number,
-    playerDirY?: number
+    playerDirY?: number,
+    activeGrenades?: readonly { x: number; y: number; radius?: number }[]
   ): void {
     if (this.painTimer > 0) {
       this.painTimer = Math.max(0, this.painTimer - delta);
@@ -777,7 +778,8 @@ export class RaycastEnemy {
         onShootPlayer,
         hasLineOfFire,
         playerDirX,
-        playerDirY
+        playerDirY,
+        activeGrenades
       );
       return;
     }
@@ -944,7 +946,42 @@ export class RaycastEnemy {
       this.stepSoundTimer = 0;
     }
 
+    // Scan for nearby active thermal detonators threatening this enemy
+    let closestThreatGrenade: { x: number; y: number; radius: number; dist: number } | null = null;
+    let closestThreatDist = Infinity;
+
+    if (activeGrenades && activeGrenades.length > 0) {
+      for (const g of activeGrenades) {
+        const gRadius = g.radius ?? 3.5;
+        const dangerRadius = gRadius + 1.2;
+        const gDist = Math.hypot(this.x - g.x, this.y - g.y);
+        if (gDist <= dangerRadius && gDist < closestThreatDist) {
+          // Check line of sight: only panic/flee if not protected behind a solid wall or closed door
+          const hasLosToGrenade = hasLineOfSight(this.x, this.y, g.x, g.y);
+          if (hasLosToGrenade) {
+            closestThreatDist = gDist;
+            closestThreatGrenade = { x: g.x, y: g.y, radius: gRadius, dist: gDist };
+          }
+        }
+      }
+    }
+
     // State Machine
+    if (closestThreatGrenade) {
+      // Immediate emergency alert: wake up from idle or break out from stationary attack into motion
+      if (this.state === "idle" || this.state === "attack") {
+        this.state = "chase";
+        this.hasTarget = true;
+        this.lastKnownPlayerX = playerX;
+        this.lastKnownPlayerY = playerY;
+        this.searchTimer = 600;
+        if (dist > 0.001) {
+          this.dirX = dx / dist;
+          this.dirY = dy / dist;
+        }
+      }
+    }
+
     if (this.state === "idle") {
       this.isMoving = false;
       // Alerted by direct sight within forward vision cone
@@ -952,63 +989,95 @@ export class RaycastEnemy {
         this.state = dist <= this.config.attackRange && lof ? "attack" : "chase";
       }
     } else if (this.state === "chase") {
-      if (dist <= this.config.attackRange && fullVisibility && inCone && this.stepOutFrames <= 0) {
+      if (!closestThreatGrenade && dist <= this.config.attackRange && fullVisibility && inCone && this.stepOutFrames <= 0) {
         this.state = "attack";
         this.isMoving = false;
       } else {
-        // Move / reposition towards player or out of cover
-        const speed = this.config.speed * delta;
+        // Move / reposition towards player, or flee from / attack around grenade
+        let speed = this.config.speed * delta;
         let tx = playerX;
         let ty = playerY;
 
-        if (this.clearanceTimer > 0) {
+        if (closestThreatGrenade) {
+          // Panic sprint speed when escaping or rushing around grenade
+          speed *= 1.35;
+
+          const gDx = this.x - closestThreatGrenade.x;
+          const gDy = this.y - closestThreatGrenade.y;
+          const gDist = Math.max(0.01, closestThreatGrenade.dist);
+          const awayX = gDx / gDist;
+          const awayY = gDy / gDist;
+
+          // Enemies decide to run from the grenade or aggressively attack the player:
+          // 1. Melee enemies (e.g. Dark Trooper) always charge towards the player to attack.
+          // 2. If stuck against a wall while fleeing, turn and rush the player.
+          // 3. If very close to grenade (<= 2.6 tiles), prioritize running away from it.
+          // 4. Otherwise, alternate between fleeing away from the blast and charging the player.
+          const isStuck = this.stuckFrames > 2;
+          const shouldAttackPlayer =
+            this.config.isMelee ||
+            isStuck ||
+            (closestThreatDist > 2.6 && (this.id % 2 === 1) && seesPlayer);
+
+          if (shouldAttackPlayer) {
+            // Aggressively charge towards player to attack
+            tx = playerX;
+            ty = playerY;
+          } else {
+            // Run away from the grenade to clear the blast radius
+            tx = this.x + awayX * 4.0;
+            ty = this.y + awayY * 4.0;
+          }
+        } else if (this.clearanceTimer > 0) {
           this.clearanceTimer = Math.max(0, this.clearanceTimer - delta);
         }
 
-        if (seesPlayer) {
-          // If we see player but are partially covered behind a corner, steer smoothly towards the clear shoulder
-          if (!losLeft && losRight) {
-            this.clearanceDir = 1;
-            this.clearanceTimer = 20;
-          } else if (losLeft && !losRight) {
-            this.clearanceDir = -1;
-            this.clearanceTimer = 20;
-          } else if (losLeft && losRight && this.clearanceTimer <= 0) {
-            this.clearanceDir = 0;
-          }
-
-          if (this.clearanceTimer > 0 && this.clearanceDir !== 0) {
-            // Diagonal steering: blend forward and lateral clearance at balanced 45-degree angle
-            const steerLateral = 0.95 * this.clearanceDir;
-            tx = this.x + (perpX * steerLateral + dirToPlayerX) * 1.5;
-            ty = this.y + (perpY * steerLateral + dirToPlayerY) * 1.5;
-          } else {
-            tx = playerX;
-            ty = playerY;
-          }
-        } else if (this.hasTarget) {
-          const toLastDist = Math.hypot(this.lastKnownPlayerX - this.x, this.lastKnownPlayerY - this.y);
-          if (toLastDist > 0.4) {
-            tx = this.lastKnownPlayerX;
-            ty = this.lastKnownPlayerY;
-          } else {
-            // Reached last known position without spotting player -> reposition / sweep around corner
-            if (this.repositionCooldown <= 0) {
-              const randAngle = Math.random() * Math.PI * 2;
-              this.wanderDirX = Math.cos(randAngle);
-              this.wanderDirY = Math.sin(randAngle);
-              this.repositionCooldown = 60 + Math.random() * 60;
-            } else {
-              this.repositionCooldown -= delta;
+        if (!closestThreatGrenade) {
+          if (seesPlayer) {
+            // If we see player but are partially covered behind a corner, steer smoothly towards the clear shoulder
+            if (!losLeft && losRight) {
+              this.clearanceDir = 1;
+              this.clearanceTimer = 20;
+            } else if (losLeft && !losRight) {
+              this.clearanceDir = -1;
+              this.clearanceTimer = 20;
+            } else if (losLeft && losRight && this.clearanceTimer <= 0) {
+              this.clearanceDir = 0;
             }
-            tx = this.x + this.wanderDirX * 2.5;
-            ty = this.y + this.wanderDirY * 2.5;
+
+            if (this.clearanceTimer > 0 && this.clearanceDir !== 0) {
+              // Diagonal steering: blend forward and lateral clearance at balanced 45-degree angle
+              const steerLateral = 0.95 * this.clearanceDir;
+              tx = this.x + (perpX * steerLateral + dirToPlayerX) * 1.5;
+              ty = this.y + (perpY * steerLateral + dirToPlayerY) * 1.5;
+            } else {
+              tx = playerX;
+              ty = playerY;
+            }
+          } else if (this.hasTarget) {
+            const toLastDist = Math.hypot(this.lastKnownPlayerX - this.x, this.lastKnownPlayerY - this.y);
+            if (toLastDist > 0.4) {
+              tx = this.lastKnownPlayerX;
+              ty = this.lastKnownPlayerY;
+            } else {
+              // Reached last known position without spotting player -> reposition / sweep around corner
+              if (this.repositionCooldown <= 0) {
+                const randAngle = Math.random() * Math.PI * 2;
+                this.wanderDirX = Math.cos(randAngle);
+                this.wanderDirY = Math.sin(randAngle);
+                this.repositionCooldown = 60 + Math.random() * 60;
+              } else {
+                this.repositionCooldown -= delta;
+              }
+              tx = this.x + this.wanderDirX * 2.5;
+              ty = this.y + this.wanderDirY * 2.5;
+            }
+          } else {
+            // Lost target completely and search timer expired -> return to idle
+            this.state = "idle";
+            this.isMoving = false;
+            return;
           }
-        } else {
-          // Lost target completely and search timer expired -> return to idle
-          this.state = "idle";
-          this.isMoving = false;
-          return;
         }
 
         const oldX = this.x;
@@ -1123,13 +1192,31 @@ export class RaycastEnemy {
     onShootPlayer: (enemy: RaycastEnemy, damage: number, accuracy: number, distance: number) => void,
     hasLineOfFire?: (x1: number, y1: number, x2: number, y2: number) => boolean,
     playerDirX?: number,
-    playerDirY?: number
+    playerDirY?: number,
+    activeGrenades?: readonly { x: number; y: number; radius?: number }[]
   ): void {
     if (this.shootingTimer > 0) {
       this.shootingTimer = Math.max(0, this.shootingTimer - delta);
     }
     if (this.meleeTimer > 0) {
       this.meleeTimer = Math.max(0, this.meleeTimer - delta);
+    }
+
+    // Scan for nearby active thermal detonators threatening Diagona
+    let closestThreatGrenade: { x: number; y: number; radius: number; dist: number } | null = null;
+    if (activeGrenades && activeGrenades.length > 0) {
+      for (const g of activeGrenades) {
+        const gRadius = g.radius ?? 3.5;
+        const dangerRadius = gRadius + 1.2;
+        const gDist = Math.hypot(this.x - g.x, this.y - g.y);
+        if (gDist <= dangerRadius) {
+          const hasLosToGrenade = hasLineOfSight(this.x, this.y, g.x, g.y);
+          if (hasLosToGrenade) {
+            closestThreatGrenade = { x: g.x, y: g.y, radius: gRadius, dist: gDist };
+            break;
+          }
+        }
+      }
     }
 
     const dx = playerX - this.x;
@@ -1162,7 +1249,7 @@ export class RaycastEnemy {
         this.state = "idle";
         this.playAnimation("hiding_last", false);
 
-        // Spotting player triggers coming out
+        // Spotting player or nearby grenade triggers coming out
         let playerLookingAtEnemy = true;
         if (playerDirX !== undefined && playerDirY !== undefined && dist > 0.001) {
           const toEnemyX = this.x - playerX;
@@ -1176,6 +1263,7 @@ export class RaycastEnemy {
         const canSpotPlayer =
           ((dist <= effectiveSightRange && los && inCone && playerLookingAtEnemy) ||
            (dist <= 2.8 && los && inCone) ||
+           Boolean(closestThreatGrenade) ||
            this.painTimer > 0);
 
         if (canSpotPlayer) {
@@ -1257,6 +1345,7 @@ export class RaycastEnemy {
         const canSpotPlayer =
           ((dist <= effectiveSightRange && los && inCone) ||
            (dist <= 2.8 && los && inCone) ||
+           Boolean(closestThreatGrenade) ||
            this.painTimer > 0);
 
         if (canSpotPlayer) {
@@ -1315,7 +1404,7 @@ export class RaycastEnemy {
 
         this.diagonaSubmergedTimer = Math.max(0, this.diagonaSubmergedTimer - delta);
 
-        const stalkSpeed = 0.026 * delta;
+        const stalkSpeed = (closestThreatGrenade ? 0.038 : 0.026) * delta;
         const oldX = this.x;
         const oldY = this.y;
         const moved = this.moveTowards(playerX, playerY, stalkSpeed, tryMoveEnemy);

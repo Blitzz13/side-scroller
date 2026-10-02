@@ -862,7 +862,8 @@ export class RaycastEnemyManager {
     pickupManager: RaycastPickupManager,
     laserManager?: RaycastLaserManager,
     playerDirX?: number,
-    playerDirY?: number
+    playerDirY?: number,
+    activeGrenades?: readonly { x: number; y: number; radius?: number }[]
   ): void {
     this.cachedMapFlat = mapFlat;
     this.cachedMapWidth = mapWidth;
@@ -1053,7 +1054,8 @@ export class RaycastEnemyManager {
         onShootPlayer,
         lofChecker,
         playerDirX,
-        playerDirY
+        playerDirY,
+        activeGrenades
       );
 
       // Trigger stormtrooper voicelines based on visibility & proximity
