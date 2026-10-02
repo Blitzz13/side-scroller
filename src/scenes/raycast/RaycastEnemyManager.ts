@@ -1188,6 +1188,29 @@ export class RaycastEnemyManager {
     for (const enemy of this.enemies) {
       if (enemy.isDead) continue;
 
+      // Strict line-of-fire check: enemies only detect the player if there are NO walls between them and the player
+      if (
+        this.cachedMapFlat &&
+        this.cachedMapWidth &&
+        this.cachedMapHeight &&
+        this.cachedDoorStatesFlat
+      ) {
+        const hasClearLine = this.hasLineOfFire(
+          enemy.x,
+          enemy.y,
+          shooterX,
+          shooterY,
+          this.cachedMapFlat,
+          this.cachedMapWidth,
+          this.cachedMapHeight,
+          this.cachedDoorStatesFlat,
+          this.cachedThinWalls
+        );
+        if (!hasClearLine) {
+          continue; // Blocked by solid wall, closed door, or thin wall: enemy in another room cannot detect player
+        }
+      }
+
       const distToShooter = Math.hypot(enemy.x - shooterX, enemy.y - shooterY);
       const distToImpact = Math.hypot(enemy.x - targetX, enemy.y - targetY);
 
@@ -1203,43 +1226,13 @@ export class RaycastEnemyManager {
         distToLaser = Math.hypot(enemy.x - projX, enemy.y - projY);
       }
 
-      // Acoustic check: if map geometry is cached, check if sound has direct line-of-sight
-      let hasDirectAcoustic = true;
-      if (this.cachedMapFlat && this.cachedDoorStatesFlat) {
-        hasDirectAcoustic = this.checkLineOfSight(
-          shooterX,
-          shooterY,
-          enemy.x,
-          enemy.y,
-          this.cachedMapFlat,
-          this.cachedMapWidth,
-          this.cachedMapHeight,
-          this.cachedDoorStatesFlat
-        );
-      }
-      const effectiveGunshotRadius = hasDirectAcoustic ? gunshotRadius : gunshotRadius * 0.65; // ~9.1 tiles through solid walls
-
-      const heardGunshot = distToShooter <= effectiveGunshotRadius;
+      const heardGunshot = distToShooter <= gunshotRadius;
       const nearMiss = distToLaser <= nearMissRadius;
       const nearImpact = distToImpact <= impactRadius;
 
       if (heardGunshot || nearMiss || nearImpact) {
         enemy.alert(shooterX, shooterY, true);
-        const isBehindWall =
-          this.cachedMapFlat && this.cachedMapWidth && this.cachedMapHeight && this.cachedDoorStatesFlat
-            ? !this.hasLineOfFire(
-                enemy.x,
-                enemy.y,
-                shooterX,
-                shooterY,
-                this.cachedMapFlat,
-                this.cachedMapWidth,
-                this.cachedMapHeight,
-                this.cachedDoorStatesFlat,
-                this.cachedThinWalls
-              )
-            : false;
-        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY, isBehindWall);
+        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY, false);
       }
     }
   }
@@ -1256,24 +1249,34 @@ export class RaycastEnemyManager {
   ): void {
     for (const enemy of this.enemies) {
       if (enemy.isDead) continue;
+
+      // Strict line-of-fire check: enemies only detect the player if there are NO walls between them and the player
+      if (
+        this.cachedMapFlat &&
+        this.cachedMapWidth &&
+        this.cachedMapHeight &&
+        this.cachedDoorStatesFlat
+      ) {
+        const hasClearLine = this.hasLineOfFire(
+          enemy.x,
+          enemy.y,
+          shooterX,
+          shooterY,
+          this.cachedMapFlat,
+          this.cachedMapWidth,
+          this.cachedMapHeight,
+          this.cachedDoorStatesFlat,
+          this.cachedThinWalls
+        );
+        if (!hasClearLine) {
+          continue; // Blocked by wall: enemy in another room cannot detect player
+        }
+      }
+
       const distToImpact = Math.hypot(enemy.x - impactX, enemy.y - impactY);
       if (distToImpact <= alertRadius) {
         enemy.alert(shooterX, shooterY, true);
-        const isBehindWall =
-          this.cachedMapFlat && this.cachedMapWidth && this.cachedMapHeight && this.cachedDoorStatesFlat
-            ? !this.hasLineOfFire(
-                enemy.x,
-                enemy.y,
-                shooterX,
-                shooterY,
-                this.cachedMapFlat,
-                this.cachedMapWidth,
-                this.cachedMapHeight,
-                this.cachedDoorStatesFlat,
-                this.cachedThinWalls
-              )
-            : false;
-        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY, isBehindWall);
+        this.voicelineManager.onGunfireHeard(enemy, shooterX, shooterY, false);
       }
     }
   }
@@ -1534,7 +1537,6 @@ export class RaycastEnemyManager {
         enemy.takeDamage(damage, onEnemyKilled, centerX, centerY);
         hitEnemies.push(enemy);
       } else if (dist <= 20.0) {
-        enemy.alert(centerX, centerY, true);
         const wallsToCheck = thinWalls || this.cachedThinWalls;
         const isBehindWall =
           this.cachedMapFlat && this.cachedMapWidth && this.cachedMapHeight && this.cachedDoorStatesFlat
@@ -1550,7 +1552,10 @@ export class RaycastEnemyManager {
                 wallsToCheck
               )
             : false;
-        this.voicelineManager.onGunfireHeard(enemy, centerX, centerY, isBehindWall);
+        if (!isBehindWall) {
+          enemy.alert(centerX, centerY, true);
+          this.voicelineManager.onGunfireHeard(enemy, centerX, centerY, false);
+        }
       }
     }
     return hitEnemies;

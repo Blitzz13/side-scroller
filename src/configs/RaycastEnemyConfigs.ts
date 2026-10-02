@@ -486,6 +486,11 @@ export const diagonaConfig: IRaycastEnemyConfig = {
   deathSounds: diagonaDeathSounds,
   attackSounds: diagonaAttackSounds,
   emergeSound: diagonaEmergeSound,
+  voicelines: {
+    spotted: [],
+    suspicious: [],
+    grenade: [],
+  },
   animationConfig: {
     omniDirectional: true,
     deathAnimation: {

@@ -89,6 +89,7 @@ export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
     imperial_commando: defaultImperialOfficerVoicePool,
     imperialcommando: defaultImperialOfficerVoicePool,
     commando: defaultImperialOfficerVoicePool,
+    diagona: { spotted: [], suspicious: [], grenade: [] },
   },
 
   defaultVoicePool,

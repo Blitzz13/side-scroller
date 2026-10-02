@@ -93,6 +93,9 @@ export class EnemyVoicelineManager {
     if (typeKey && this.config.voicePools?.[typeKey]) {
       return this.config.voicePools[typeKey];
     }
+    if (typeKey === "diagona" || typeKey === "dianoga") {
+      return { spotted: [], suspicious: [], grenade: [] };
+    }
     return (
       this.config.defaultVoicePool ||
       this.config.voicePools?.["stormtrooper"] || {
