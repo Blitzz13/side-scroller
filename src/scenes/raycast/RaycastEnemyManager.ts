@@ -120,7 +120,33 @@ export class RaycastEnemyManager {
   }
 
   public onPlayerThrowGrenade(playerX: number, playerY: number): void {
-    this.voicelineManager.onPlayerThrowGrenade(playerX, playerY, this.enemies);
+    const hasLineOfFireCheck = (enemyX: number, enemyY: number): boolean => {
+      if (
+        this.cachedMapFlat &&
+        this.cachedMapWidth &&
+        this.cachedMapHeight &&
+        this.cachedDoorStatesFlat
+      ) {
+        return this.hasLineOfFire(
+          enemyX,
+          enemyY,
+          playerX,
+          playerY,
+          this.cachedMapFlat,
+          this.cachedMapWidth,
+          this.cachedMapHeight,
+          this.cachedDoorStatesFlat,
+          this.cachedThinWalls
+        );
+      }
+      return true;
+    };
+    this.voicelineManager.onPlayerThrowGrenade(
+      playerX,
+      playerY,
+      this.enemies,
+      hasLineOfFireCheck
+    );
   }
 
   public async initSpritesheets(): Promise<void> {

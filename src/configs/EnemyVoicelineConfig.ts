@@ -48,7 +48,7 @@ export const enemyVoicelineConfig: IEnemyVoicelineConfig = {
   volume: 0.90,
   hearingRange: 3.5,
   suspiciousRange: 3.5,
-  grenadeHearingRange: 25.0,
+  grenadeHearingRange: 7.0,
   spottedCooldown: 7000,
   suspiciousCooldown: 10000,
   grenadeCooldown: 8000,

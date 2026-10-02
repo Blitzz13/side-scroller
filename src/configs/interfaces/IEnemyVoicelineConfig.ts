@@ -23,7 +23,7 @@ export interface IEnemyVoicelineConfig {
   /** Maximum distance (in tiles) for suspicious voicelines when player is close and unoccluded by walls (default: 3.5) */
   suspiciousRange?: number;
 
-  /** Maximum distance (in tiles) for enemies to react to a thrown grenade (default: 25.0) */
+  /** Maximum distance (in tiles) for enemies around the player to react to a thrown grenade (default: 7.0) */
   grenadeHearingRange: number;
 
   /** Minimum interval in milliseconds between "spotted" voicelines per enemy (default: 7000ms) */

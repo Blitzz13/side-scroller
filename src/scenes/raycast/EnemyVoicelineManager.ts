@@ -216,7 +216,8 @@ export class EnemyVoicelineManager {
   public onPlayerThrowGrenade(
     playerX: number,
     playerY: number,
-    enemies: RaycastEnemy[] = []
+    enemies: RaycastEnemy[] = [],
+    hasLineOfFire?: (enemyX: number, enemyY: number) => boolean
   ): void {
     const now = Date.now();
     const globalCooldown = this.config.globalGrenadeCooldown ?? 4000;
@@ -224,10 +225,10 @@ export class EnemyVoicelineManager {
       return;
     }
 
-    // 1. Find closest alive enemy on the map within grenade hearing range who has grenade voicelines
+    // 1. Find closest alive enemy around the player within grenade reaction range (not behind walls)
     // and whose per-enemy grenade cooldown has elapsed
     const enemyCooldown = this.config.grenadeCooldown ?? 8000;
-    const maxRange = this.config.grenadeHearingRange ?? 25.0;
+    const maxRange = this.config.grenadeHearingRange ?? 7.0;
     const maxRangeSq = maxRange * maxRange;
 
     let closestEnemy: RaycastEnemy | null = null;
@@ -235,7 +236,13 @@ export class EnemyVoicelineManager {
     let chosenAlias: string | null = null;
 
     for (const enemy of enemies) {
-      if (!enemy || enemy.isDead || enemy.health <= 0 || this.deadEnemyIds.has(enemy.id)) {
+      if (
+        !enemy ||
+        enemy.isDead ||
+        enemy.health <= 0 ||
+        enemy.state === "dead" ||
+        this.deadEnemyIds.has(enemy.id)
+      ) {
         continue;
       }
       // Check per-enemy grenade voiceline cooldown
@@ -246,6 +253,11 @@ export class EnemyVoicelineManager {
       const dy = enemy.y - playerY;
       const distSq = dx * dx + dy * dy;
       if (distSq > maxRangeSq) {
+        continue;
+      }
+
+      // Check if blocked by walls: enemy must be around the player without walls in between
+      if (hasLineOfFire && !hasLineOfFire(enemy.x, enemy.y)) {
         continue;
       }
 
@@ -525,7 +537,7 @@ export class EnemyVoicelineManager {
       const distance = Math.sqrt(dx * dx + dy * dy);
       const maxDist =
         item.category === VoicelineCategory.GRENADE
-          ? Math.max(15, this.config.grenadeHearingRange)
+          ? Math.max(8, this.config.grenadeHearingRange)
           : Math.max(10, this.config.hearingRange * 2);
       const falloff = Math.max(0, 1 - distance / maxDist);
       const minVol = this.config.minSpatialVolume ?? 0.5;
