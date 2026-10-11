@@ -154,6 +154,7 @@ export const raycastShieldPickupConfig: IRaycastPickupConfig = {
   },
   scale: 0.12,
   anchor: "floor",
+  pickupRadius: 1.1,
 };
 
 /**

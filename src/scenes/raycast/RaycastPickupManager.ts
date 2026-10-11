@@ -87,9 +87,11 @@ export class RaycastPickupManager {
     const texW = texture.width || 64;
     const texH = texture.height || 64;
     for (let x = 0; x < texW; x++) {
-      slices.push(
-        new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH))
-      );
+      const slice = new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH));
+      if (slice.baseTexture) {
+        slice.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      }
+      slices.push(slice);
     }
     return slices;
   }
@@ -285,13 +287,16 @@ export class RaycastPickupManager {
 
     const objectLayers = allLayers.filter(
       (layer: any) =>
-        layer.type === "objectgroup" ||
-        (layer.name &&
-          (layer.name.toLowerCase().includes("object") ||
-            layer.name.toLowerCase().includes("item") ||
-            layer.name.toLowerCase().includes("prop") ||
-            layer.name.toLowerCase().includes("decor") ||
-            layer.name.toLowerCase().includes("pickup")))
+        (layer.type === "objectgroup" ||
+          (layer.name &&
+            (layer.name.toLowerCase().includes("object") ||
+              layer.name.toLowerCase().includes("item") ||
+              layer.name.toLowerCase().includes("prop") ||
+              layer.name.toLowerCase().includes("decor") ||
+              layer.name.toLowerCase().includes("pickup")))) &&
+        !(layer.name &&
+          (layer.name.toLowerCase().includes("enemy") ||
+            layer.name.toLowerCase().includes("enemies")))
     );
 
     for (const layer of objectLayers) {
@@ -358,6 +363,24 @@ export class RaycastPickupManager {
             const meta = tileMeta[adjustedTileId] || {};
             const typeStr = (meta.type || tileTypes[tileGid] || "").toLowerCase();
             const imgStr = (meta.image || "").toLowerCase();
+
+            const isEnemy =
+              meta.tileClass === "Enemy" ||
+              (meta.type && meta.type.toLowerCase().includes("enemy")) ||
+              typeStr.includes("enemy") ||
+              imgStr.includes("enemy") ||
+              imgStr.includes("officer") ||
+              imgStr.includes("trooper") ||
+              imgStr.includes("viper_droid") ||
+              imgStr.includes("dark_trooper") ||
+              imgStr.includes("diagona") ||
+              (layer.name &&
+                (layer.name.toLowerCase().includes("enemy") ||
+                  layer.name.toLowerCase().includes("enemies")));
+
+            if (isEnemy) {
+              return;
+            }
 
             const isKeycard =
               typeStr.includes("keycard") ||
@@ -451,7 +474,7 @@ export class RaycastPickupManager {
                 vOffset,
                 z,
                 anchor,
-                pickupRadius: pConfig?.pickupRadius ?? (keyColor ? 0.9 : undefined),
+                pickupRadius: pConfig?.pickupRadius ?? (isShield ? 1.1 : (keyColor ? 0.9 : undefined)),
                 config: pConfig,
               };
 
@@ -579,6 +602,31 @@ export class RaycastPickupManager {
             const normalizedType = (objType || meta.type || "").toLowerCase();
             const imgStr = (meta.image || "").toLowerCase();
 
+            const isEnemy =
+              obj.type === "Enemy" ||
+              meta.tileClass === "Enemy" ||
+              normalizedType.includes("enemy") ||
+              imgStr.includes("enemy") ||
+              imgStr.includes("officer") ||
+              imgStr.includes("trooper") ||
+              imgStr.includes("viper_droid") ||
+              imgStr.includes("dark_trooper") ||
+              imgStr.includes("diagona") ||
+              (obj.name &&
+                (obj.name.toLowerCase().includes("enemy") ||
+                  obj.name.toLowerCase().includes("officer") ||
+                  obj.name.toLowerCase().includes("trooper") ||
+                  obj.name.toLowerCase().includes("viper") ||
+                  obj.name.toLowerCase().includes("droid") ||
+                  obj.name.toLowerCase().includes("diagona"))) ||
+              (layer.name &&
+                (layer.name.toLowerCase().includes("enemy") ||
+                  layer.name.toLowerCase().includes("enemies")));
+
+            if (isEnemy) {
+              return;
+            }
+
             const isKeycard =
               normalizedType.includes("keycard") ||
               normalizedType.includes("card") ||
@@ -679,7 +727,7 @@ export class RaycastPickupManager {
                 vOffset,
                 z,
                 anchor,
-                pickupRadius: objPickupRadius ?? pConfig?.pickupRadius ?? (keyColor ? 0.9 : undefined),
+                pickupRadius: objPickupRadius ?? pConfig?.pickupRadius ?? (isShield ? 1.1 : (keyColor ? 0.9 : undefined)),
                 config: pConfig,
               };
 
@@ -994,7 +1042,7 @@ export class RaycastPickupManager {
         const effectiveRadius =
           item.pickupRadius ??
           item.config?.pickupRadius ??
-          (item.keyColor ? 0.9 : pickupRadius);
+          (item.keyColor ? 0.9 : (item.type === RaycastPickupType.SHIELD ? 1.1 : pickupRadius));
 
         if (distSq <= effectiveRadius * effectiveRadius) {
           item.collected = true;
@@ -1078,7 +1126,7 @@ export class RaycastPickupManager {
       collected: false,
       scale: pConfig?.scale ?? 0.25,
       anchor: pConfig?.anchor ?? (keyColor ? "center" : "floor"),
-      pickupRadius: pConfig?.pickupRadius ?? (keyColor ? 0.9 : undefined),
+      pickupRadius: pConfig?.pickupRadius ?? (type === RaycastPickupType.SHIELD ? 1.1 : (keyColor ? 0.9 : undefined)),
       config: pConfig,
     };
 

@@ -9,6 +9,7 @@ import {
   getRaycastEnemyConfig,
   raycastEnemyConfigs,
   TileMeta,
+  IEnemyItemDrop,
 } from "./types";
 import { RaycastPickupManager } from "./RaycastPickupManager";
 import { RaycastPlayerController } from "./RaycastPlayerController";
@@ -24,6 +25,7 @@ export class RaycastEnemyManager {
   private nextEnemyId: number = 1;
   private voicelineManager: EnemyVoicelineManager;
   private onKillCallback?: (killedEnemy: RaycastEnemy, killedCount: number, totalCount: number) => void;
+  private onAlertCallback?: (alertedEnemy: RaycastEnemy) => void;
   private cachedMapFlat?: Int32Array;
   private cachedMapWidth: number = 0;
   private cachedMapHeight: number = 0;
@@ -42,6 +44,12 @@ export class RaycastEnemyManager {
     cb: (killedEnemy: RaycastEnemy, killedCount: number, totalCount: number) => void
   ): void {
     this.onKillCallback = cb;
+  }
+
+  public setOnAlertCallback(
+    cb: (alertedEnemy: RaycastEnemy) => void
+  ): void {
+    this.onAlertCallback = cb;
   }
 
   private static readonly ENEMY_SFX_REGISTRY: Record<string, string> = {
@@ -480,21 +488,56 @@ export class RaycastEnemyManager {
             }
           }
           let customVisionCone: number | undefined;
-          if (obj.properties) {
-            const coneProp = obj.properties.find(
-              (p: any) =>
-                p.name === "visionConeAngle" ||
-                p.name === "fov" ||
-                p.name === "visionCone" ||
-                p.name === "coneAngle"
-            );
-            if (coneProp && typeof coneProp.value === "number") {
-              customVisionCone = coneProp.value;
+          let customItemDrop: IEnemyItemDrop | undefined;
+          let customTriggerAlert: boolean = false;
+
+          const layerProps = (layer as any).properties || [];
+          const allProps = [...layerProps, ...(obj.properties || [])];
+          for (const prop of allProps) {
+            const pName = (prop.name || "").toLowerCase();
+            if (
+              pName === "visionconeangle" ||
+              pName === "fov" ||
+              pName === "visioncone" ||
+              pName === "coneangle"
+            ) {
+              if (typeof prop.value === "number") {
+                customVisionCone = prop.value;
+              }
+            } else if (pName === "itemdrop" || pName === "dropitem") {
+              if (typeof prop.value === "object" && prop.value !== null) {
+                customItemDrop = {
+                  type: String(prop.value.type || prop.value.pickupType || "-"),
+                  amount: prop.value.amount !== undefined ? Number(prop.value.amount) : undefined,
+                  weaponType: prop.value.weaponType ? String(prop.value.weaponType) : undefined,
+                  itemId: prop.value.itemId ? String(prop.value.itemId) : undefined,
+                  sprite: prop.value.sprite ? String(prop.value.sprite) : undefined,
+                  object: prop.value.object,
+                };
+              } else if (typeof prop.value === "string") {
+                try {
+                  customItemDrop = JSON.parse(prop.value);
+                } catch {
+                  customItemDrop = { type: prop.value };
+                }
+              }
+            } else if (pName === "triggeralert" || pName === "trigeralert") {
+              customTriggerAlert = Boolean(prop.value);
             }
           }
 
           if (config) {
-            this.spawnEnemy(config, x, y, dirX, dirY, undefined, customVisionCone);
+            this.spawnEnemy(
+              config,
+              x,
+              y,
+              dirX,
+              dirY,
+              undefined,
+              customVisionCone,
+              customItemDrop,
+              customTriggerAlert
+            );
           }
         }
       }
@@ -508,7 +551,9 @@ export class RaycastEnemyManager {
     dirX: number = 0,
     dirY: number = 1,
     spritesheet?: Spritesheet,
-    visionConeAngle?: number
+    visionConeAngle?: number,
+    itemDrop?: IEnemyItemDrop,
+    triggerAlert?: boolean
   ): RaycastEnemy {
     const sheet =
       spritesheet ||
@@ -524,6 +569,11 @@ export class RaycastEnemyManager {
     enemy.dirY = dirY;
     enemy.wanderDirX = dirX;
     enemy.wanderDirY = dirY;
+    enemy.itemDrop = itemDrop;
+    enemy.triggerAlert = Boolean(triggerAlert);
+    enemy.onAlertTriggered = (alerted) => {
+      this.onAlertCallback?.(alerted);
+    };
 
     if (enemy.animatedSprite) {
       // Per-enemy Graphics mask for partial wall occlusion
@@ -1071,29 +1121,92 @@ export class RaycastEnemyManager {
       // Clear one-frame just-spotted flag
       enemy.justSpottedPlayer = false;
 
-      // Handle weapon drop on death
-      if (enemy.isDead && !enemy.hasDroppedLoot && enemy.config.dropWeapon !== undefined) {
-        const shouldDrop =
-          enemy.config.dropChance === undefined ||
-          Math.random() <= enemy.config.dropChance;
-
-        if (shouldDrop) {
+      // Handle drop on death
+      if (enemy.isDead && !enemy.hasDroppedLoot) {
+        if (enemy.itemDrop && enemy.itemDrop.type && enemy.itemDrop.type !== "-") {
           enemy.hasDroppedLoot = true;
-          const dropAmmo = enemy.config.dropAmmo ?? 20;
-          const dropWeapon = enemy.config.dropWeapon ?? RaycastWeaponType.E11;
-          pickupManager.spawnPickup(
-            RaycastPickupType.WEAPON,
-            enemy.x,
-            enemy.y,
-            dropAmmo,
-            dropWeapon
-          );
+          this.spawnCustomItemDrop(enemy, pickupManager);
+        } else if (enemy.config.dropWeapon !== undefined) {
+          const shouldDrop =
+            enemy.config.dropChance === undefined ||
+            Math.random() <= enemy.config.dropChance;
+
+          if (shouldDrop) {
+            enemy.hasDroppedLoot = true;
+            const dropAmmo = enemy.config.dropAmmo ?? 20;
+            const dropWeapon = enemy.config.dropWeapon ?? RaycastWeaponType.E11;
+            pickupManager.spawnPickup(
+              RaycastPickupType.WEAPON,
+              enemy.x,
+              enemy.y,
+              dropAmmo,
+              dropWeapon
+            );
+          }
         }
       }
     }
 
     // Update queue, concurrency, and spacing for stormtrooper voicelines
     this.voicelineManager.update(delta, playerX, playerY);
+  }
+
+  private spawnCustomItemDrop(
+    enemy: RaycastEnemy,
+    pickupManager: RaycastPickupManager
+  ): void {
+    if (!enemy.itemDrop) return;
+    const drop = enemy.itemDrop;
+    const typeStr = (drop.type || "").toLowerCase().trim();
+    const amount = drop.amount !== undefined ? drop.amount : 1;
+
+    let pickupType = RaycastPickupType.WEAPON;
+    let weaponEnum = RaycastWeaponType.E11;
+
+    if (typeStr.includes("red") && (typeStr.includes("card") || typeStr.includes("key"))) {
+      pickupType = RaycastPickupType.RED_KEYCARD;
+    } else if (typeStr.includes("blue") && (typeStr.includes("card") || typeStr.includes("key"))) {
+      pickupType = RaycastPickupType.BLUE_KEYCARD;
+    } else if (typeStr.includes("green") && (typeStr.includes("card") || typeStr.includes("key"))) {
+      pickupType = RaycastPickupType.GREEN_KEYCARD;
+    } else if (typeStr === "card" || typeStr === "keycard") {
+      pickupType = RaycastPickupType.RED_KEYCARD;
+    } else if (typeStr === "shield") {
+      pickupType = RaycastPickupType.SHIELD;
+    } else if (typeStr === "health") {
+      pickupType = RaycastPickupType.HEALTH;
+    } else if (typeStr === "ammo") {
+      if (drop.weaponType && drop.weaponType.toLowerCase().includes("detonator")) {
+        pickupType = amount > 1
+          ? RaycastPickupType.THERMAL_DETONATOR_BELT
+          : RaycastPickupType.THERMAL_DETONATOR_SINGLE;
+      } else {
+        pickupType = RaycastPickupType.AMMO;
+      }
+    } else if (typeStr === "weapon") {
+      pickupType = RaycastPickupType.WEAPON;
+      const wType = (drop.weaponType || "e_11").toLowerCase();
+      if (wType.includes("dh_17") || wType.includes("dh17")) {
+        weaponEnum = RaycastWeaponType.DH17;
+      } else if (wType.includes("detonator")) {
+        weaponEnum = RaycastWeaponType.THERMAL_DETONATOR;
+      } else {
+        weaponEnum = RaycastWeaponType.E11;
+      }
+    } else {
+      if (typeStr === "red_keycard") pickupType = RaycastPickupType.RED_KEYCARD;
+      else if (typeStr === "blue_keycard") pickupType = RaycastPickupType.BLUE_KEYCARD;
+      else if (typeStr === "green_keycard") pickupType = RaycastPickupType.GREEN_KEYCARD;
+      else pickupType = RaycastPickupType.WEAPON;
+    }
+
+    pickupManager.spawnPickup(
+      pickupType,
+      enemy.x,
+      enemy.y,
+      amount,
+      weaponEnum
+    );
   }
 
   /**

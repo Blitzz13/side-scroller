@@ -147,9 +147,29 @@ export interface ITile {
 
 export interface IDestructableWall {
   align: Align | string;
+  isEnabling?: boolean;
   linkIds: (string | number)[];
   offset: number;
   rotation: FlatWallRotation | string;
+  wall?: ITile;
+}
+
+export interface IEnemy {
+  itemDrop?: IPickupItem;
+  triggerAlert?: boolean;
+}
+
+export interface IEnemyItemDrop {
+  type: string;
+  amount?: number;
+  weaponType?: string;
+  itemId?: string;
+  sprite?: string;
+  object?: {
+    anchor?: string;
+    scale?: number;
+    vOffset?: number;
+  };
 }
 
 export interface IObject {
@@ -177,6 +197,8 @@ export interface RaycastBreakable {
   objId?: number;
   tileId?: number;
   linkId?: string;
+  linkIds?: string[];
+  isEnabling?: boolean;
   x: number;
   y: number;
   type: "chair" | "table" | "power_cell" | string;
@@ -211,6 +233,7 @@ export interface ThinWallDescriptor {
 
 export interface DestructableWallConfig {
   id: number;
+  objId?: number;
   name?: string;
   gridX: number;
   gridY: number;
@@ -218,7 +241,8 @@ export interface DestructableWallConfig {
   rotation?: "vertical" | "horizontal" | string;
   align?: "center" | "left" | "right" | "top" | "bottom" | string;
   offset?: number;
-  linkIds?: string[] | string | number;
+  linkIds?: (string | number)[] | string | number;
+  isEnabling?: boolean;
 }
 
 export * from "../../configs/interfaces/IEnemyVoicelineConfig";

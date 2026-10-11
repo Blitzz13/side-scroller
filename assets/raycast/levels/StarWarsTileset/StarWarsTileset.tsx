@@ -178,7 +178,7 @@
  <tile id="34">
   <image source="assets/raycast/pickups/key_card_red.png" width="25" height="30"/>
  </tile>
- <tile id="36">
+ <tile id="36" type="DestructableWall">
   <image source="assets/raycast/textures/grilled_wall.jpg" width="64" height="64"/>
  </tile>
 </tileset>

@@ -49,6 +49,7 @@ export class DestructableWall {
   public readonly align: string;
   public readonly offset: number;
   public readonly linkIds: string[];
+  public readonly isEnabling: boolean;
 
   public x1: number = 0;
   public y1: number = 0;
@@ -64,6 +65,8 @@ export class DestructableWall {
     this.gridX = config.gridX;
     this.gridY = config.gridY;
     this.texture = config.texture;
+    this.isEnabling = Boolean(config.isEnabling);
+    this.active = !this.isEnabling;
 
     const rotStr = String(config.rotation || "vertical").toLowerCase();
     this.rotation =
@@ -225,31 +228,30 @@ export class DestructableWall {
 
   /**
    * Called when any breakable is destroyed.
-   * Returns true if this specific wall transitioned from active to inactive.
+   * Returns true if this specific wall changed its active state.
    */
   public onBreakableDestroyed(broken: RaycastBreakable): boolean {
-    if (!this.active) return false;
     const wasActive = this.active;
     this.updateActiveStatus();
-    return wasActive && !this.active;
+    return this.isEnabling ? (!wasActive && this.active) : (wasActive && !this.active);
   }
 
   /**
    * Updates whether the wall is active.
-   * The wall is disabled if and only if ALL linked breakables are destroyed.
+   * If isEnabling is false: active until all linked breakables are destroyed.
+   * If isEnabling is true: inactive until all linked breakables are destroyed.
    */
   public updateActiveStatus(): boolean {
     if (this.linkedBreakables.length === 0) {
-      // If link IDs were specified but no breakables were matched yet, remain active
       if (this.linkIds.length > 0) {
-        this.active = true;
+        this.active = !this.isEnabling;
         return this.active;
       }
       return this.active;
     }
 
     const allDestroyed = this.linkedBreakables.every((b) => b.isBroken);
-    this.active = !allDestroyed;
+    this.active = this.isEnabling ? allDestroyed : !allDestroyed;
     return this.active;
   }
 

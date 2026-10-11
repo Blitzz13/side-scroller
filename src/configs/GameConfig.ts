@@ -34,7 +34,7 @@ export function registerFonts(): void {
     for (const key of Object.keys(font.pageTextures)) {
       const page = font.pageTextures[key];
       if (page && page.baseTexture) {
-        page.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+        page.baseTexture.scaleMode = SCALE_MODES.NEAREST;
       }
     }
   }
@@ -48,6 +48,10 @@ export const manifest: AssetsManifest = {
           {
             alias: "menu_theme",
             src: "./assets/sounds/menu_theme.mp3"
+          },
+          {
+            alias: "base_alarm",
+            src: "./assets/sounds/base_alarm.mp3"
           },
           {
             alias: "repair_sound",
@@ -375,6 +379,14 @@ export const manifest: AssetsManifest = {
             src: "./assets/raycast/textures/computer_panel_destroyed.jpg",
           },
           {
+            name: "grilled_wall",
+            src: "./assets/raycast/textures/grilled_wall.jpg",
+          },
+          {
+            name: "grilled_wall_destroyed",
+            src: "./assets/raycast/textures/grilled_wall_destroyed.jpg",
+          },
+          {
             name: "dirty_water",
             src: "./assets/raycast/textures/dirty_water.jpg",
           },
@@ -384,6 +396,10 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "level2",
+            src: "./assets/raycast/levels/level2.json",
+          },
+          {
+            name: "test_level",
             src: "./assets/raycast/levels/test_level.json",
           },
           {

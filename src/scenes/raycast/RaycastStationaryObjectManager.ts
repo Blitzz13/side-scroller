@@ -70,6 +70,14 @@ export class RaycastStationaryObjectManager {
       if (sheet.baseTexture) {
         sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
       }
+      if (sheet.textures) {
+        for (const k in sheet.textures) {
+          const fTex = sheet.textures[k];
+          if (fTex && fTex.baseTexture) {
+            fTex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+          }
+        }
+      }
       this.spritesheets[alias] = sheet;
       this.spritesheets[path] = sheet;
     }

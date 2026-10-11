@@ -3,6 +3,7 @@ import { sound } from "@pixi/sound";
 import { MapObject, RaycastBreakable, TileMeta } from "./types";
 import { defaultDestructibleWallConfig } from "../../configs/DestructableWallConfig";
 import { forEachTileInLayer } from "./tiledUtils";
+import { extractLinkIds } from "./DestructableWall";
 
 export class RaycastBreakableManager {
   private breakables: RaycastBreakable[] = [];
@@ -40,9 +41,11 @@ export class RaycastBreakableManager {
     const texW = texture.width || 64;
     const texH = texture.height || 64;
     for (let x = 0; x < texW; x++) {
-      slices.push(
-        new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH))
-      );
+      const slice = new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH));
+      if (slice.baseTexture) {
+        slice.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      }
+      slices.push(slice);
     }
     return slices;
   }
@@ -111,7 +114,9 @@ export class RaycastBreakableManager {
           (layer.name.toLowerCase().includes("doorprotector") ||
             layer.name.toLowerCase().includes("destructablewall") ||
             layer.name.toLowerCase().includes("destructiblewall") ||
-            layer.name.toLowerCase().includes("barrier")))
+            layer.name.toLowerCase().includes("barrier") ||
+            layer.name.toLowerCase().includes("enemy") ||
+            layer.name.toLowerCase().includes("enemies")))
     );
 
     for (const layer of objectLayers) {
@@ -193,9 +198,11 @@ export class RaycastBreakableManager {
         layer.objects.forEach((obj: any) => {
           if (
             obj.type === "DestructableWall" ||
-            (obj.type || "").toLowerCase().includes("destructablewall")
+            (obj.type || "").toLowerCase().includes("destructablewall") ||
+            obj.type === "Enemy" ||
+            (obj.type || "").toLowerCase().includes("enemy")
           ) {
-            return; // Handled by DestructableWallManager
+            return; // Handled by DestructableWallManager or RaycastEnemyManager
           }
 
           const rawGid = obj.gid ?? 0;
@@ -296,14 +303,14 @@ export class RaycastBreakableManager {
     }
 
     // Parse DestructableWalls object layers (solid grid-snapped destructible wall blocks)
-    let destroyedTileId = 20; // Default for computer_panel_destroyed
+    let defaultDestroyedTileId = 20; // Default fallback (computer_panel_destroyed)
     if (mapData.tilesets) {
       for (const ts of mapData.tilesets) {
         if (ts.tiles) {
           for (const t of ts.tiles) {
             const img = (t.image || "").toLowerCase();
             if (img.includes("computer_panel_destroyed") || (img.includes("destroyed") && img.includes("panel"))) {
-              destroyedTileId = t.id;
+              defaultDestroyedTileId = t.id;
               break;
             }
           }
@@ -343,15 +350,91 @@ export class RaycastBreakableManager {
 
             let health = defaultDestructibleWallConfig.health;
             let linkId = String(obj.id);
+            let isEnabling = false;
+            let linkIds: string[] = [];
+
             if (obj.properties) {
               obj.properties.forEach((prop: any) => {
                 const pName = (prop.name || "").toLowerCase();
                 if (pName === "health" || pName === "hp") {
                   health = parseFloat(prop.value);
-                } else if (pName === "linkid" || pName === "link" || pName === "id") {
-                  linkId = String(prop.value);
+                } else if (pName === "isenabling") {
+                  isEnabling = Boolean(prop.value);
+                } else if (
+                  pName === "linkids" ||
+                  pName === "linkid" ||
+                  pName === "linkedid" ||
+                  pName === "linkedids" ||
+                  pName === "link" ||
+                  pName === "targetid" ||
+                  pName === "id"
+                ) {
+                  linkIds.push(...extractLinkIds(prop.value));
+                  if (pName !== "linkids" && pName !== "linkedids") {
+                    linkId = String(prop.value);
+                  }
                 }
               });
+            }
+
+            if (linkIds.length === 0 && linkId) {
+              linkIds.push(linkId);
+            }
+
+            // Determine image and destroyed texture pair for this specific wall
+            let intactImage = "";
+            if (tileMeta && (tileMeta[adjustedTileId] || tileMeta[gid])) {
+              const m = tileMeta[adjustedTileId] || tileMeta[gid];
+              intactImage = (m.image || "").toLowerCase();
+            }
+            if (!intactImage && mapData.tilesets) {
+              for (const ts of mapData.tilesets) {
+                if (ts.tiles) {
+                  const found = ts.tiles.find((t: any) => t.id === adjustedTileId);
+                  if (found && found.image) {
+                    intactImage = (found.image || "").toLowerCase();
+                    break;
+                  }
+                }
+              }
+            }
+
+            const intactBaseName =
+              intactImage.split(/[\\/]/).pop()?.replace(/\.[^/.]+$/, "") || "";
+
+            let wallDestroyedTileId: number | undefined;
+            if (mapData.tilesets && intactBaseName) {
+              for (const ts of mapData.tilesets) {
+                if (ts.tiles) {
+                  for (const t of ts.tiles) {
+                    const tImg = (t.image || "").toLowerCase();
+                    if (tImg.includes(`${intactBaseName}_destroyed`)) {
+                      wallDestroyedTileId = t.id;
+                      break;
+                    }
+                  }
+                }
+                if (wallDestroyedTileId !== undefined) break;
+              }
+            }
+
+            if (wallDestroyedTileId === undefined) {
+              if (intactBaseName.includes("grilled")) {
+                wallDestroyedTileId = 37;
+              } else {
+                wallDestroyedTileId = defaultDestroyedTileId;
+              }
+            }
+
+            let wallName = obj.name;
+            if (!wallName) {
+              if (intactBaseName.includes("grilled")) {
+                wallName = "Grilled Wall";
+              } else if (intactBaseName.includes("computer") || intactBaseName.includes("panel")) {
+                wallName = "Computer Panel Wall";
+              } else {
+                wallName = "Destructible Wall";
+              }
             }
 
             const breakable: RaycastBreakable = {
@@ -359,18 +442,20 @@ export class RaycastBreakableManager {
               objId: obj.id,
               tileId: adjustedTileId,
               linkId: linkId,
+              linkIds: linkIds,
+              isEnabling: isEnabling,
               x: worldX,
               y: worldY,
               gridX: gridX,
               gridY: gridY,
               isWallBlock: true,
               type: "destructible_wall",
-              name: obj.name || "Computer Panel Wall",
+              name: wallName,
               health: health,
               maxHealth: health,
               isBroken: false,
               intactTextureId: adjustedTileId,
-              destroyedTextureId: destroyedTileId,
+              destroyedTextureId: wallDestroyedTileId,
               scale: 1.0,
               hitRadius: 0.65,
               blocksMovement: false,

@@ -3,6 +3,7 @@ import { sound, IMediaInstance } from "@pixi/sound";
 import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
 import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
 import { RaycastDirectionalObject } from "./RaycastDirectionalObject";
+import { IEnemyItemDrop } from "./types";
 
 export type EnemyAIState = "idle" | "chase" | "attack" | "dead";
 export type DiagonaPhase =
@@ -21,6 +22,9 @@ export class RaycastEnemy extends RaycastDirectionalObject {
   public maxHealth: number;
   public state: EnemyAIState = "idle";
   public isMoving: boolean = false;
+  public itemDrop?: IEnemyItemDrop;
+  public triggerAlert: boolean = false;
+  public onAlertTriggered?: (enemy: RaycastEnemy) => void;
 
   // Vision cone settings (degrees) - adjustable per enemy, except Viper Probe Droid (always 360)
   public static defaultVisionConeAngle: number = 120;
@@ -115,12 +119,28 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     return hasLineOfSight(this.x, this.y, playerX, playerY);
   }
 
+  public triggerAlertEvent(): void {
+    if (!this.triggerAlert) return;
+    this.onAlertTriggered?.(this);
+    const customSound = (this.config as any).alertSound || `alert_${this.config.type}`;
+    if (sound.exists(customSound)) {
+      try {
+        sound.play(customSound, { volume: 0.6 });
+      } catch {}
+    } else if (sound.exists("enemy_alert")) {
+      try {
+        sound.play("enemy_alert", { volume: 0.6 });
+      } catch {}
+    }
+  }
+
   /**
    * Alerts the enemy to suspicious noise, gunfire, or projectile near-misses/impacts.
    * Wakes the enemy from idle into chase/search state and turns towards the source of the disturbance.
    */
   public alert(sourceX: number, sourceY: number, forceFaceSource: boolean = true): void {
     if (this.isDead) return;
+    this.triggerAlertEvent();
 
     if (this.config.type === RaycastEnemyType.DIAGONA) {
       if (this.diagonaPhase === "hidden" || this.diagonaPhase === "peeking") {
@@ -841,6 +861,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     if (seesPlayer && !this.wasSeeingPlayer) {
       this.stepOutFrames = defaultStepOut; // Step forward/out into open room/hallway when first acquiring target
       this.justSpottedPlayer = true;
+      this.triggerAlertEvent();
       this.timeTargetVisible = 0;
       this.shotsFiredAtTarget = 0;
       this.sightLostTimer = 0;
@@ -1251,6 +1272,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
             this.dirY = dy / dist;
           }
           this.justSpottedPlayer = true;
+          this.triggerAlertEvent();
           this.timeTargetVisible = 0;
           this.shotsFiredAtTarget = 0;
           this.sightLostTimer = 0;

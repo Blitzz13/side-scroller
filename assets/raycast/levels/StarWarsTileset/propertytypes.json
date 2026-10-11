@@ -39,6 +39,11 @@
                 "value": "-"
             },
             {
+                "name": "isEnabling",
+                "type": "bool",
+                "value": false
+            },
+            {
                 "name": "linkIds",
                 "type": "list",
                 "value": [
@@ -91,6 +96,40 @@
             "-"
         ],
         "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 15,
+        "members": [
+            {
+                "name": "itemDrop",
+                "propertyType": "PickupItem",
+                "type": "class",
+                "value": {
+                    "amount": 0,
+                    "type": "-"
+                }
+            },
+            {
+                "name": "triggerAlert",
+                "type": "bool",
+                "value": false
+            }
+        ],
+        "name": "Enemy",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
     },
     {
         "id": 9,

@@ -403,7 +403,7 @@ export class LevelEndScene extends BaseScene {
     t.resolution = textRes;
     t.roundPixels = true;
     if (t.texture && t.texture.baseTexture) {
-      t.texture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+      t.texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
     }
     t.anchor.set(anchorX, anchorY);
     t.position.set(Math.round(x), Math.round(y));

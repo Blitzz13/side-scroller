@@ -2,6 +2,87 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-11] - Player Spawn Point Filtering, Sound Alias Array Normalization & Texture Loader Fixes
+
+### 1. Player Spawn Filtering vs Enemy Spawns
+- **Filtered Spawns Layer to Player Spawn Points** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Fixed an issue in `level2.json` where enemy spawn tiles (GID 39 / tile 38) and other entity spawn locations in the `Spawns` layer overwrote the player's position, placing the player at the last enemy spawn point instead of the designated player spawn point (GID 28 / tile 27 `player_spawn.webp` at 16, 18).
+  - Added strict player spawn verification: now exclusively positions the player if the tile or object matches `tileId === 27`, `player_spawn`, or `player`, while explicitly ignoring enemy spawns (`tileId === 38`, `enemy_spawn`, `enemy`).
+
+### 2. Audio Engine Alias Collision & InvalidStateError Fix
+- **Sound Alias Array Normalization & Safe Sound Stopping** ([`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **Root Cause**: In `@pixi/sound`'s asset loader plugin, sound aliases are extracted using `alias[0]`. Passing string aliases like `"base_alarm"`, `"battle_theme"`, and `"button_click"` resulted in all `"b..."` sounds registering under the single-character alias `'b'`. This triggered WebAudio's `InvalidStateError: Failed to set the 'buffer' property on 'AudioBufferSourceNode'` due to conflicting concurrent buffer assignments, and caused `@pixi/sound`'s `Assertion failed: No sound matching alias 'base_alarm'`.
+  - Normalized all manifest asset aliases into string arrays (`alias: [string]`) in `loadGameAssets()`, ensuring all sounds register under their complete, unique alias strings.
+  - Guarded all `sound.stop()` calls (`calm_loop`, `battle_theme`, `base_alarm`) with `sound.exists(alias)` to prevent assertion warnings during alert switches and scene disposal.
+
+### 3. Sub-frame Spritesheet 404 Skip in Level Loader
+- **Skip Standalone Fetch for Sub-frame Tiles** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Filtered out sub-frame sprite tiles that exist only inside spritesheets (such as `key_card_blue.png`, `key_card_green.png`, `key_card_red.png`, `viper_droid_default_1.png`) from being loaded as standalone raycast wall textures in `loadLevel()`, eliminating 404 network fetch errors.
+
+---
+
+## [2026-10-11] - Shield Pickup Radius Expansion, Positioned Enemy Billboard Cube Fix, Alert Music Loop & Nearest Filtering
+
+### 1. Shield Pickup Radius Enlargement
+- **Shield Pickup Reach Extended** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Added explicit `pickupRadius: 1.1` to `raycastShieldPickupConfig` in `RaycastPickupConfigs.ts`.
+  - Added fallback pickup radius `1.1` for shield items across `RaycastPickupManager.checkPlayerPickups()`, `spawnPickup()`, and Tiled object/tile layer item parsing.
+  - Allows players to comfortably collect shields placed on top of tables and desks even when blocked by furniture physical collision bounds (radius ~0.75).
+
+### 2. Positioned Enemy Spritesheet Cube Billboard Fix
+- **Excluded Enemy Layers and Types from Billboard Rendering** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - **Root Cause**: `RaycastPickupManager` and `RaycastBreakableManager` filtered object layers without excluding layers with `"enemy"` or `"enemies"`. In `level2.json`, `PositionedEnemies` objects with GID 24 fell through pickup and breakable checks and were pushed into `staticObjects`, rendering the raw spritesheet (`implerial_officer.png` / `imperial_commando.png`) as a 3D billboard cube at the enemy spawn location.
+  - Added exclusion filter in `RaycastPickupManager` and `RaycastBreakableManager` to ignore layers named `enemy` or `enemies`.
+  - Added strict guard checks in `RaycastPickupManager` (both tile and object loops) and `RaycastBreakableManager` skipping objects with `type === "Enemy"`, `tileClass === "Enemy"`, or matching enemy image/name identifiers.
+
+### 3. Looping Alert Music & Base Alarm SFX
+- **Battle Theme & Base Alarm Playback on Repeat** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Implemented `triggerAlertAudio()` and `stopAlertAudio()` on `RaycastScene`.
+  - Hooked `enemyManager.setOnAlertCallback()` in `loadLevel()`.
+  - When an enemy alert is triggered (`triggerAlert: true`):
+    - Stops calm ambient background music (`calm_loop.mp3`).
+    - Loads and plays `assets/sounds/battle_theme.mp3` on repeat (`loop: true`).
+    - Loads and plays `assets/sounds/base_alarm.mp3` on repeat (`loop: true`).
+  - Added alert state management (`isAlertActive`) to avoid duplicate concurrent audio instances.
+  - Cleanly stops alarm and battle music on level transitions and scene disposal.
+
+### 4. Direct SCALE_MODES.NEAREST Enforcement for Textures & Decorations
+- **Pixelated Texture Filtering Guaranteed** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts)):
+  - Directly sets `baseTexture.scaleMode = SCALE_MODES.NEAREST` on all loaded textures, fallback textures, and sliced 1px column textures across `RaycastScene`, `RaycastPickupManager`, `RaycastBreakableManager`, and `RaycastStationaryObjectManager`.
+  - Added `enforceNearestScaleMode()` in `RaycastScene` to ensure all cached textures and spritesheet frames in Pixi's `Assets.cache` have nearest-neighbor filtering applied.
+  - Disabled canvas context image smoothing (`imageSmoothingEnabled = false`) in `extractTexturePixels` and `updateFloorCeilingTextures`.
+  - Explicitly sets `SCALE_MODES.NEAREST` on dynamic door and thin wall column texture reassignments in `renderScene()`.
+
+---
+
+## [2026-10-11] - Enemy Custom Item Drops, Destructible Enabling Walls & Level 2 Integration
+
+### 1. Enemy Class, Custom Loot Drops & Alert Sound Hooks
+- **Enemy Custom Item Drops (`itemDrop`)** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts), [`assets/raycast/levels/StarWarsTileset/propertytypes.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/propertytypes.json)):
+  - Added support for the Tiled `Enemy` class member `itemDrop` (of property type `PickupItem`), allowing level designers to specify custom loot drops for designated enemies instead of standard ammunition/weapon drops.
+  - Parsed `itemDrop` in `RaycastEnemyManager.parseMapEnemies()` and implemented `spawnCustomItemDrop()` on enemy death to spawn specific items: keycards (`red_keycard`, `blue_keycard`, `green_keycard`), weapons (with designated weapon types and ammunition counts), ammo (including thermal detonators), shields, and health.
+  - Configured `level2.json`'s Imperial Officer (object 39) to drop a Red Keycard upon defeat to enable progression through locked security doors.
+- **Enemy Alert Event Infrastructure (`triggerAlert`)** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added `triggerAlert` property support for the `Enemy` class in both object and tile layers.
+  - Implemented `triggerAlertEvent()` and `onAlertTriggered` callback on `RaycastEnemy`, automatically dispatched when an enemy spots the player or is alerted to gunfire/disturbances.
+  - Connected sound playback check for `enemy_alert` or `alert_${type}` aliases, ready for upcoming audio assets.
+
+### 2. Enabling Destructible Walls & Grilled Wall Level Finish Integration
+- **Destructible Wall Enabling Logic (`isEnabling`)** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts), [`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Implemented the `isEnabling` property across `DestructableWall` and `RaycastBreakable` solid wall blocks. When `isEnabling = true`, destroying the wall activates linked entities (such as level exit triggers) rather than removing barriers.
+  - Added list-based `linkIds` parsing in `RaycastBreakableManager` via `extractLinkIds()`.
+- **Level Exit Gating via Enabling Walls** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Parsed `LevelFinish` trigger zones with their object IDs and initialized them as disabled (`enabled: false`) if linked to an unbroken enabling wall (such as object 37 in `level2.json` linked to level finish 38).
+  - Approaching a locked level exit displays `[!] EXIT LOCKED - DESTROY SECURITY BARRIER` on the HUD.
+  - Upon destroying the enabling wall, `handleWallBlockDestroyed()` unlocks the linked `LevelFinishZone`, triggers audio feedback (`door_1`), and displays `[★] Exit Sector Unlocked!`.
+- **Grilled Wall Textures & Dynamic Destroyed Pairing** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Added intact `grilled_wall.jpg` (tile 36, type `DestructableWall`) and destroyed `grilled_wall_destroyed.jpg` (tile 37) to `StarWarsTileset.tsx` and preloaded them in `GameConfig.ts`.
+  - Replaced hardcoded destroyed tile ID assignment in `RaycastBreakableManager` with dynamic texture base name matching (`${baseName}_destroyed`), correctly swapping intact grilled walls with `grilled_wall_destroyed.jpg` in real time.
+- **Level 2 Registration** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Registered `level2` pointing to `./assets/raycast/levels/level2.json`, retaining `test_level` for test environment loading.
+
+---
+
 ## [2026-10-11] - 8-Directional Stationary Objects, ISB Holotable & Level Mirroring Fix
 
 ### 1. Base 8-Directional Object Architecture & ISB Holotable Integration

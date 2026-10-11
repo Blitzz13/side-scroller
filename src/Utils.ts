@@ -43,6 +43,19 @@ export function setTintToSprite(container: Sprite | AnimatedSprite, tint: number
 }
 
 export async function loadGameAssets(manifest: AssetsManifest): Promise<void> {
+  if (manifest && Array.isArray(manifest.bundles)) {
+    for (const bundle of manifest.bundles) {
+      if (Array.isArray(bundle.assets)) {
+        for (const asset of bundle.assets) {
+          if (asset && asset.alias) {
+            if (typeof asset.alias === "string") {
+              asset.alias = [asset.alias];
+            }
+          }
+        }
+      }
+    }
+  }
   await Assets.init({ manifest });
   await Assets.loadBundle(manifest.bundles.map(x => x.name));
 }

@@ -84,6 +84,7 @@ export class DestructableWallManager {
       let rotation = "vertical";
       let offset = 0;
       let linkIds: any = [];
+      let isEnabling = false;
 
       // Extract custom properties from object and layer
       const allProps = [...(layer.properties || []), ...(obj.properties || [])];
@@ -122,6 +123,8 @@ export class DestructableWallManager {
           pName === "targetids"
         ) {
           linkIds = pVal;
+        } else if (pName === "isenabling") {
+          isEnabling = Boolean(pVal);
         }
       }
 
@@ -135,6 +138,7 @@ export class DestructableWallManager {
         align,
         offset,
         linkIds,
+        isEnabling,
       });
 
       this.walls.push(wall);

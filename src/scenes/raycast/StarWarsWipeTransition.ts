@@ -51,7 +51,7 @@ export class StarWarsWipeTransition {
     this.prevRenderTexture = RenderTexture.create({
       width: w,
       height: h,
-      scaleMode: SCALE_MODES.LINEAR,
+      scaleMode: SCALE_MODES.NEAREST,
     });
 
     this.shader = Shader.from(wipeVert, wipeFrag, {
