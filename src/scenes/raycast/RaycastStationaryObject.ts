@@ -1,4 +1,4 @@
-import { AnimatedSprite, SCALE_MODES, Spritesheet, Texture } from "pixi.js";
+import { AnimatedSprite, MIPMAP_MODES, SCALE_MODES, Spritesheet, Texture } from "pixi.js";
 import { RaycastDirectionalObject } from "./RaycastDirectionalObject";
 
 export interface StationaryObjectOptions {
@@ -56,6 +56,8 @@ export class RaycastStationaryObject extends RaycastDirectionalObject {
   public initFromSpritesheet(spritesheet: Spritesheet): void {
     if (spritesheet.baseTexture) {
       spritesheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      spritesheet.baseTexture.mipmap = MIPMAP_MODES.OFF;
+      spritesheet.baseTexture.update();
     }
 
     const texs = spritesheet.textures;

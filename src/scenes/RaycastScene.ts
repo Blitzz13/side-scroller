@@ -3,6 +3,7 @@ import {
   Graphics,
   Mesh,
   MeshGeometry,
+  MIPMAP_MODES,
   Rectangle,
   SCALE_MODES,
   Shader,
@@ -343,6 +344,7 @@ export class RaycastScene extends BaseScene {
         const sprite = new Sprite();
         sprite.width = 1;
         sprite.x = i;
+        sprite.roundPixels = true;
         sprite.visible = false;
         this.wallContainer.addChild(sprite);
         columnSprites.push(sprite);
@@ -354,6 +356,7 @@ export class RaycastScene extends BaseScene {
         const sprite = new Sprite();
         sprite.width = 1;
         sprite.x = i;
+        sprite.roundPixels = true;
         sprite.visible = false;
         this.thinWallContainer.addChild(sprite);
         thinSprites.push(sprite);
@@ -365,9 +368,11 @@ export class RaycastScene extends BaseScene {
       for (let j = 0; j < 16; j++) {
         const dTex = new Texture(Texture.WHITE.baseTexture, new Rectangle(0, 0, 1, 1));
         dTex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+        dTex.baseTexture.mipmap = MIPMAP_MODES.OFF;
         colDoorTex.push(dTex);
         const tTex = new Texture(Texture.WHITE.baseTexture, new Rectangle(0, 0, 1, 1));
         tTex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+        tTex.baseTexture.mipmap = MIPMAP_MODES.OFF;
         colThinTex.push(tTex);
       }
       this.doorColumnTextures.push(colDoorTex);
@@ -393,6 +398,7 @@ export class RaycastScene extends BaseScene {
     for (let i = 0; i < 2000; i++) {
       const sprite = new Sprite();
       sprite.width = 1;
+      sprite.roundPixels = true;
       sprite.visible = false;
       this.objectContainer.addChild(sprite);
       this.objectSpritePool.push(sprite);
@@ -868,6 +874,8 @@ export class RaycastScene extends BaseScene {
           .then((texture) => {
             if (texture && texture.baseTexture) {
               texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+              texture.baseTexture.mipmap = MIPMAP_MODES.OFF;
+              texture.baseTexture.update();
             }
             this.textures[parseInt(tileId)] = texture;
           })
@@ -878,6 +886,8 @@ export class RaycastScene extends BaseScene {
                 .then((t) => {
                   if (t && t.baseTexture) {
                     t.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+                    t.baseTexture.mipmap = MIPMAP_MODES.OFF;
+                    t.baseTexture.update();
                   }
                   this.textures[parseInt(tileId)] = t;
                 })
@@ -888,6 +898,8 @@ export class RaycastScene extends BaseScene {
                 .then((t) => {
                   if (t && t.baseTexture) {
                     t.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+                    t.baseTexture.mipmap = MIPMAP_MODES.OFF;
+                    t.baseTexture.update();
                   }
                   this.textures[parseInt(tileId)] = t;
                 })
@@ -899,22 +911,36 @@ export class RaycastScene extends BaseScene {
     await Promise.all(texturePromises);
     this.enforceNearestScaleMode();
 
-    // Extract raw pixel buffers and pre-slice 1px column textures for zero-allocation rendering
+    // Extract raw pixel buffers and pre-slice 1px column textures with texel-centered UVs
     for (const [tileIdStr, texture] of Object.entries(this.textures)) {
       const tileId = parseInt(tileIdStr);
       if (texture && texture.baseTexture) {
         texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+        texture.baseTexture.mipmap = MIPMAP_MODES.OFF;
+        texture.baseTexture.update();
       }
       this.rawTextureData[tileId] = this.extractTexturePixels(texture);
 
       const slices: Texture[] = [];
       const texW = texture.width || 64;
       const texH = texture.height || 64;
+      const realW = texture.baseTexture?.realWidth || texW;
       for (let x = 0; x < texW; x++) {
         const slice = new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH));
         if (slice.baseTexture) {
           slice.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+          slice.baseTexture.mipmap = MIPMAP_MODES.OFF;
         }
+        slice.updateUvs();
+        const u = (x + 0.5) / realW;
+        slice._uvs.x0 = u;
+        slice._uvs.x1 = u;
+        slice._uvs.x2 = u;
+        slice._uvs.x3 = u;
+        slice._uvs.uvsFloat32[0] = u;
+        slice._uvs.uvsFloat32[2] = u;
+        slice._uvs.uvsFloat32[4] = u;
+        slice._uvs.uvsFloat32[6] = u;
         slices.push(slice);
       }
       this.columnTextures[tileId] = slices;
@@ -1709,6 +1735,8 @@ export class RaycastScene extends BaseScene {
     }
     this.floorCeilingAtlasTexture = Texture.from(atlasCanvas);
     this.floorCeilingAtlasTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+    this.floorCeilingAtlasTexture.baseTexture.mipmap = MIPMAP_MODES.OFF;
+    this.floorCeilingAtlasTexture.baseTexture.update();
 
     // 3. Build map lookup texture (R = floor slot + 1, G = ceiling slot + 1)
     const mapCanvas = document.createElement("canvas");
@@ -1749,6 +1777,8 @@ export class RaycastScene extends BaseScene {
     }
     this.floorCeilingMapTexture = Texture.from(mapCanvas);
     this.floorCeilingMapTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+    this.floorCeilingMapTexture.baseTexture.mipmap = MIPMAP_MODES.OFF;
+    this.floorCeilingMapTexture.baseTexture.update();
 
     // 4. Update shader uniforms
     const uniforms = this.floorCeilingShader.uniforms;
@@ -1936,13 +1966,23 @@ export class RaycastScene extends BaseScene {
       const cache = (Assets.cache as any)?._cache;
       if (cache && typeof cache.forEach === "function") {
         cache.forEach((asset: any) => {
+          if (asset?.mipmap !== undefined) {
+            asset.scaleMode = SCALE_MODES.NEAREST;
+            asset.mipmap = MIPMAP_MODES.OFF;
+            asset.update?.();
+          }
           if (asset?.baseTexture) {
             asset.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+            asset.baseTexture.mipmap = MIPMAP_MODES.OFF;
+            asset.baseTexture.update();
           }
           if (asset?.textures) {
             for (const k in asset.textures) {
-              if (asset.textures[k]?.baseTexture) {
-                asset.textures[k].baseTexture.scaleMode = SCALE_MODES.NEAREST;
+              const subTex = asset.textures[k];
+              if (subTex?.baseTexture) {
+                subTex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+                subTex.baseTexture.mipmap = MIPMAP_MODES.OFF;
+                subTex.baseTexture.update();
               }
             }
           }
@@ -3744,6 +3784,7 @@ export class RaycastScene extends BaseScene {
             const thinTex = this.thinWallColumnTextures[i][j];
             thinTex.baseTexture = slices[clampedTexX].baseTexture;
             thinTex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+            thinTex.baseTexture.mipmap = MIPMAP_MODES.OFF;
 
             const srcY = Math.min(texH - 1, Math.floor(clipRatio * texH));
             const srcH = Math.max(1, texH - srcY);
@@ -3754,6 +3795,16 @@ export class RaycastScene extends BaseScene {
             thinTex.frame.width = 1;
             thinTex.frame.height = srcH;
             thinTex.updateUvs();
+            const realW = thinTex.baseTexture.realWidth || 64;
+            const uThin = (origFrame.x + 0.5) / realW;
+            thinTex._uvs.x0 = uThin;
+            thinTex._uvs.x1 = uThin;
+            thinTex._uvs.x2 = uThin;
+            thinTex._uvs.x3 = uThin;
+            thinTex._uvs.uvsFloat32[0] = uThin;
+            thinTex._uvs.uvsFloat32[2] = uThin;
+            thinTex._uvs.uvsFloat32[4] = uThin;
+            thinTex._uvs.uvsFloat32[6] = uThin;
 
             sprite.texture = thinTex;
           } else if (isActualDoor && ray.doorSlide === DoorOpen.UP) {
@@ -3762,6 +3813,7 @@ export class RaycastScene extends BaseScene {
             const doorTex = this.doorColumnTextures[i][j];
             doorTex.baseTexture = slices[clampedTexX].baseTexture;
             doorTex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+            doorTex.baseTexture.mipmap = MIPMAP_MODES.OFF;
 
             const srcY = Math.min(texH - 1, Math.floor(open * texH));
             const srcH = Math.max(1, texH - srcY);
@@ -3772,6 +3824,16 @@ export class RaycastScene extends BaseScene {
             doorTex.frame.width = 1;
             doorTex.frame.height = srcH;
             doorTex.updateUvs();
+            const realW = doorTex.baseTexture.realWidth || 64;
+            const uDoor = (origFrame.x + 0.5) / realW;
+            doorTex._uvs.x0 = uDoor;
+            doorTex._uvs.x1 = uDoor;
+            doorTex._uvs.x2 = uDoor;
+            doorTex._uvs.x3 = uDoor;
+            doorTex._uvs.uvsFloat32[0] = uDoor;
+            doorTex._uvs.uvsFloat32[2] = uDoor;
+            doorTex._uvs.uvsFloat32[4] = uDoor;
+            doorTex._uvs.uvsFloat32[6] = uDoor;
 
             sprite.texture = doorTex;
           } else {
@@ -3781,8 +3843,10 @@ export class RaycastScene extends BaseScene {
           if (isThinWall) {
             sprite.zIndex = Math.floor((this.MAX_RENDER_DISTANCE - ray.distance) * 1000);
           }
-          sprite.y = drawStart;
-          sprite.height = drawEnd - drawStart;
+          const rDrawStart = Math.floor(drawStart);
+          const rDrawEnd = Math.ceil(drawEnd);
+          sprite.y = rDrawStart;
+          sprite.height = Math.max(1, rDrawEnd - rDrawStart);
           sprite.width = 1;
           sprite.visible = true;
           sprite.tint =
@@ -4105,6 +4169,7 @@ export class RaycastScene extends BaseScene {
           } else {
             sprite = new Sprite();
             sprite.width = 1;
+            sprite.roundPixels = true;
             this.objectContainer.addChild(sprite);
             this.objectSpritePool.push(sprite);
           }
@@ -4114,7 +4179,7 @@ export class RaycastScene extends BaseScene {
           sprite.x = stripe;
           sprite.y = stripeStartY;
           sprite.width = 1;
-          sprite.height = drawEndY - stripeStartY;
+          sprite.height = Math.max(1, drawEndY - stripeStartY);
           sprite.tint = obj.tint ?? tint;
           sprite.zIndex = Math.floor((this.MAX_RENDER_DISTANCE - transformY) * 1000);
           sprite.visible = true;

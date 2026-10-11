@@ -3,6 +3,8 @@ import {
   BLEND_MODES,
   Container,
   Graphics,
+  MIPMAP_MODES,
+  SCALE_MODES,
   Sprite,
   Texture,
 } from "pixi.js";
@@ -97,6 +99,12 @@ export class RaycastLaserManager {
         // Fallback procedural texture if texture load is delayed
         this.laserTexture = Texture.WHITE;
       }
+    }
+
+    if (this.laserTexture && this.laserTexture.baseTexture) {
+      this.laserTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      this.laserTexture.baseTexture.mipmap = MIPMAP_MODES.OFF;
+      this.laserTexture.baseTexture.update();
     }
   }
 
@@ -202,6 +210,7 @@ export class RaycastLaserManager {
       sprite = new Sprite(this.laserTexture ?? Texture.WHITE);
       sprite.anchor.set(0.5, 0.5);
       sprite.blendMode = BLEND_MODES.ADD;
+      sprite.roundPixels = true;
       this.container.addChild(sprite);
     }
 
@@ -272,6 +281,7 @@ export class RaycastLaserManager {
       sprite = new Sprite(this.laserTexture ?? Texture.WHITE);
       sprite.anchor.set(0.5, 0.5);
       sprite.blendMode = BLEND_MODES.ADD;
+      sprite.roundPixels = true;
       this.container.addChild(sprite);
     }
 

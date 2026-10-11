@@ -3,6 +3,7 @@ import {
   Assets,
   Container,
   Graphics,
+  MIPMAP_MODES,
   Rectangle,
   SCALE_MODES,
   Spritesheet,
@@ -72,6 +73,8 @@ export class RaycastPickupManager {
         if (tex) {
           if (tex.baseTexture) {
             tex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+            tex.baseTexture.mipmap = MIPMAP_MODES.OFF;
+            tex.baseTexture.update();
           }
           this.pickupTextures[p.key] = tex;
           this.pickupSlices[p.key] = this.sliceTexture(tex);
@@ -84,13 +87,31 @@ export class RaycastPickupManager {
 
   private sliceTexture(texture: Texture): Texture[] {
     const slices: Texture[] = [];
+    const baseTex = texture.baseTexture;
+    if (baseTex) {
+      baseTex.scaleMode = SCALE_MODES.NEAREST;
+      baseTex.mipmap = MIPMAP_MODES.OFF;
+      baseTex.update();
+    }
     const texW = texture.width || 64;
     const texH = texture.height || 64;
+    const realW = baseTex?.realWidth || texW;
     for (let x = 0; x < texW; x++) {
-      const slice = new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH));
+      const slice = new Texture(baseTex, new Rectangle(x, 0, 1, texH));
       if (slice.baseTexture) {
         slice.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+        slice.baseTexture.mipmap = MIPMAP_MODES.OFF;
       }
+      slice.updateUvs();
+      const u = (x + 0.5) / realW;
+      slice._uvs.x0 = u;
+      slice._uvs.x1 = u;
+      slice._uvs.x2 = u;
+      slice._uvs.x3 = u;
+      slice._uvs.uvsFloat32[0] = u;
+      slice._uvs.uvsFloat32[2] = u;
+      slice._uvs.uvsFloat32[4] = u;
+      slice._uvs.uvsFloat32[6] = u;
       slices.push(slice);
     }
     return slices;
@@ -118,6 +139,8 @@ export class RaycastPickupManager {
       if (sheet) {
         if (sheet.baseTexture) {
           sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+          sheet.baseTexture.mipmap = MIPMAP_MODES.OFF;
+          sheet.baseTexture.update();
         }
         this.keycardSpritesheet = sheet;
 
@@ -130,6 +153,8 @@ export class RaycastPickupManager {
             if (tex) {
               if (tex.baseTexture) {
                 tex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+                tex.baseTexture.mipmap = MIPMAP_MODES.OFF;
+                tex.baseTexture.update();
               }
               this.keycardAnimationFrames[color].push(tex);
             }
@@ -164,6 +189,8 @@ export class RaycastPickupManager {
       if (sheet) {
         if (sheet.baseTexture) {
           sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+          sheet.baseTexture.mipmap = MIPMAP_MODES.OFF;
+          sheet.baseTexture.update();
         }
         this.shieldSpritesheet = sheet;
         this.shieldAnimationFrames = [];
@@ -173,6 +200,8 @@ export class RaycastPickupManager {
           if (tex) {
             if (tex.baseTexture) {
               tex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+              tex.baseTexture.mipmap = MIPMAP_MODES.OFF;
+              tex.baseTexture.update();
             }
             this.shieldAnimationFrames.push(tex);
           }

@@ -1,4 +1,4 @@
-import { Assets, Container, Graphics, SCALE_MODES, Spritesheet } from "pixi.js";
+import { Assets, Container, Graphics, MIPMAP_MODES, SCALE_MODES, Spritesheet } from "pixi.js";
 import { RaycastStationaryObject, StationaryObjectOptions } from "./RaycastStationaryObject";
 import { TileMeta } from "./types";
 import { extractTiledGidAndRotation, forEachTileInLayer } from "./tiledUtils";
@@ -69,12 +69,16 @@ export class RaycastStationaryObjectManager {
     if (sheet) {
       if (sheet.baseTexture) {
         sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+        sheet.baseTexture.mipmap = MIPMAP_MODES.OFF;
+        sheet.baseTexture.update();
       }
       if (sheet.textures) {
         for (const k in sheet.textures) {
           const fTex = sheet.textures[k];
           if (fTex && fTex.baseTexture) {
             fTex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+            fTex.baseTexture.mipmap = MIPMAP_MODES.OFF;
+            fTex.baseTexture.update();
           }
         }
       }

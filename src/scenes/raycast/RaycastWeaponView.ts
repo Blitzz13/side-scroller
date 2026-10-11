@@ -38,12 +38,14 @@ export class RaycastWeaponView extends Container {
 
     this.flashSprite = new Sprite();
     this.flashSprite.anchor.set(0.5, 0.5);
+    this.flashSprite.roundPixels = true;
     this.flashSprite.visible = false;
     this.addChild(this.flashSprite);
 
     // 3. Weapon sprite (drawn on top of 3D world, below HUD)
     this.weaponSprite = new Sprite();
     this.weaponSprite.anchor.set(0.5, 0.85);
+    this.weaponSprite.roundPixels = true;
     this.weaponSprite.scale.set(this.baseScale);
     this.weaponSprite.position.set(this.basePosX, this.basePosY);
     this.weaponSprite.visible = false;

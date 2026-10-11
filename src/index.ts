@@ -1,5 +1,5 @@
 import "./style.css";
-import { Application, BaseTexture, Graphics, SCALE_MODES, Ticker } from "pixi.js";
+import { Application, BaseTexture, Graphics, MIPMAP_MODES, SCALE_MODES, Ticker } from "pixi.js";
 import { MainMenu } from "./scenes/MainMenu";
 import { gameConfig, manifest, registerFonts } from "./configs/GameConfig";
 import { BaseScene } from "./scenes/BaseScene";
@@ -14,8 +14,9 @@ import { LevelEndScene } from "./scenes/LevelEndScene";
 import { RaycastSaveManager } from "./scenes/raycast/RaycastSaveManager";
 import { Stats } from "pixi-stats";
 
-// Set global nearest-neighbor pixel sampling for all loaded textures and spritesheets
+// Set global nearest-neighbor pixel sampling and disable mipmaps for all loaded textures and spritesheets
 BaseTexture.defaultOptions.scaleMode = SCALE_MODES.NEAREST;
+BaseTexture.defaultOptions.mipmap = MIPMAP_MODES.OFF;
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
@@ -23,7 +24,7 @@ const app = new Application<HTMLCanvasElement>({
   height: gameConfig.height,
   autoDensity: true,
   resolution: Math.max(1, Math.min(window.devicePixelRatio || 1, 2)),
-  antialias: true,
+  antialias: false,
 });
 
 let showInstructions = true;

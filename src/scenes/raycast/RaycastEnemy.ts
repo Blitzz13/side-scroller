@@ -1,4 +1,4 @@
-import { AnimatedSprite, Graphics, SCALE_MODES, Spritesheet, Texture } from "pixi.js";
+import { AnimatedSprite, Graphics, MIPMAP_MODES, SCALE_MODES, Spritesheet, Texture } from "pixi.js";
 import { sound, IMediaInstance } from "@pixi/sound";
 import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
 import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
@@ -377,6 +377,8 @@ export class RaycastEnemy extends RaycastDirectionalObject {
   public initAnimatedSprite(spritesheet: Spritesheet): void {
     if (spritesheet.baseTexture) {
       spritesheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      spritesheet.baseTexture.mipmap = MIPMAP_MODES.OFF;
+      spritesheet.baseTexture.update();
     }
 
     const texs = spritesheet.textures;

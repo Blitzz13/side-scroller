@@ -2,6 +2,35 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-11] - Crisp Pixel-Art Nearest-Neighbor Filtering for Decorations and Walls
+
+### 1. Root Cause Resolution for Blurry Lines & Seams in Decorations and Walls
+- **Texel-Center UV Pinning on 1px Slices** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - **Root Cause**: Wall columns, decorations (tables, chairs, power cells), and pickups are rendered by slicing textures into 1-pixel-wide vertical strips. Previously, slices spanned standard boundaries from `x / W` to `(x + 1) / W`. When rasterized across screen pixels, floating-point evaluation along the quad edges bled into neighboring texels (`x - 1` or `x + 1`), generating vertical line seams down every column.
+  - **Solution**: Explicitly pinned texture coordinate U-values on all 4 quad vertices to the exact texel center: `u = (x + 0.5) / realWidth` (`uvsFloat32[0] = uvsFloat32[2] = uvsFloat32[4] = uvsFloat32[6] = u`). This guarantees `dU/dx = 0`, completely preventing horizontal derivative mipmap triggers and eliminating all border texel bleeding.
+  - Applied texel-center UV pinning to pre-sliced wall textures (`columnTextures`), dynamic door and thin wall slices, pickup slices, breakable furniture debris, and thermal detonators.
+
+### 2. Complete Mipmap Disabling Across Engine
+- **Global and Texture-Specific Mipmap Deactivation** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts), [`src/scenes/raycast/RaycastStationaryObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObject.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts)):
+  - **Root Cause**: PixiJS defaults `BaseTexture.defaultOptions.mipmap` to `MIPMAP_MODES.POW2`. Even with `SCALE_MODES.NEAREST`, mipmap generation produces downsampled, pre-filtered mip levels with linear averaging. When close to walls or decorations, high UV screen derivatives triggered GPU mipmap selection, sampling blurry lower-resolution levels rather than level 0.
+  - Set `BaseTexture.defaultOptions.mipmap = MIPMAP_MODES.OFF` globally in `src/index.ts`.
+  - Explicitly set `baseTexture.mipmap = MIPMAP_MODES.OFF` and called `.update()` on all loaded textures, spritesheets, dynamic column textures, and floor/ceiling atlas/map textures.
+  - Enhanced `enforceNearestScaleMode()` to scan `Assets.cache` and enforce `mipmap = MIPMAP_MODES.OFF` alongside `SCALE_MODES.NEAREST`.
+
+### 3. Canvas MSAA Elimination & Pixelated CSS Scaling
+- **Disabled WebGL MSAA Antialiasing** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Configured PixiJS `Application` with `antialias: false`. WebGL hardware multi-sample antialiasing was blending adjacent 1px column polygon edges, producing faint vertical line seams across surfaces.
+- **Pixelated Canvas CSS Styling** ([`src/style.css`](file:///D:/Projects/side-scroller/src/style.css)):
+  - Added `image-rendering: -moz-crisp-edges`, `image-rendering: -webkit-crisp-edges`, `image-rendering: pixelated`, and `image-rendering: crisp-edges` to `canvas`, ensuring browser viewport scaling preserves sharp pixel art without bilinear blur.
+
+### 4. Integer Snapping & Sprite `roundPixels`
+- **Subpixel Coordinate Snapping** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Enabled `roundPixels: true` across all sprites in `spritePool`, `thinWallSpritePool`, and `objectSpritePool`, as well as laser and weapon view sprites.
+  - Snapped wall slice `sprite.y` to `Math.floor(drawStart)` and `sprite.height` to integer pixels `Math.max(1, Math.ceil(drawEnd) - Math.floor(drawStart))` to eliminate fractional coordinate rasterization jitter.
+
+---
+
+
 ## [2026-10-11] - Player Spawn Point Filtering, Sound Alias Array Normalization & Texture Loader Fixes
 
 ### 1. Player Spawn Filtering vs Enemy Spawns

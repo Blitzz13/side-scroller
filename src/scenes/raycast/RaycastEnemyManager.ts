@@ -1,4 +1,4 @@
-import { Assets, Container, Graphics, SCALE_MODES, Spritesheet } from "pixi.js";
+import { Assets, Container, Graphics, MIPMAP_MODES, SCALE_MODES, Spritesheet } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { RaycastEnemy } from "./RaycastEnemy";
 import {
@@ -199,6 +199,8 @@ export class RaycastEnemyManager {
     if (sheet) {
       if (sheet.baseTexture) {
         sheet.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+        sheet.baseTexture.mipmap = MIPMAP_MODES.OFF;
+        sheet.baseTexture.update();
       }
       for (const k of candidateKeys) {
         this.spritesheets[k] = sheet;
