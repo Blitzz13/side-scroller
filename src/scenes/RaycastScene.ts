@@ -255,7 +255,7 @@ export class RaycastScene extends BaseScene {
       dirX: -1,
       dirY: 0,
       planeX: 0,
-      planeY: 0.8,
+      planeY: -0.8,
     };
 
     // 1. World container holding all 3D world elements (supports isolated sorting and shake)
@@ -1324,8 +1324,8 @@ export class RaycastScene extends BaseScene {
           this.player.dirX = info.dirX;
           this.player.dirY = info.dirY;
           const fov = 0.8;
-          this.player.planeX = info.dirY * fov;
-          this.player.planeY = -info.dirX * fov;
+          this.player.planeX = -info.dirY * fov;
+          this.player.planeY = info.dirX * fov;
 
           this.uPlayerPosUniform[0] = this.player.x;
           this.uPlayerPosUniform[1] = this.player.y;
@@ -2300,8 +2300,8 @@ export class RaycastScene extends BaseScene {
   };
 
   private rotatePlayer(angle: number): void {
-    const cos = Math.cos(-angle);
-    const sin = Math.sin(-angle);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
 
     const oldDirX = this.player.dirX;
     this.player.dirX = this.player.dirX * cos - this.player.dirY * sin;
@@ -2492,8 +2492,8 @@ export class RaycastScene extends BaseScene {
         normStrafe /= inputMag;
       }
 
-      const strafeDirX = this.player.dirY;
-      const strafeDirY = -this.player.dirX;
+      const strafeDirX = -this.player.dirY;
+      const strafeDirY = this.player.dirX;
 
       const dx = (this.player.dirX * normFwd + strafeDirX * normStrafe) * moveSpeed;
       const dy = (this.player.dirY * normFwd + strafeDirY * normStrafe) * moveSpeed;
@@ -3806,8 +3806,8 @@ export class RaycastScene extends BaseScene {
     const ny = dirY / len;
     this.player.dirX = nx;
     this.player.dirY = ny;
-    this.player.planeX = ny * 0.8;
-    this.player.planeY = -nx * 0.8;
+    this.player.planeX = -ny * 0.8;
+    this.player.planeY = nx * 0.8;
 
     this.uPlayerPosUniform[0] = this.player.x;
     this.uPlayerPosUniform[1] = this.player.y;
