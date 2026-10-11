@@ -8,7 +8,8 @@ This document logs recent development changes and enhancements made to the Rayca
 - **Abstract 8-Directional Base Class** ([`src/scenes/raycast/RaycastDirectionalObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastDirectionalObject.ts)):
   - Extracted common 8-directional trigonometric calculations, angular difference wrapping, and sector classification (`towards`, `towards_left_diagonal`, `left`, `away_left_diagonal`, `away`) into a reusable base class.
   - Built-in sector hysteresis (default 5.0°) preventing sprite flickering along diagonal boundary angles.
-  - Integrated bilateral symmetry handling via horizontal sprite flipping (`isFlipped = deg < 0`).
+  - **Symmetric 8-Directional Sector Boundaries & Jitter Elimination**: Fixed a boundary definition bug where the 112.5° sector threshold was omitted and `awayBound` (157.5°) was used as the upper bound for `left`, creating an unstable negative-hysteresis oscillation between 157.5° and 162.5° that caused sprites to rapidly snap back and forth between side and diagonal angles while standing still. Implemented 4 distinct, symmetric sector thresholds (22.5°, 67.5°, 112.5°, 157.5°) with discrete forward/backward hysteresis deadbands.
+  - Integrated bilateral symmetry handling via horizontal sprite flipping (`isFlipped = deg > 0` when viewed from the object's right-hand side).
   - Zero-allocation 3D perspective projection and per-column wall occlusion masking in `render3D()`.
 - **Stationary 8-Directional Props** ([`src/scenes/raycast/RaycastStationaryObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObject.ts), [`assets/raycast/decorations/isb_holotable.json`](file:///D:/Projects/side-scroller/assets/raycast/decorations/isb_holotable.json)):
   - Implemented `RaycastStationaryObject` extending `RaycastDirectionalObject` to support multi-angle decorations.

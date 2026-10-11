@@ -92,35 +92,50 @@ export class RaycastDirectionalObject {
 
     const deg = (diff * 180) / Math.PI;
 
-    const isDiag =
-      this.lastAnimDir.includes("diagonal") ||
-      this.lastAnimDir.includes("towards_left") ||
-      this.lastAnimDir.includes("away_left");
     const isTowards = this.lastAnimDir === "towards";
+    const isTowardsDiag = this.lastAnimDir === "towards_left_diagonal";
     const isLeft = this.lastAnimDir === "left";
+    const isAwayDiag = this.lastAnimDir === "away_left_diagonal";
     const isAway = this.lastAnimDir === "away";
 
-    const towardsBound = isTowards ? 22.5 + hysteresis : isDiag ? 22.5 - hysteresis : 22.5;
-    const leftBound = isLeft ? 67.5 - hysteresis : isDiag ? 67.5 + hysteresis : 67.5;
-    const awayBound = isAway ? 157.5 - hysteresis : isDiag ? 157.5 + hysteresis : 157.5;
+    const clampedHysteresis = Math.min(10.0, Math.max(0.0, hysteresis));
+
+    // Standard 8-directional sectors with symmetric 45° widths:
+    // Sector 1: towards               (centered at 0°,   nominal span: 0° - 22.5°)
+    // Sector 2: towards_left_diagonal (centered at 45°,  nominal span: 22.5° - 67.5°)
+    // Sector 3: left                  (centered at 90°,  nominal span: 67.5° - 112.5°)
+    // Sector 4: away_left_diagonal    (centered at 135°, nominal span: 112.5° - 157.5°)
+    // Sector 5: away                  (centered at 180°, nominal span: 157.5° - 180°)
+
+    // Transition boundary 1: between towards (0°) and towards_left_diagonal (45°)
+    const bound1 = isTowards ? 22.5 + clampedHysteresis : isTowardsDiag ? 22.5 - clampedHysteresis : 22.5;
+
+    // Transition boundary 2: between towards_left_diagonal (45°) and left (90°)
+    const bound2 = isTowardsDiag ? 67.5 + clampedHysteresis : isLeft ? 67.5 - clampedHysteresis : 67.5;
+
+    // Transition boundary 3: between left (90°) and away_left_diagonal (135°)
+    const bound3 = isLeft ? 112.5 + clampedHysteresis : isAwayDiag ? 112.5 - clampedHysteresis : 112.5;
+
+    // Transition boundary 4: between away_left_diagonal (135°) and away (180°)
+    const bound4 = isAwayDiag ? 157.5 + clampedHysteresis : isAway ? 157.5 - clampedHysteresis : 157.5;
 
     const absDeg = Math.abs(deg);
 
     let dirName: string;
-    if (absDeg < towardsBound) {
+    if (absDeg < bound1) {
       dirName = "towards";
-    } else if (absDeg < leftBound) {
+    } else if (absDeg < bound2) {
       dirName = "towards_left_diagonal";
-    } else if (absDeg < awayBound) {
+    } else if (absDeg < bound3) {
       dirName = "left";
-    } else if (absDeg < 165) {
+    } else if (absDeg < bound4) {
       dirName = "away_left_diagonal";
     } else {
       dirName = "away";
     }
 
     this.lastAnimDir = dirName;
-    const isFlipped = dirName !== "towards" && dirName !== "away" && deg < 0;
+    const isFlipped = dirName !== "towards" && dirName !== "away" && deg > 0;
     this.isFlipped = isFlipped;
 
     return { dirName, isFlipped, deg, absDeg };
