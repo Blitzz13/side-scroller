@@ -2,6 +2,26 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-11] - Destroyed Wall Texture Loading & Raycast Render Glitch Fix
+
+### 1. Missing Destroyed Wall Tile in StarWarsTileset & Texture Mapping
+- **Added `grilled_wall_destroyed.jpg` Tile Definition** ([`StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Added tile ID `37` for `assets/raycast/textures/grilled_wall_destroyed.jpg` with `tileType="thickWall"` to `StarWarsTileset.tsx`.
+  - Previously, `StarWarsTileset.tsx` omitted tile 37, preventing `loadLevel()` from including `grilled_wall_destroyed.jpg` in `textureMap`. As a result, the texture was never loaded or pre-sliced, leaving `this.columnTextures[37]` undefined.
+- **Automatic Fallback Texture Mapping in `loadLevel`** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added explicit fallback mapping in `loadLevel()` for known destroyed wall tiles (tile 20 `computer_panel_destroyed` and tile 37 `grilled_wall_destroyed`) to guarantee their textures are loaded even if omitted from tilesets.
+  - Added fallback image loaders for `grilled_wall_destroyed` and `computer_panel_destroyed`.
+  - Added `ensureWallTextureSliced(tileId)` method in `RaycastScene` that dynamically fetches, loads, and pre-slices any missing destroyed wall column textures if not already prepared.
+  - Hooked `ensureWallTextureSliced` after `parseMapBreakables` in `loadLevel()` and inside `handleWallBlockDestroyed()` as an extra safeguard.
+
+### 2. Render Scene Untextured Sprite Ghosting Glitch Fix
+- **Sprite Visibility Cleanup on Untextured Column Slices** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - In `renderScene()`, when `slices` is undefined for a given `wallType`, `sprite.visible = false` was previously omitted. Pooled sprites retained old textures, UVs, and positions from adjacent walls or previous frames, rendering a frozen, glitchy slice quad when the mouse moved.
+  - Added `sprite.visible = false` to the fallback branch to guarantee no corrupted quad geometry or ghosted textures render on screen.
+
+---
+
+
 ## [2026-10-11] - Crisp Pixel-Art Nearest-Neighbor Filtering for Decorations and Walls
 
 ### 1. Root Cause Resolution for Blurry Lines & Seams in Decorations and Walls

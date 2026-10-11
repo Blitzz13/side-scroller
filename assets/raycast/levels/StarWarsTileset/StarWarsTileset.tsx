@@ -181,4 +181,10 @@
  <tile id="36" type="DestructableWall">
   <image source="assets/raycast/textures/grilled_wall.jpg" width="64" height="64"/>
  </tile>
+ <tile id="37">
+  <properties>
+   <property name="tileType" value="thickWall"/>
+  </properties>
+  <image source="assets/raycast/textures/grilled_wall_destroyed.jpg" width="64" height="64"/>
+ </tile>
 </tileset>
