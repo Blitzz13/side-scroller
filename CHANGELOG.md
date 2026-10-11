@@ -2,6 +2,86 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-11] - 8-Directional Stationary Objects, ISB Holotable & Level Mirroring Fix
+
+### 1. Base 8-Directional Object Architecture & ISB Holotable Integration
+- **Abstract 8-Directional Base Class** ([`src/scenes/raycast/RaycastDirectionalObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastDirectionalObject.ts)):
+  - Extracted common 8-directional trigonometric calculations, angular difference wrapping, and sector classification (`towards`, `towards_left_diagonal`, `left`, `away_left_diagonal`, `away`) into a reusable base class.
+  - Built-in sector hysteresis (default 5.0°) preventing sprite flickering along diagonal boundary angles.
+  - Integrated bilateral symmetry handling via horizontal sprite flipping (`isFlipped = deg < 0`).
+  - Zero-allocation 3D perspective projection and per-column wall occlusion masking in `render3D()`.
+- **Stationary 8-Directional Props** ([`src/scenes/raycast/RaycastStationaryObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObject.ts), [`assets/raycast/decorations/isb_holotable.json`](file:///D:/Projects/side-scroller/assets/raycast/decorations/isb_holotable.json)):
+  - Implemented `RaycastStationaryObject` extending `RaycastDirectionalObject` to support multi-angle decorations.
+  - Added support for the ISB Holotable with waist-high standing proportions (`referenceHeight = 142`, `scale = 0.55`, `hitRadius = 0.45`, `anchor = "floor"`).
+- **Stationary Object Management** ([`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts)):
+  - Added centralized manager for spritesheet preloading, parsing Tiled tile and object layers, player collision circles (`checkCollision`), targeting raycast detection (`findClosestHit`), and depth-sorted rendering.
+- **RaycastEnemy Refactoring** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Refactored `RaycastEnemy` to extend `RaycastDirectionalObject`, inheriting angle calculation, sector categorizing, and sprite flipping.
+  - Simplified `RaycastEnemyManager.render()` from ~170 lines down to delegating directly to `enemy.render3D()`.
+- **Manager Exclusions & Scene Wiring** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Excluded `isb_holotable` from `RaycastBreakableManager` and `RaycastPickupManager` to prevent false recognition as breakable wooden tables or 1D billboard items.
+  - Integrated `RaycastStationaryObjectManager` into `RaycastScene` lifecycle: level loading, movement collision blocking in `tryMove()`, weapon targeting occlusion in `getAimTarget()`, and Z-buffer occlusion rendering in `renderScene()`.
+  - Added tile ID 32 definition to StarWarsTileset fallback and level maps.
+
+### 2. Level Coordinate & Camera Orientation Mirroring Parity Fix
+- **Camera Plane Vector & Strafe Formula Alignment** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **Root Cause**: The camera plane perpendicular calculation (`planeX = info.dirY * fov`, `planeY = -info.dirX * fov`) and strafe movement vector (`strafeDirX = dirY`, `strafeDirY = -dirX`) had inverted signs relative to Tiled 2D cartesian coordinates (where +Y is south/down). This caused maps to render horizontally mirrored relative to Tiled map designs.
+  - Corrected camera plane vectors: `planeX = -dirY * fov`, `planeY = dirX * fov`.
+  - Corrected strafe direction vectors: `strafeDirX = -dirY`, `strafeDirY = dirX`.
+  - Inverted mouse rotation angle sign (`Math.cos(angle)`, `Math.sin(angle)`) to preserve intuitive counter-clockwise/clockwise camera turning.
+  - Restored true 1:1 spatial parity between Tiled map layouts and the in-game first-person view.
+
+### 3. High-Resolution Water Texture Asset
+- **Enhanced Dirty Water Texture** ([`assets/raycast/textures/dirty_water.jpg`](file:///D:/Projects/side-scroller/assets/raycast/textures/dirty_water.jpg)):
+  - Replaced dirty water floor texture with a higher resolution asset for improved visual fidelity in flooded subterranean sectors.
+
+---
+
+## [2026-10-03] - Thermal Detonator Evasion AI & Grenade Shout Occlusion Filtering
+
+### 1. Enemy Tactical Thermal Detonator Evasion & Flee AI
+- **Active Explosive Proximity Threat Detection** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - Exposed `activeDetonators` getter on `ThermalDetonatorManager`.
+  - In `RaycastEnemy.update()`, hostiles scan for live thermal detonators within threat radius (`explosionRadius + 1.2` tiles) with unblocked line of sight.
+- **Dynamic Flee & Cornered Rushing Behaviors** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Ranged hostiles (Stormtroopers, Officers, Commandos) break firing stance and sprint away from the active detonator (`tx = x + awayX * 4.0, ty = y + awayY * 4.0`) to escape the blast zone.
+  - Cornered hostiles (stuck against walls for >2 frames) or dedicated melee units (Phase 1 Dark Troopers) turn aggressively towards the player instead of running into obstacles.
+  - Submerged Dianoga creatures detect nearby detonators, accelerating underwater stalking speed (to 0.038) or surfacing to retaliate.
+
+### 2. Grenade Reaction Radius & Wall-Occlusion Shout Filtering
+- **Grenade Callout Range Tuning** ([`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/configs/interfaces/IEnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IEnemyVoicelineConfig.ts)):
+  - Reduced `grenadeHearingRange` from 25.0 tiles down to a focused 7.0 tiles.
+- **Line-of-Fire Wall Occlusion Check** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Wired `hasLineOfFire` validation into `onPlayerThrowGrenade()`. Hostiles behind walls, closed doors, or partitions no longer trigger "Grenade!" vocal callouts.
+  - Filtered out dead or dying enemies (`state === "dead"`) from vocalizing reactions to grenades.
+
+---
+
+## [2026-10-02] - Water Surface Footstep Acoustics & Room-Partition Alert Dampening
+
+### 1. Water Floor Surface & Dynamic Splashing Footstep SFX
+- **Floor Surface Material Detection** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Added `getSurfaceTypeAt(x, y)` in `RaycastScene` to query floor tile metadata and image names for surface properties (`"default"` vs `"water"`).
+- **Wet Footstep Sound Effects** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`assets/raycast/sfx/wet_step_1.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/wet_step_1.mp3), [`assets/raycast/sfx/wet_step_2.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/wet_step_2.mp3)):
+  - Registered `wet_step_1` and `wet_step_2` in the sound manifest.
+  - Extended `RaycastPlayerController.updateFootsteps()` and `playFootstep()` to alternate wet slosh sound effects when traversing flooded water floors.
+- **Tileset & Level Integration** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx), [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json)):
+  - Added tile ID 31 (`dirty_water.jpg`) as a floor tile with custom property `surface = "water"`.
+
+### 2. Inter-Room Acoustic Isolation & Strict Line-of-Fire Alerting
+- **Strict Line-of-Fire Checks for Gunfire & Impact Alerts** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Enforced `hasLineOfFire()` check on `onPlayerShoot()`, `onLaserImpact()`, and detonator explosions. Hostiles separated by solid walls or closed doors in adjacent rooms are no longer alerted by gunshots through barriers.
+- **Dianoga Voiceline Exclusion** ([`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Configured empty voice pools (`spotted: []`, `suspicious: []`, `grenade: []`) for Dianoga enemies to prevent organic sewer creatures from shouting Imperial trooper voicelines.
+
+### 3. Suspicious Voiceline Occlusion & Distance Tuning
+- **Hearing Range Threshold Tuning** ([`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/configs/interfaces/IEnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IEnemyVoicelineConfig.ts)):
+  - Reduced `hearingRange` and `suspiciousRange` from 7.0 to 3.5 tiles.
+- **Wall Occlusion Filtering** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Suspicious voicelines ("I hear something", "Show yourself") are blocked if the player is occluded behind walls (`!isBehindWall`), preventing enemies from talking to players through solid room barriers.
+
+---
+
 ## [2026-09-28] - Vision Cones, Gunfire Acoustic Alertness, Target Acquisition Aim Ramp & Non-Lethal Warning Fire
 
 ### 1. Directional Vision Cones (Field of View / FOV)
