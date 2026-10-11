@@ -2,6 +2,7 @@ import { AnimatedSprite, Graphics, SCALE_MODES, Spritesheet, Texture } from "pix
 import { sound, IMediaInstance } from "@pixi/sound";
 import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
 import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
+import { RaycastDirectionalObject } from "./RaycastDirectionalObject";
 
 export type EnemyAIState = "idle" | "chase" | "attack" | "dead";
 export type DiagonaPhase =
@@ -14,13 +15,8 @@ export type DiagonaPhase =
   | "surfaced"
   | "biting";
 
-export class RaycastEnemy {
-  public id: number;
+export class RaycastEnemy extends RaycastDirectionalObject {
   public config: IRaycastEnemyConfig;
-  public x: number;
-  public y: number;
-  public dirX: number = 0;
-  public dirY: number = 1;
   public health: number;
   public maxHealth: number;
   public state: EnemyAIState = "idle";
@@ -164,13 +160,6 @@ export class RaycastEnemy {
   public diagonaResetToIdleAfterHide: boolean = false;
   private diagonaHasPlayedEmergeSound: boolean = false;
 
-  // Animated sprite
-  public animatedSprite!: AnimatedSprite;
-  public occlusionMask: Graphics | null = null;
-  public isFlipped: boolean = false;
-  private animations: Record<string, Texture[]> = {};
-  private currentAnimKey: string = "";
-
   // Timing
   public shootingTimer: number = 0;
   public painTimer: number = 0;
@@ -229,14 +218,8 @@ export class RaycastEnemy {
   public wanderDirY: number = 0;
   public stuckFrames: number = 0;
   public stepOutFrames: number = 0;
-  public currentVOffset: number = 0;
   public clearanceDir: number = 0;
   public clearanceTimer: number = 0;
-  private lastAnimDir: string = "";
-
-  // Screen projection coordinates (updated each frame by RaycastEnemyManager.render)
-  public screenX: number = -9999;
-  public screenY: number = -9999;
 
   // Sound instance tracking to allow immediate stopping on death
   public onDeathCallback?: (enemy: RaycastEnemy) => void;
@@ -343,14 +326,10 @@ export class RaycastEnemy {
     spritesheet?: Spritesheet,
     visionConeAngle?: number
   ) {
-    this.id = id;
+    super(id, x, y, 0, 1, config.scale ?? 1, config.referenceHeight ?? 67);
     this.config = config;
-    this.x = x;
-    this.y = y;
     this.health = config.maxHealth;
     this.maxHealth = config.maxHealth;
-    this.dirX = 0;
-    this.dirY = 1;
     if (config.type === RaycastEnemyType.VIPER_DROID) {
       this._visionConeAngle = 360; // Viper Probe Droid is exempt from cone restriction
     } else {
@@ -1662,44 +1641,8 @@ export class RaycastEnemy {
       return;
     }
 
-    // Relative angle between enemy facing direction and vector to player
-    const toPlayerAngle = Math.atan2(playerY - this.y, playerX - this.x);
-    const facingAngle = Math.atan2(this.dirY, this.dirX);
-
-    let diff = toPlayerAngle - facingAngle;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
-
-    const deg = (diff * 180) / Math.PI;
-
-    // Direction hysteresis to prevent rapid flickering at sector boundaries
-    const hysteresis = 5.0;
-    const isDiag = this.lastAnimDir.includes("diagonal");
-    const isTowards = this.lastAnimDir === "towards";
-    const isLeft = this.lastAnimDir === "left";
-    const isAway = this.lastAnimDir === "away";
-
-    const towardsBound = isTowards ? 22.5 + hysteresis : isDiag ? 22.5 - hysteresis : 22.5;
-    const leftBound = isLeft ? 67.5 - hysteresis : isDiag ? 67.5 + hysteresis : 67.5;
-    const awayBound = isAway ? 157.5 - hysteresis : isDiag ? 157.5 + hysteresis : 157.5;
-
-    const absDeg = Math.abs(deg);
-
-    let dirName: string;
-    if (absDeg < towardsBound) {
-      dirName = "towards";
-    } else if (absDeg < leftBound) {
-      dirName = "towards_left_diagonal";
-    } else if (absDeg < awayBound) {
-      dirName = "left";
-    } else if (absDeg < 165) {
-      dirName = "away_left_diagonal";
-    } else {
-      dirName = "away";
-    }
-
-    this.lastAnimDir = dirName;
-    this.isFlipped = dirName !== "towards" && dirName !== "away" && deg < 0;
+    // Relative 8-directional sector and flip calculation from base RaycastDirectionalObject
+    const { dirName } = this.getDirectionSector(playerX, playerY);
 
     if (this.painTimer > 0) {
       if (this.animations[`damage_${dirName}`]) {
@@ -1718,7 +1661,7 @@ export class RaycastEnemy {
     }
   }
 
-  private playAnimation(key: string, loop: boolean = true, speed: number = 0.16): void {
+  public override playAnimation(key: string, loop: boolean = true, speed: number = 0.16): void {
     if (this.currentAnimKey === key) return;
 
     const textures = this.animations[key];
@@ -1745,16 +1688,47 @@ export class RaycastEnemy {
     }
   }
 
-  public dispose(): void {
+  public override render3D(
+    playerX: number,
+    playerY: number,
+    dirX: number,
+    dirY: number,
+    planeX: number,
+    planeY: number,
+    zBuffer: Float64Array,
+    maxRenderDistance: number,
+    doorDistBuffer?: Float64Array,
+    doorBottomBuffer?: Float64Array
+  ): boolean {
+    this.currentVOffset = this.isDead
+      ? (this.config.deathVOffset !== undefined ? -this.config.deathVOffset : 0)
+      : (this.config.vOffset ?? 0);
+    this.floatingBob = Boolean(this.config.floatingBob && !this.isDead);
+
+    const visible = super.render3D(
+      playerX,
+      playerY,
+      dirX,
+      dirY,
+      planeX,
+      planeY,
+      zBuffer,
+      maxRenderDistance,
+      doorDistBuffer,
+      doorBottomBuffer
+    );
+    if (visible && this.painTimer > 0 && this.animatedSprite) {
+      this.animatedSprite.tint = 0xff4444;
+    }
+    return visible;
+  }
+
+  public override dispose(): void {
     this.stopActiveSounds();
     if (this.animatedSprite) {
       this.animatedSprite.mask = null;
       this.animatedSprite.stop();
-      this.animatedSprite.destroy();
     }
-    if (this.occlusionMask) {
-      this.occlusionMask.destroy();
-      this.occlusionMask = null;
-    }
+    super.dispose();
   }
 }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="32" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="35" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -162,11 +162,23 @@
  <tile id="30">
   <image source="assets/raycast/enemies/diagona.png" width="78" height="47"/>
  </tile>
- <tile id="31" type="Tile">
-  <properties>
-   <property name="surface" value="water"/>
-   <property name="tileType" propertytype="TileType" value="floor"/>
-  </properties>
+ <tile id="31">
   <image source="assets/raycast/textures/dirty_water.jpg" width="1024" height="1024"/>
+ </tile>
+ <tile id="32" type="Object">
+  <properties>
+   <property name="anchor" propertytype="Anchor" value="floor"/>
+   <property name="scale" type="float" value="0.6"/>
+  </properties>
+  <image source="assets/raycast/decorations/isb_holotable.png" width="256" height="256"/>
+ </tile>
+ <tile id="33">
+  <image source="assets/raycast/pickups/key_card_green.png" width="25" height="30"/>
+ </tile>
+ <tile id="34">
+  <image source="assets/raycast/pickups/key_card_red.png" width="25" height="30"/>
+ </tile>
+ <tile id="36">
+  <image source="assets/raycast/textures/grilled_wall.jpg" width="64" height="64"/>
  </tile>
 </tileset>

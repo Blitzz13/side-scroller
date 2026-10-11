@@ -31,6 +31,7 @@ import { DestructableWallManager } from "./raycast/DestructableWallManager";
 import { ThermalDetonatorManager } from "./raycast/ThermalDetonatorManager";
 import { RaycastLaserManager } from "./raycast/RaycastLaserManager";
 import { RaycastStairsManager } from "./raycast/RaycastStairsManager";
+import { RaycastStationaryObjectManager } from "./raycast/RaycastStationaryObjectManager";
 import { RaycastWeaponType } from "../enums/RaycastWeaponType";
 import { RaycastPickupType } from "../enums/RaycastPickupType";
 import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
@@ -217,6 +218,7 @@ export class RaycastScene extends BaseScene {
   private animatedPickupContainer!: Container;
   private enemyContainer!: Container;
   private enemyManager!: RaycastEnemyManager;
+  private stationaryObjectManager!: RaycastStationaryObjectManager;
   private destructableWallManager!: DestructableWallManager;
   private detonatorContainer!: Container;
   private detonatorManager!: ThermalDetonatorManager;
@@ -388,6 +390,7 @@ export class RaycastScene extends BaseScene {
     }
 
     this.enemyManager = new RaycastEnemyManager(this.enemyContainer);
+    this.stationaryObjectManager = new RaycastStationaryObjectManager(this.entityContainer);
 
     // 3D Detonator projectile & explosion container
     this.detonatorContainer = new Container();
@@ -595,6 +598,7 @@ export class RaycastScene extends BaseScene {
         { id: 29, image: "assets/raycast/enemies/diagona.png", type: "Tile" },
         { id: 30, image: "assets/raycast/enemies/diagona.png", type: "Tile" },
         { id: 31, image: "assets/raycast/textures/dirty_water.jpg", type: "Tile", properties: [{ name: "tileType", value: "floor" }, { name: "surface", value: "water" }] },
+        { id: 32, image: "assets/raycast/decorations/isb_holotable.png", type: "Object", properties: [{ name: "anchor", value: "floor" }] },
       ];
     }
   }
@@ -773,6 +777,7 @@ export class RaycastScene extends BaseScene {
     this.levelFinishZones = [];
     if (this.laserManager) this.laserManager.clear();
     if (this.detonatorManager) this.detonatorManager.clear();
+    if (this.stationaryObjectManager) this.stationaryObjectManager.clear();
     if (this.playerController) this.playerController.resetKeycards();
 
     let mapData: any;
@@ -892,6 +897,8 @@ export class RaycastScene extends BaseScene {
     };
     await this.enemyManager.initSpritesheets();
     this.enemyManager.parseMapEnemies(mapData, firstgid, this.tileMeta, offsetX, offsetY);
+    await this.stationaryObjectManager.initSpritesheets();
+    this.stationaryObjectManager.parseMapObjects(mapData, this.tileMeta, firstgid, offsetX, offsetY);
 
     // Initialize thermal detonator manager textures & frames
     await this.detonatorManager.initTextures();
@@ -1799,6 +1806,11 @@ export class RaycastScene extends BaseScene {
       }
     } catch {}
     try {
+      if (this.stationaryObjectManager) {
+        this.stationaryObjectManager.dispose();
+      }
+    } catch {}
+    try {
       if (this.playerController) {
         this.playerController.dispose();
       }
@@ -2097,7 +2109,19 @@ export class RaycastScene extends BaseScene {
       this.doorStatesFlat,
       this.allThinWalls
     );
-    const effectiveWallDist = Math.min(wallDistance, aimBarrierDist);
+    let effectiveWallDist = Math.min(wallDistance, aimBarrierDist);
+
+    // Find closest stationary 8-directional object hit along aiming vector
+    const stationaryHit = this.stationaryObjectManager?.findClosestHit(
+      this.player.x,
+      this.player.y,
+      this.player.dirX,
+      this.player.dirY,
+      effectiveWallDist
+    );
+    if (stationaryHit && stationaryHit.distance < effectiveWallDist) {
+      effectiveWallDist = stationaryHit.distance;
+    }
 
     // Find closest breakable furniture or destructible wall hit along aiming vector
     let breakableHit = this.breakableManager.findClosestHit(
@@ -2644,6 +2668,13 @@ export class RaycastScene extends BaseScene {
     if (
       this.breakableManager &&
       this.breakableManager.checkCollision(newX, newY, r)
+    ) {
+      return false;
+    }
+
+    if (
+      this.stationaryObjectManager &&
+      this.stationaryObjectManager.checkCollision(newX, newY, r)
     ) {
       return false;
     }
@@ -3536,6 +3567,22 @@ export class RaycastScene extends BaseScene {
       this.doorDistBuffer,
       this.doorBottomBuffer
     );
+
+    // 8. Render 8-directional stationary objects (e.g. holotables) with Z-buffer occlusion
+    if (this.stationaryObjectManager) {
+      this.stationaryObjectManager.render(
+        this.player.x,
+        this.player.y,
+        this.player.dirX,
+        this.player.dirY,
+        this.player.planeX,
+        this.player.planeY,
+        this.zBuffer,
+        this.MAX_RENDER_DISTANCE,
+        this.doorDistBuffer,
+        this.doorBottomBuffer
+      );
+    }
 
     // 8. Render animated 3D explosions with perspective & Z-buffer occlusion
     if (this.detonatorManager) {

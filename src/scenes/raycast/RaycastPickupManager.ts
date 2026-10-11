@@ -462,18 +462,25 @@ export class RaycastPickupManager {
                 this.spawnShieldSprite(item);
               }
             } else {
-              const isBreakable =
-                imgStr.includes("chair") ||
-                imgStr.includes("table") ||
-                imgStr.includes("power_cell") ||
-                imgStr.includes("powercell") ||
-                typeStr.includes("chair") ||
-                typeStr.includes("table") ||
-                typeStr.includes("power_cell") ||
-                typeStr.includes("powercell") ||
-                meta.tileClass === "DestructableWall";
+              const isDirectionalObject =
+                imgStr.includes("isb_holotable") ||
+                imgStr.includes("holotable") ||
+                typeStr.includes("isb_holotable") ||
+                typeStr.includes("holotable");
 
-              if (!isBreakable) {
+              const isBreakable =
+                !isDirectionalObject &&
+                (imgStr.includes("chair") ||
+                  imgStr.includes("table") ||
+                  imgStr.includes("power_cell") ||
+                  imgStr.includes("powercell") ||
+                  typeStr.includes("chair") ||
+                  typeStr.includes("table") ||
+                  typeStr.includes("power_cell") ||
+                  typeStr.includes("powercell") ||
+                  meta.tileClass === "DestructableWall");
+
+              if (!isBreakable && !isDirectionalObject) {
                 const scale = layerScale ?? meta.scale;
                 const scaleX = layerScaleX ?? meta.scaleX ?? scale;
                 const scaleY = layerScaleY ?? meta.scaleY ?? scale;
@@ -683,24 +690,33 @@ export class RaycastPickupManager {
                 this.spawnShieldSprite(item);
               }
             } else {
-              const isBreakable =
-                imgStr.includes("chair") ||
-                imgStr.includes("table") ||
-                imgStr.includes("power_cell") ||
-                imgStr.includes("powercell") ||
-                (obj.name || "").toLowerCase().includes("chair") ||
-                (obj.name || "").toLowerCase().includes("table") ||
-                (obj.name || "").toLowerCase().includes("power_cell") ||
-                (obj.name || "").toLowerCase().includes("powercell") ||
-                normalizedType.includes("chair") ||
-                normalizedType.includes("table") ||
-                normalizedType.includes("power_cell") ||
-                normalizedType.includes("powercell") ||
-                obj.type === "DestructableWall" ||
-                normalizedType.includes("destructablewall") ||
-                (layer.name && layer.name.toLowerCase().includes("doorprotector"));
+              const isDirectionalObject =
+                imgStr.includes("isb_holotable") ||
+                imgStr.includes("holotable") ||
+                normalizedType.includes("isb_holotable") ||
+                normalizedType.includes("holotable") ||
+                (obj.name && obj.name.toLowerCase().includes("isb_holotable")) ||
+                (obj.name && obj.name.toLowerCase().includes("holotable"));
 
-              if (!isBreakable) {
+              const isBreakable =
+                !isDirectionalObject &&
+                (imgStr.includes("chair") ||
+                  imgStr.includes("table") ||
+                  imgStr.includes("power_cell") ||
+                  imgStr.includes("powercell") ||
+                  (obj.name || "").toLowerCase().includes("chair") ||
+                  (obj.name || "").toLowerCase().includes("table") ||
+                  (obj.name || "").toLowerCase().includes("power_cell") ||
+                  (obj.name || "").toLowerCase().includes("powercell") ||
+                  normalizedType.includes("chair") ||
+                  normalizedType.includes("table") ||
+                  normalizedType.includes("power_cell") ||
+                  normalizedType.includes("powercell") ||
+                  obj.type === "DestructableWall" ||
+                  normalizedType.includes("destructablewall") ||
+                  (layer.name && layer.name.toLowerCase().includes("doorprotector")));
+
+              if (!isBreakable && !isDirectionalObject) {
                 this.staticObjects.push({
                   x,
                   y,

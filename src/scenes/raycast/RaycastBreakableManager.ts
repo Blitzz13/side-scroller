@@ -70,7 +70,7 @@ export class RaycastBreakableManager {
             const typeStr = (tile.type || "").toLowerCase();
             if (imgPath.includes("chair") || typeStr.includes("chair")) {
               breakableTileMap[tile.id] = "chair";
-            } else if (imgPath.includes("table") || typeStr.includes("table")) {
+            } else if ((imgPath.includes("table") || typeStr.includes("table")) && !imgPath.includes("holotable") && !typeStr.includes("holotable")) {
               breakableTileMap[tile.id] = "table";
             } else if (
               imgPath.includes("power_cell") ||
@@ -221,7 +221,9 @@ export class RaycastBreakableManager {
                 (objName.includes("table") ||
                   objType === "table" ||
                   imgStr.includes("table")) &&
-                !objType.includes("destructable")
+                !objType.includes("destructable") &&
+                !objName.includes("holotable") &&
+                !imgStr.includes("holotable")
               ) {
                 breakableType = "table";
               } else if (

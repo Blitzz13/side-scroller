@@ -1321,173 +1321,19 @@ export class RaycastEnemyManager {
     doorDistBuffer?: Float64Array,
     doorBottomBuffer?: Float64Array
   ): void {
-    const screenW = gameConfig.width;
-    const screenH = gameConfig.height;
-    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
-
     for (const enemy of this.enemies) {
-      const sprite = enemy.animatedSprite;
-      if (!sprite) continue;
-
-      const dx = enemy.x - playerX;
-      const dy = enemy.y - playerY;
-
-      // Transform into camera space
-      const transformX = invDet * (dirY * dx - dirX * dy);
-      const transformY = invDet * (-planeY * dx + planeX * dy);
-
-      // Frustum culling: must be in front of player and within max render distance
-      if (transformY <= 0.1 || transformY > maxRenderDistance) {
-        sprite.visible = false;
-        enemy.screenX = -9999;
-        enemy.screenY = -9999;
-        continue;
-      }
-
-      // Update orientation and animation frame
-      enemy.updateAnimation(playerX, playerY);
-
-      const spriteScreenX = Math.floor(
-        (screenW / 2) * (1 + transformX / transformY)
+      enemy.render3D(
+        playerX,
+        playerY,
+        dirX,
+        dirY,
+        planeX,
+        planeY,
+        zBuffer,
+        maxRenderDistance,
+        doorDistBuffer,
+        doorBottomBuffer
       );
-      const baseHeight = Math.abs(Math.floor(screenH / transformY));
-      const refHeight = enemy.config.referenceHeight ?? 67;
-
-      const curTex = sprite.texture;
-      const texW = curTex ? (curTex.orig?.width || curTex.width || 32) : 32;
-      const texH = curTex ? (curTex.orig?.height || curTex.height || 64) : 64;
-
-      const spriteHeight = Math.max(
-        1,
-        Math.floor(baseHeight * enemy.config.scale * (texH / refHeight))
-      );
-      const spriteWidth = Math.max(
-        1,
-        Math.floor(baseHeight * enemy.config.scale * (texW / refHeight))
-      );
-
-      const floorY = Math.floor(screenH / 2 + baseHeight / 2);
-      const halfW = spriteWidth / 2;
-
-      // Compute visible screen columns for this sprite
-      const drawStartX = Math.max(0, Math.floor(spriteScreenX - halfW));
-      const drawEndX = Math.min(screenW - 1, Math.floor(spriteScreenX + halfW));
-
-      if (drawStartX > drawEndX) {
-        sprite.visible = false;
-        enemy.screenX = -9999;
-        enemy.screenY = -9999;
-        continue;
-      }
-
-      // Per-column occlusion mask: draw only columns where enemy is in front of wall or under opening door
-      const mask = enemy.occlusionMask;
-      if (mask) {
-        mask.clear();
-
-        let runStart = -1;
-        let runTopY = -1;
-        let hasDrawnAnyRun = false;
-
-        for (let col = drawStartX; col <= drawEndX; col++) {
-          if (transformY < zBuffer[col]) {
-            let topY = 0;
-            if (doorDistBuffer && doorBottomBuffer && doorDistBuffer[col] < transformY) {
-              topY = Math.max(0, Math.floor(doorBottomBuffer[col]));
-            }
-            if (topY < screenH) {
-              if (runStart >= 0 && topY === runTopY) {
-                // Continue current horizontal run
-              } else {
-                if (runStart >= 0) {
-                  mask.beginFill(0xffffff);
-                  mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
-                  mask.endFill();
-                  hasDrawnAnyRun = true;
-                }
-                runStart = col;
-                runTopY = topY;
-              }
-            } else {
-              // topY >= screenH: door panel completely covers column down to floor
-              if (runStart >= 0) {
-                mask.beginFill(0xffffff);
-                mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
-                mask.endFill();
-                hasDrawnAnyRun = true;
-                runStart = -1;
-              }
-            }
-          } else {
-            // Occluded by wall
-            if (runStart >= 0) {
-              mask.beginFill(0xffffff);
-              mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
-              mask.endFill();
-              hasDrawnAnyRun = true;
-              runStart = -1;
-            }
-          }
-        }
-        // Flush last open run
-        if (runStart >= 0) {
-          mask.beginFill(0xffffff);
-          mask.drawRect(runStart, runTopY, drawEndX - runStart + 1, screenH - runTopY);
-          mask.endFill();
-          hasDrawnAnyRun = true;
-        }
-
-        if (!hasDrawnAnyRun && drawStartX <= drawEndX) {
-          sprite.visible = false;
-          enemy.screenX = -9999;
-          enemy.screenY = -9999;
-          continue;
-        }
-      }
-
-      sprite.visible = true;
-      sprite.x = spriteScreenX;
-      let renderY = floorY;
-      const vOffset = enemy.currentVOffset !== undefined ? enemy.currentVOffset : (enemy.isDead ? 0 : (enemy.config.vOffset ?? 0));
-      if (vOffset > 0) {
-        renderY -= vOffset * baseHeight;
-      }
-      if (enemy.isDead && enemy.config.deathVOffset !== undefined) {
-        renderY += enemy.config.deathVOffset * baseHeight;
-      }
-      if (enemy.config.floatingBob && !enemy.isDead) {
-        renderY -= Math.sin((Date.now() + enemy.id * 500) / 350) * 0.03 * baseHeight;
-      }
-      sprite.y = Math.floor(renderY);
-      sprite.width = spriteWidth;
-      sprite.height = spriteHeight;
-      enemy.screenX = spriteScreenX;
-      enemy.screenY = Math.floor(renderY - spriteHeight * 0.55);
-
-      // Re-apply flipX scale after dimension updates
-      if (enemy.isFlipped) {
-        sprite.scale.x = -Math.abs(sprite.scale.x);
-      } else {
-        sprite.scale.x = Math.abs(sprite.scale.x);
-      }
-
-      // Distance shading & damage tint
-      const shade = Math.max(
-        0.18,
-        Math.min(1.0, 1.0 - (transformY / maxRenderDistance) * 0.75)
-      );
-      if (enemy.painTimer > 0) {
-        sprite.tint = 0xff4444;
-      } else {
-        const shadeInt = (shade * 255) | 0;
-        sprite.tint = (shadeInt << 16) | (shadeInt << 8) | shadeInt;
-      }
-
-      // Depth sorting
-      sprite.zIndex = Math.floor((maxRenderDistance - transformY) * 1000);
-      if (enemy.occlusionMask) {
-        enemy.occlusionMask.zIndex = sprite.zIndex;
-      }
     }
   }
 
