@@ -2,6 +2,35 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-12] - True 3D Perspective Opening Crawl Shader & Galaxy Background
+
+### 1. Authentic Star Wars 3D Opening Crawl Shader & Alignment
+- **Hardware-Accelerated 3D Projective Crawl** ([`src/scenes/raycast/shaders/starWarsCrawl.vert`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/starWarsCrawl.vert), [`src/scenes/raycast/shaders/starWarsCrawl.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/starWarsCrawl.frag), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts)):
+  - Replaced disjoint per-line affine scaling with a full WebGL `Mesh` running dedicated projective 3D shaders.
+  - Generates the crawl text onto a high-resolution offscreen canvas with **justified text paragraphs**—producing clean, perfectly straight vertical margins.
+  - Fragment shader applies optical perspective transformation: horizontal trapezoidal taper ($u = 0.5 + (x - 0.5) / (h \cdot \text{taper})$), non-linear vertical foreshortening ($v = \text{scroll} - K / h$), smooth distance fog at the vanishing horizon, and soft bottom edge entry fade.
+  - Provides genuine cinematic 3D motion where the entire text plane recedes into deep space as a single unified parchment.
+- **Cosmic Star Background** ([`assets/cutscenes/intro/star_background.jpg`](file:///D:/Projects/side-scroller/assets/cutscenes/intro/star_background.jpg)):
+  - Integrated high-res galaxy star background image loaded via Pixi `Assets.load()`.
+  - Overlaid with subtle randomized twinkling dynamic star particles for depth and life.
+- **Audio Timing & Blue Card Separation**:
+  - Decoupled `audioStartTime` from the blue card phase so setting `audioStartTime: 0` plays `intro_theme.mp3` immediately at $t = 0$.
+  - Blue card duration is fully independent and smoothly fades to reveal the galaxy background and fanfare logo.
+- **Cinematic Logo Receding Curve & Zero-Delay Slow Crawl Entry** ([`assets/cutscenes/intro/config.ts`](file:///D:/Projects/side-scroller/assets/cutscenes/intro/config.ts), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts)):
+  - Replaced the front-loaded hyperbolic shrink with a film-accurate power curve $(1 - 0.95 p)^{1.6}$: the logo stays large, bold, and readable during the opening blast, receding majestically and smoothly into deep space without vanishing abruptly in the first second.
+  - Added `crawlStartDelay` (default ~4.8s) so the crawl can start promptly while the logo is receding in the background, decoupling crawl timing from total logo duration.
+  - Primed `crawlScroll` directly at the bottom screen edge on crawl start, eliminating the multi-second blank screen pause when scrolling at slower speeds (`crawlSpeed: 0.023`). The text now emerges smoothly and immediately into view.
+- **Dynamic Intro JSON Integration & Layout** ([`assets/cutscenes/intro/intro.json`](file:///D:/Projects/side-scroller/assets/cutscenes/intro/intro.json), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts)):
+  - Removed all hardcoded text: all lines, titles, and paragraphs are dynamically loaded from `intro.json`.
+  - Title screen logo renders `STAR` on line 1, `WARS` on line 2, and the story title (`A REBEL STORY`) below it.
+  - Scrolling crawl text renders episode header and story paragraphs without repeating the story name.
+  - **Restricted Skip Controls**: Disabled stage mouse clicking and Space/Enter keys so skipping is strictly triggered by pressing `Escape` or clicking the interactive `[SKIP [ESC]]` button.
+- **Cinematic Camera Tilt Down & Fade to Black** ([`assets/cutscenes/intro/config.ts`](file:///D:/Projects/side-scroller/assets/cutscenes/intro/config.ts), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts)):
+  - Added camera rotation/tilt down at 1:16 (`cameraPanDownStartTime: 76.0`): the cosmic galaxy background and stars pan majestically upward with parallax depth as the musical theme transitions into its descending brass motif.
+  - Added smooth fade to black starting at 1:22 (`fadeToBlackStartTime: 82.0`): a dark overlay seamlessly transitions the scene into pure black as the final chords resolve, concluding at song end (~89.36s) before advancing to Cutscene 1.
+
+---
+
 ## [2026-10-12] - Prologue Cutscene System with Holodeck, Hologram Glitch & Transmission UI
 
 ### 1. Level 1 Prologue Cutscene Flow

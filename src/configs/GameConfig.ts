@@ -54,6 +54,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/cutscenes/cutscene1/prologue_dialog.mp3"
           },
           {
+            alias: "intro_theme",
+            src: "./assets/cutscenes/intro/intro_theme.mp3"
+          },
+          {
             alias: "base_alarm",
             src: "./assets/sounds/base_alarm.mp3"
           },
