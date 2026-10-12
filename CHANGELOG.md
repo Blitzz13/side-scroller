@@ -2,6 +2,18 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-12] - Clean Tileset Slicing Pipeline & Removal of Redundant `ensureWallTextureSliced`
+
+### 1. Unified Tileset Texture Loading & Cleanup
+- **Tileset Alignment with Tile ID 39** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Updated fallback destroyed wall tile ID for grilled walls from `37` to `39` to match the newly added tile in `StarWarsTileset.tsx` (`id="39"` -> `grilled_wall_destroyed.jpg`).
+- **Removed Redundant `ensureWallTextureSliced` Logic** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Removed `ensureWallTextureSliced()` method and all its call sites in `loadLevel()` and `handleWallBlockDestroyed()`.
+  - Removed temporary `knownDestroyedWalls` hardcoded map in `loadLevel()`.
+  - Because `StarWarsTileset.tsx` defines both tile `20` (`computer_panel_destroyed.jpg`) and tile `39` (`grilled_wall_destroyed.jpg`), they are naturally discovered by `parseTiledMap()` and `loadLevel()`, loaded via `Assets.load()`, and pre-sliced into `columnTextures` uniformly alongside all other wall textures.
+
+---
+
 ## [2026-10-11] - Destroyed Wall Texture Loading & Raycast Render Glitch Fix
 
 ### 1. Missing Destroyed Wall Tile in StarWarsTileset & Texture Mapping

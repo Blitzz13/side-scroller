@@ -617,7 +617,7 @@ export class RaycastScene extends BaseScene {
         { id: 33, image: "assets/raycast/pickups/key_card_green.png", type: "PickupItem", properties: [{ name: "type", value: "green_keycard" }] },
         { id: 34, image: "assets/raycast/pickups/key_card_red.png", type: "PickupItem", properties: [{ name: "type", value: "red_keycard" }] },
         { id: 36, image: "assets/raycast/textures/grilled_wall.jpg", type: "DestructableWall", properties: [{ name: "tileType", value: "thickWall" }] },
-        { id: 37, image: "assets/raycast/textures/grilled_wall_destroyed.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 39, image: "assets/raycast/textures/grilled_wall_destroyed.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
       ];
     }
   }
@@ -724,78 +724,6 @@ export class RaycastScene extends BaseScene {
     this.shakeDuration = duration;
   }
 
-  private async ensureWallTextureSliced(tileId: number): Promise<void> {
-    if (this.columnTextures[tileId] && this.columnTextures[tileId].length > 0) {
-      return;
-    }
-
-    let texture = this.textures[tileId];
-    if (!texture) {
-      const candidatePaths: Record<number, string[]> = {
-        20: [
-          "computer_panel_destroyed",
-          "assets/raycast/textures/computer_panel_destroyed.jpg",
-          "./assets/raycast/textures/computer_panel_destroyed.jpg",
-        ],
-        37: [
-          "grilled_wall_destroyed",
-          "assets/raycast/textures/grilled_wall_destroyed.jpg",
-          "./assets/raycast/textures/grilled_wall_destroyed.jpg",
-        ],
-      };
-
-      const paths = candidatePaths[tileId] || [];
-      for (const p of paths) {
-        if (Assets.cache.has(p)) {
-          texture = Assets.get(p);
-          break;
-        }
-      }
-      if (!texture && paths.length > 0) {
-        for (const p of paths) {
-          try {
-            texture = await Assets.load(p);
-            if (texture) break;
-          } catch {}
-        }
-      }
-    }
-
-    if (texture && texture.baseTexture) {
-      texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-      texture.baseTexture.mipmap = MIPMAP_MODES.OFF;
-      texture.baseTexture.update();
-
-      this.textures[tileId] = texture;
-      this.rawTextureData[tileId] = this.extractTexturePixels(texture);
-
-      const slices: Texture[] = [];
-      const texW = texture.width || 64;
-      const texH = texture.height || 64;
-      const realW = texture.baseTexture.realWidth || texW;
-      for (let x = 0; x < texW; x++) {
-        const slice = new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH));
-        if (slice.baseTexture) {
-          slice.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-          slice.baseTexture.mipmap = MIPMAP_MODES.OFF;
-        }
-        slice.updateUvs();
-        const u = (x + 0.5) / realW;
-        slice._uvs.x0 = u;
-        slice._uvs.x1 = u;
-        slice._uvs.x2 = u;
-        slice._uvs.x3 = u;
-        slice._uvs.uvsFloat32[0] = u;
-        slice._uvs.uvsFloat32[2] = u;
-        slice._uvs.uvsFloat32[4] = u;
-        slice._uvs.uvsFloat32[6] = u;
-        slices.push(slice);
-      }
-      this.columnTextures[tileId] = slices;
-      this.tileTypes[tileId + this.firstgid] = TileType.THICK_WALL;
-    }
-  }
-
   private handleBreakableDestroyed(broken: RaycastBreakable, context: string = ""): void {
     if (broken.isWallBlock) {
       this.handleWallBlockDestroyed(broken);
@@ -814,10 +742,6 @@ export class RaycastScene extends BaseScene {
     const destroyedTileId = broken.destroyedTextureId !== undefined ? broken.destroyedTextureId : 20;
     const destroyedGid = destroyedTileId + this.firstgid;
 
-    // Ensure destroyed wall texture is pre-sliced and ready in columnTextures
-    if (!this.columnTextures[destroyedTileId] || this.columnTextures[destroyedTileId].length === 0) {
-      this.ensureWallTextureSliced(destroyedTileId);
-    }
     this.tileTypes[destroyedGid] = TileType.THICK_WALL;
 
     // 1. Swap texture in map and flat arrays so raycaster renders computer_panel_destroyed or grilled_wall_destroyed
@@ -945,18 +869,6 @@ export class RaycastScene extends BaseScene {
       });
     }
 
-    // Ensure all known destroyed wall textures are mapped
-    const knownDestroyedWalls: Record<number, string> = {
-      20: "assets/raycast/textures/computer_panel_destroyed.jpg",
-      37: "assets/raycast/textures/grilled_wall_destroyed.jpg",
-    };
-    for (const [tIdStr, p] of Object.entries(knownDestroyedWalls)) {
-      const tId = parseInt(tIdStr);
-      if (!textureMap[tId]) {
-        textureMap[tId] = p;
-      }
-    }
-
     const texturePromises = Object.entries(textureMap).map(
       ([tileId, fileName]) => {
         const assetPath = `${fileName}`;
@@ -1076,11 +988,6 @@ export class RaycastScene extends BaseScene {
       offsetX,
       offsetY
     );
-    for (const b of this.breakableManager.getBreakables()) {
-      if (b.isWallBlock && b.destroyedTextureId !== undefined) {
-        await this.ensureWallTextureSliced(b.destroyedTextureId);
-      }
-    }
     this.pickupManager.bindBreakables(this.breakableManager.getBreakables());
     this.destructableWallManager.parseMapDoorProtectors(mapData, firstgid, offsetX, offsetY);
     this.destructableWallManager.bindBreakables(

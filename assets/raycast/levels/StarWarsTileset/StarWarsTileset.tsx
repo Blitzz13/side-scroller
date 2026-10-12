@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="35" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="37" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -181,10 +181,10 @@
  <tile id="36" type="DestructableWall">
   <image source="assets/raycast/textures/grilled_wall.jpg" width="64" height="64"/>
  </tile>
- <tile id="37">
-  <properties>
-   <property name="tileType" value="thickWall"/>
-  </properties>
+ <tile id="38">
+  <image source="enemy_spawn.jpg" width="64" height="64"/>
+ </tile>
+ <tile id="39">
   <image source="assets/raycast/textures/grilled_wall_destroyed.jpg" width="64" height="64"/>
  </tile>
 </tileset>

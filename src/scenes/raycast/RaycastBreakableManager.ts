@@ -440,7 +440,7 @@ export class RaycastBreakableManager {
 
             if (wallDestroyedTileId === undefined) {
               if (intactBaseName.includes("grilled")) {
-                wallDestroyedTileId = 37;
+                wallDestroyedTileId = 39;
               } else {
                 wallDestroyedTileId = defaultDestroyedTileId;
               }
