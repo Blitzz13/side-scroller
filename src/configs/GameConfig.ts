@@ -50,6 +50,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/sounds/menu_theme.mp3"
           },
           {
+            alias: "prologue_dialog",
+            src: "./assets/cutscenes/cutscene1/prologue_dialog.mp3"
+          },
+          {
             alias: "base_alarm",
             src: "./assets/sounds/base_alarm.mp3"
           },
@@ -333,6 +337,14 @@ export const manifest: AssetsManifest = {
           {
             name: "menu_background",
             src: "./assets/menu_background.png",
+          },
+          {
+            name: "ship_holodeck",
+            src: "./assets/cutscenes/ship_holodeck.png",
+          },
+          {
+            name: "mon_hologram",
+            src: "./assets/cutscenes/mon_hologram.png",
           },
           {
             name: "imperial_grilled_wall",

@@ -12,11 +12,13 @@
         },
         "lib": ["ES2022", "DOM"],
         "types": ["node"],
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "resolveJsonModule": true
     },
     "include": [
         "./src",
         "webpack.config.ts",
         "webpack.dev.ts",
+        "assets/cutscenes/**/*.ts"
     ]
 }

@@ -5,4 +5,5 @@ export enum Scene {
     EndGame = "EndGame",
     Raycast = "Raycast",
     LevelEnd = "LevelEnd",
+    Cutscene = "Cutscene",
 }

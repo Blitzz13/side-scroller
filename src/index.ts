@@ -10,6 +10,7 @@ import { EndlessLevel } from "./scenes/EndlessLevel";
 import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
 import { RaycastScene } from "./scenes/RaycastScene";
+import { CutsceneScene } from "./scenes/CutsceneScene";
 import { LevelEndScene } from "./scenes/LevelEndScene";
 import { RaycastSaveManager } from "./scenes/raycast/RaycastSaveManager";
 import { Stats } from "pixi-stats";
@@ -106,6 +107,9 @@ function buildScene(scene: Scene, nextLevel?: string): void {
     case Scene.LevelEnd:
       currentScene = new LevelEndScene(app.stage, currentScale, nextLevel);
       break;
+    case Scene.Cutscene:
+      currentScene = new CutsceneScene(app.stage, currentScale, nextLevel || "level1");
+      break;
     case Scene.Raycast: {
       const startingLevel = nextLevel || RaycastSaveManager.getCurrentLevel();
       currentScene = new RaycastScene(app.stage, currentScale, startingLevel);
@@ -119,8 +123,17 @@ function buildScene(scene: Scene, nextLevel?: string): void {
   currentScene.on(Scene.Change, changeScene);
 }
 
-function changeScene(scene: Scene, nextLevel?: string): void {
+function changeScene(scene: Scene, nextLevel?: string, skipCutscene?: boolean): void {
   if (isSceneTransitioning) return;
+
+  // Intercept loading level 1 to play the prologue cutscene before entering the level
+  if (scene === Scene.Raycast && !skipCutscene) {
+    const target = nextLevel || RaycastSaveManager.getCurrentLevel();
+    if (target === "level1" || target === "assets/raycast/levels/level1.json") {
+      scene = Scene.Cutscene;
+      nextLevel = "level1";
+    }
+  }
 
   const overlay = getTransitionOverlay();
   app.stage.sortableChildren = true;

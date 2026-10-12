@@ -2,6 +2,35 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-12] - Prologue Cutscene System with Holodeck, Hologram Glitch & Transmission UI
+
+### 1. Level 1 Prologue Cutscene Flow
+- **Prologue Cutscene Scene & Configuration** ([`src/scenes/CutsceneScene.ts`](file:///D:/Projects/side-scroller/src/scenes/CutsceneScene.ts), [`assets/cutscenes/cutscene1/config.ts`](file:///D:/Projects/side-scroller/assets/cutscenes/cutscene1/config.ts)):
+  - Built dedicated `CutsceneScene` inheriting from `BaseScene`.
+  - Added fully-typed and documented configuration in `assets/cutscenes/cutscene1/config.ts` allowing granular customization of hologram coordinates, scale, anchor, fade-in speed, resting alpha, tint, glitch parameters, dialog box positioning and style, line timings, typewriter speed, and call-to-action prompts.
+- **Holodeck Background & Mon Mothma Hologram Animation**:
+  - Sets `assets/cutscenes/ship_holodeck.png` as crisp 1280x720 background canvas with `SCALE_MODES.NEAREST` and `MIPMAP_MODES.OFF`.
+  - Renders `assets/cutscenes/mon_hologram.png` with configurable floor projector disc emitter glow and smooth fade-in animation.
+  - Implemented randomized periodic hologram glitch animation bursts: triggers position jitter, alpha flicker, color tint shifts, scale distortion, and cybernetic horizontal slice scanlines across the hologram sprite.
+- **Holonet Transmission Dialog Box & Audio Synchronization** ([`assets/cutscenes/cutscene1/prologue_dialog.json`](file:///D:/Projects/side-scroller/assets/cutscenes/cutscene1/prologue_dialog.json), [`assets/cutscenes/cutscene1/prologue_dialog.mp3`](file:///D:/Projects/side-scroller/assets/cutscenes/cutscene1/prologue_dialog.mp3)):
+  - Cybernetic glassmorphism dialog terminal on the right side of the screen with glowing header and live transmission beacon.
+  - Plays `prologue_dialog.mp3` with `@pixi/sound` and reveals the 4 dialogue lines in synchronization with the spoken audio via a typewriter effect.
+  - Color-codes speakers (Mon Mothma in cyan, Tuk in amber).
+  - **Dynamic Multi-Line Height & Auto-Scroll (Overlap Fix)** ([`src/scenes/CutsceneScene.ts`](file:///D:/Projects/side-scroller/src/scenes/CutsceneScene.ts)):
+    - Replaced hardcoded vertical spacing with dynamic height calculation (`layoutDialogue()`) measuring speaker title height and wrapped text height per message.
+    - Guaranteed speaker labels and dialogue text never overlap regardless of dialog box width/height or font size.
+    - Added rectangular content mask and smooth viewport auto-scrolling (plus mouse wheel support) when the dialogue exceeds the dialog box height.
+- **Mission Start Transition to Level 1**:
+  - Once dialogue audio finishes, displays a glowing, pulsing call-to-action banner: `"CLICK ANYWHERE TO START MISSION"` (`[ OR PRESS ENTER / SPACE ]`).
+  - Clicking anywhere on screen (or pressing Space / Enter) transitions smoothly to `assets/raycast/levels/level1.json`.
+  - Includes a developer/player-friendly `SKIP [ESC]` option.
+- **Scene Router & Asset Manifest Integration** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts), [`src/enums/Scene.ts`](file:///D:/Projects/side-scroller/src/enums/Scene.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`tsconfig.json`](file:///D:/Projects/side-scroller/tsconfig.json)):
+  - Registered `Scene.Cutscene` in `Scene` enum and `buildScene`.
+  - Intercepts requests to load `level1` in `changeScene` to play the cutscene before entering `level1`, passing a skip flag on mission start to transition directly to `RaycastScene`.
+  - Added cutscene images and audio to `GameConfig.ts` manifest bundles.
+
+---
+
 ## [2026-10-12] - Clean Tileset Slicing Pipeline & Removal of Redundant `ensureWallTextureSliced`
 
 ### 1. Unified Tileset Texture Loading & Cleanup
