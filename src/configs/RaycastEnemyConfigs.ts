@@ -36,6 +36,7 @@ export const stormtrooperConfig: IRaycastEnemyConfig = {
   visionConeAngle: 120,
   attackRange: 5.5,
   minDistance: 2.0,
+  lostSightDuration: 4.0, // 4.0s search duration after losing sight
   rateOfFire: 900,
   damage: 10,
   accuracy: 0.35,
@@ -54,6 +55,7 @@ export const stormtrooperConfig: IRaycastEnemyConfig = {
   attackSounds: stormtrooperAttackSounds,
   shoulderOffset: 0.35,
   coverClearanceOffset: 1.5,
+  stepOutDuration: 0.5,
   stepOutFrames: 30,
 };
 
@@ -97,6 +99,7 @@ export const viperDroidRaycastConfig: IRaycastEnemyConfig = {
   visionConeAngle: 360,
   attackRange: 6.0,
   minDistance: 2.2,
+  lostSightDuration: 2.5, // 2.5s search duration after losing sight
   rateOfFire: 850,
   damage: 8,
   accuracy: 0.4,
@@ -114,6 +117,7 @@ export const viperDroidRaycastConfig: IRaycastEnemyConfig = {
   floatingBob: true,
   shoulderOffset: 0.38,
   coverClearanceOffset: 1.8,
+  stepOutDuration: 0.58,
   stepOutFrames: 35,
   hoverSound: viperDroidHoverSound,
   idleSound: viperDroidHoverSound,
@@ -193,6 +197,7 @@ export const imperialOfficerConfig: IRaycastEnemyConfig = {
   visionConeAngle: 120,
   attackRange: 6.0,
   minDistance: 2.2,
+  lostSightDuration: 4.0, // 4.0s search duration after losing sight
   rateOfFire: 750,
   damage: 10,
   accuracy: 0.4,
@@ -211,6 +216,7 @@ export const imperialOfficerConfig: IRaycastEnemyConfig = {
   attackSounds: imperialOfficerAttackSounds,
   shoulderOffset: 0.35,
   coverClearanceOffset: 1.5,
+  stepOutDuration: 0.5,
   stepOutFrames: 30,
   voicelines: {
     spotted: [
@@ -320,6 +326,7 @@ export const phase1DarkTrooperConfig: IRaycastEnemyConfig = {
   visionConeAngle: 120,
   attackRange: 1.25,
   minDistance: 0.75,
+  lostSightDuration: 4.0, // 4.0s search duration after losing sight
   rateOfFire: 850,
   damage: 20,
   accuracy: 0.6,
@@ -332,10 +339,11 @@ export const phase1DarkTrooperConfig: IRaycastEnemyConfig = {
   spritesheet: "assets/raycast/enemies/phase1_dark_trooper.json",
   deathAnchorY: 0.65,
   isMelee: true,
-  shieldDuration: 120, // ~2 seconds at 60fps
-  shieldInterval: 180, // ~4 seconds between shielding
+  shieldDuration: 2.0, // 2.0 seconds
+  shieldInterval: 3.0, // 3.0 seconds between shielding
   shoulderOffset: 0.35,
   coverClearanceOffset: 1.5,
+  stepOutDuration: 0.42,
   stepOutFrames: 25,
   painSounds: phase1DarkTrooperPainSounds,
   deathSounds: phase1DarkTrooperDeathSounds,
@@ -380,6 +388,7 @@ export const imperialCommandoConfig: IRaycastEnemyConfig = {
   visionConeAngle: 120,
   attackRange: 6.0,
   minDistance: 2.2,
+  lostSightDuration: 4.0, // 4.0s search duration after losing sight
   rateOfFire: 750,
   damage: 10,
   accuracy: 0.45,
@@ -398,6 +407,7 @@ export const imperialCommandoConfig: IRaycastEnemyConfig = {
   attackSounds: imperialCommandoAttackSounds,
   shoulderOffset: 0.35,
   coverClearanceOffset: 1.5,
+  stepOutDuration: 0.5,
   stepOutFrames: 30,
   voicelines: {
     spotted: [
@@ -470,6 +480,7 @@ export const diagonaConfig: IRaycastEnemyConfig = {
   visionConeAngle: 140,
   attackRange: 1.35,
   minDistance: 0.75,
+  lostSightDuration: 3.0, // 3.0s search duration after losing sight
   rateOfFire: 950,
   damage: 18,
   accuracy: 0.55,

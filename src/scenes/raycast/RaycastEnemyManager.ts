@@ -17,10 +17,26 @@ import { gameConfig } from "../../configs/GameConfig";
 import { EnemyVoicelineManager } from "./EnemyVoicelineManager";
 import { RaycastLaserManager } from "./RaycastLaserManager";
 import { extractTiledGidAndRotation, forEachTileInLayer } from "./tiledUtils";
+import { AStarPathfinder, AStarPathFollower, IAStarGrid } from "../../plugins/pathfinding";
+
+export interface IEnemyWaveConfig {
+  maxWaves?: number;
+  enemiesPerWave: number;
+  enemyThreshold?: number;
+  spawnIntervalSeconds?: number;
+  waveCooldownSeconds?: number;
+  /** @deprecated Use spawnIntervalSeconds */
+  spawnIntervalFrames?: number;
+  /** @deprecated Use waveCooldownSeconds */
+  waveCooldownFrames?: number;
+}
 
 export class RaycastEnemyManager {
+  public static readonly ALERT_AWARENESS_RADIUS: number = 24.0;
+
   private container: Container;
   private enemies: RaycastEnemy[] = [];
+  private astar?: AStarPathfinder;
   private spritesheets: Record<string, Spritesheet> = {};
   private nextEnemyId: number = 1;
   private voicelineManager: EnemyVoicelineManager;
@@ -30,7 +46,37 @@ export class RaycastEnemyManager {
   private cachedMapWidth: number = 0;
   private cachedMapHeight: number = 0;
   private cachedDoorStatesFlat?: Float64Array;
+  private cachedTileTypeFlags?: Uint8Array;
   private cachedThinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>;
+
+  // Alert and Wave Spawning state
+  public isAlertActive: boolean = false;
+  private enemySpawnPoints: Array<{ x: number; y: number }> = [];
+  private waveEnemyIds: Set<number> = new Set();
+  private waveConfig: IEnemyWaveConfig = {
+    maxWaves: Infinity, // Continuous endless waves while base alert is active
+    enemiesPerWave: 6,
+    enemyThreshold: 20, // Concurrency limit to prevent performance degradation
+    spawnIntervalSeconds: 1.15, // ~1.15s
+    waveCooldownSeconds: 10.0, // ~10s
+    spawnIntervalFrames: 70, // legacy fallback alias
+    waveCooldownFrames: 600, // legacy fallback alias
+  };
+  private wavesSpawned: number = 0;
+  private currentWaveRemaining: number = 0;
+  private spawnIntervalTimer: number = 0;
+  private waveCooldownTimer: number = 0;
+  private activeWaveSpawnPoint: { x: number; y: number } | null = null;
+
+  // BFS Pathfinding grid
+  private bfsDistGrid?: Int16Array;
+  private lastBfsPlayerCellX: number = -1;
+  private lastBfsPlayerCellY: number = -1;
+  private bfsUpdateTimer: number = 0; // Update timer in seconds
+
+  private onEnemyOpenDoorCallback?: (cellX: number, cellY: number, enemyX?: number, enemyY?: number) => boolean;
+  private onWaveStartCallback?: (waveNumber: number, maxWaves?: number, spawnPoint?: { x: number; y: number }) => void;
+  private onAlertClearedCallback?: () => void;
 
   public get totalEnemies(): number {
     return this.enemies.length;
@@ -50,6 +96,73 @@ export class RaycastEnemyManager {
     cb: (alertedEnemy: RaycastEnemy) => void
   ): void {
     this.onAlertCallback = cb;
+  }
+
+  public setEnemySpawnPoints(points: Array<{ x: number; y: number }>): void {
+    this.enemySpawnPoints = [...points];
+  }
+
+  public getEnemySpawnPoints(): Array<{ x: number; y: number }> {
+    return this.enemySpawnPoints;
+  }
+
+  public setWaveConfig(config: Partial<IEnemyWaveConfig>): void {
+    this.waveConfig = { ...this.waveConfig, ...config };
+  }
+
+  public getWaveConfig(): IEnemyWaveConfig {
+    return { ...this.waveConfig };
+  }
+
+  public resetWaveSpawner(): void {
+    this.wavesSpawned = 0;
+    this.currentWaveRemaining = 0;
+    this.spawnIntervalTimer = 0;
+    this.waveCooldownTimer = 0;
+    this.activeWaveSpawnPoint = null;
+    this.waveEnemyIds.clear();
+  }
+
+  public setOnEnemyOpenDoorCallback(cb: (cellX: number, cellY: number, enemyX?: number, enemyY?: number) => boolean): void {
+    this.onEnemyOpenDoorCallback = cb;
+  }
+
+  public setOnWaveStartCallback(
+    cb: (waveNumber: number, maxWaves?: number, spawnPoint?: { x: number; y: number }) => void
+  ): void {
+    this.onWaveStartCallback = cb;
+  }
+
+  public setOnAlertClearedCallback(cb: () => void): void {
+    this.onAlertClearedCallback = cb;
+  }
+
+  public setAlertActive(active: boolean, playerX?: number, playerY?: number): void {
+    this.isAlertActive = active;
+    if (active) {
+      this.resetWaveSpawner();
+      this.waveCooldownTimer = 2.0; // 2 seconds delay before wave 1 begins
+
+      if (playerX !== undefined && playerY !== undefined) {
+        for (const enemy of this.enemies) {
+          if (!enemy.isDead && enemy.config.type !== RaycastEnemyType.DIAGONA) {
+            const dist = Math.hypot(enemy.x - playerX, enemy.y - playerY);
+            if (dist <= RaycastEnemyManager.ALERT_AWARENESS_RADIUS) {
+              enemy.alert(playerX, playerY, true);
+              enemy.hasTarget = true;
+              enemy.lastKnownPlayerX = playerX;
+              enemy.lastKnownPlayerY = playerY;
+              enemy.searchTimer = enemy.lostSightDuration;
+              if (enemy.state === "idle") {
+                enemy.state = "chase";
+              }
+            }
+          }
+        }
+      }
+    } else {
+      this.resetWaveSpawner();
+    }
   }
 
   private static readonly ENEMY_SFX_REGISTRY: Record<string, string> = {
@@ -429,6 +542,70 @@ export class RaycastEnemyManager {
 
     const allLayers = collectLayers((mapData.layers || []) as TiledLayerNode[]);
 
+    // Collect enemy spawn points across all layers
+    if (!this.enemySpawnPoints) {
+      this.enemySpawnPoints = [];
+    }
+    for (const layer of allLayers) {
+      if (layer.data || layer.chunks) {
+        forEachTileInLayer(layer, (rawTileGid: number, tileX: number, tileY: number) => {
+          if (rawTileGid !== 0) {
+            const { gid } = extractTiledGidAndRotation(rawTileGid);
+            const localTileId = gid - firstgid;
+            const meta = tileMeta ? (tileMeta[localTileId] || tileMeta[gid]) : undefined;
+            const imgStr = (meta?.image || "").toLowerCase();
+            const typeStr = (meta?.type || meta?.tileClass || "").toLowerCase();
+
+            const isSpawn =
+              localTileId === 38 ||
+              imgStr.includes("enemy_spawn") ||
+              typeStr.includes("enemy_spawn");
+
+            if (isSpawn) {
+              const spX = tileX + offsetX + 0.5;
+              const spY = tileY + offsetY + 0.5;
+              if (!this.enemySpawnPoints.some((p) => Math.hypot(p.x - spX, p.y - spY) < 0.1)) {
+                this.enemySpawnPoints.push({ x: spX, y: spY });
+              }
+            }
+          }
+        });
+      }
+      if (layer.objects) {
+        for (const obj of layer.objects) {
+          const objName = (obj.name || "").toLowerCase();
+          const objType = (obj.type || "").toLowerCase();
+          let isSpawn = false;
+          if (obj.gid !== undefined && obj.gid > 0) {
+            const decoded = extractTiledGidAndRotation(obj.gid);
+            const localTileId = decoded.gid - firstgid;
+            const meta = tileMeta ? (tileMeta[localTileId] || tileMeta[decoded.gid]) : undefined;
+            const imgStr = (meta?.image || "").toLowerCase();
+            const typeStr = (meta?.type || meta?.tileClass || "").toLowerCase();
+            if (localTileId === 38 || imgStr.includes("enemy_spawn") || typeStr.includes("enemy_spawn")) {
+              isSpawn = true;
+            }
+          }
+          if (
+            objName.includes("enemy_spawn") ||
+            objType.includes("enemy_spawn") ||
+            (objName.includes("enemy") && objName.includes("spawn"))
+          ) {
+            isSpawn = true;
+          }
+          if (isSpawn) {
+            const tileW = 64;
+            const tileH = 64;
+            const spX = obj.x / tileW + offsetX + 0.5;
+            const spY = obj.y / tileH + offsetY + 0.5;
+            if (!this.enemySpawnPoints.some((p) => Math.hypot(p.x - spX, p.y - spY) < 0.1)) {
+              this.enemySpawnPoints.push({ x: spX, y: spY });
+            }
+          }
+        }
+      }
+    }
+
     // Check for "Enemies" tile layers or object layers (exclude player Spawns layer)
     const enemyLayers = allLayers.filter(
       (layer: TiledLayerNode) =>
@@ -597,6 +774,23 @@ export class RaycastEnemyManager {
     return enemy;
   }
 
+  /**
+   * Robustly checks whether the tile at flatIdx is an actual door,
+   * using either tileTypeFlags (RaycastScene.TILE_DOOR = 2) or doorStatesFlat (non-NaN entry).
+   */
+  public isDoorTile(flatIdx: number, doorStatesFlat?: Float64Array): boolean {
+    if (flatIdx < 0) return false;
+    if (this.cachedTileTypeFlags && flatIdx < this.cachedTileTypeFlags.length) {
+      return this.cachedTileTypeFlags[flatIdx] === 2; // RaycastScene.TILE_DOOR
+    }
+    const states = doorStatesFlat || this.cachedDoorStatesFlat;
+    if (states && flatIdx < states.length) {
+      const val = states[flatIdx];
+      return !Number.isNaN(val) && val !== undefined;
+    }
+    return false;
+  }
+
   public checkLineOfSight(
     x1: number,
     y1: number,
@@ -662,15 +856,105 @@ export class RaycastEnemyManager {
       const tile = mapFlat[flatIdx];
 
       if (tile > 0) {
-        const doorState = doorStatesFlat[flatIdx];
-        if (doorState !== undefined && Math.abs(doorState) >= 0.8) {
-          continue; // Open door
+        if (this.isDoorTile(flatIdx, doorStatesFlat)) {
+          const doorState = doorStatesFlat[flatIdx];
+          if (!Number.isNaN(doorState) && Math.abs(doorState) >= 0.5) {
+            continue; // Open door
+          }
         }
         return false; // Solid wall or closed door
       }
     }
 
     return true;
+  }
+
+  /**
+   * Traces from (x1, y1) to (x2, y2) and returns the coordinates of the first door tile
+   * crossed along the line segment, or null if no door tile is crossed (or if a solid wall blocks first).
+   */
+  public findDoorOnSegment(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    mapFlat: Int32Array,
+    mapWidth: number,
+    mapHeight: number,
+    doorStatesFlat: Float64Array
+  ): { x: number; y: number } | null {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 0.001) return null;
+
+    const rayDirX = dx / distance;
+    const rayDirY = dy / distance;
+
+    let mapX = Math.floor(x1);
+    let mapY = Math.floor(y1);
+
+    const deltaDistX = Math.abs(1 / (rayDirX === 0 ? 1e-6 : rayDirX));
+    const deltaDistY = Math.abs(1 / (rayDirY === 0 ? 1e-6 : rayDirY));
+
+    let stepX: number, stepY: number, sideDistX: number, sideDistY: number;
+
+    if (rayDirX < 0) {
+      stepX = -1;
+      sideDistX = (x1 - mapX) * deltaDistX;
+    } else {
+      stepX = 1;
+      sideDistX = (mapX + 1 - x1) * deltaDistX;
+    }
+
+    if (rayDirY < 0) {
+      stepY = -1;
+      sideDistY = (y1 - mapY) * deltaDistY;
+    } else {
+      stepY = 1;
+      sideDistY = (mapY + 1 - y1) * deltaDistY;
+    }
+
+    let currentDist = 0;
+
+    // Check starting cell (e.g. if enemy is inside a doorway)
+    if (mapX >= 0 && mapX < mapWidth && mapY >= 0 && mapY < mapHeight) {
+      const idx = mapY * mapWidth + mapX;
+      if (this.isDoorTile(idx, doorStatesFlat)) {
+        return { x: mapX, y: mapY };
+      }
+    }
+
+    while (currentDist < distance) {
+      if (sideDistX < sideDistY) {
+        currentDist = sideDistX;
+        sideDistX += deltaDistX;
+        mapX += stepX;
+      } else {
+        currentDist = sideDistY;
+        sideDistY += deltaDistY;
+        mapY += stepY;
+      }
+
+      if (currentDist >= distance) break;
+
+      if (mapX < 0 || mapX >= mapWidth || mapY < 0 || mapY >= mapHeight) {
+        break;
+      }
+
+      const flatIdx = mapY * mapWidth + mapX;
+      if (this.isDoorTile(flatIdx, doorStatesFlat)) {
+        return { x: mapX, y: mapY };
+      }
+
+      // If a solid wall was encountered before reaching any door, line of sight is obstructed
+      const tile = mapFlat[flatIdx];
+      if (tile > 0) {
+        break;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -806,9 +1090,11 @@ export class RaycastEnemyManager {
       const tile = mapFlat[flatIdx];
 
       if (tile > 0) {
-        const doorState = doorStatesFlat[flatIdx];
-        if (doorState !== undefined && Math.abs(doorState) >= 0.8) {
-          continue; // Open door
+        if (this.isDoorTile(flatIdx, doorStatesFlat)) {
+          const doorState = doorStatesFlat[flatIdx];
+          if (!Number.isNaN(doorState) && Math.abs(doorState) >= 0.8) {
+            continue; // Open door
+          }
         }
         solidWallDist = currentDist; // Solid wall or closed door
         break;
@@ -847,58 +1133,320 @@ export class RaycastEnemyManager {
     mapWidth: number,
     mapHeight: number,
     doorStatesFlat: Float64Array,
-    thinWalls: Array<{ x1: number; y1: number; x2: number; y2: number }>
+    thinWalls: Array<{ x1: number; y1: number; x2: number; y2: number }>,
+    checkEnemies: boolean = true
   ): boolean {
-    const radius = 0.28;
+    const r = 0.24; // Enemy collision radius with smooth corner gliding
 
-    const samplePoints = [
-      [newX - radius, newY - radius],
-      [newX + radius, newY - radius],
-      [newX - radius, newY + radius],
-      [newX + radius, newY + radius],
-    ];
+    // Bounds check
+    if (newX - r < 0 || newX + r >= mapWidth || newY - r < 0 || newY + r >= mapHeight) {
+      return false;
+    }
 
-    for (const [sx, sy] of samplePoints) {
-      const cellX = Math.floor(sx);
-      const cellY = Math.floor(sy);
+    const minTileX = Math.floor(newX - r);
+    const maxTileX = Math.floor(newX + r);
+    const minTileY = Math.floor(newY - r);
+    const maxTileY = Math.floor(newY + r);
 
-      if (cellX < 0 || cellX >= mapWidth || cellY < 0 || cellY >= mapHeight) {
-        return false;
-      }
+    for (let gy = minTileY; gy <= maxTileY; gy++) {
+      for (let gx = minTileX; gx <= maxTileX; gx++) {
+        const flatIdx = gy * mapWidth + gx;
+        const tile = mapFlat[flatIdx];
 
-      const flatIdx = cellY * mapWidth + cellX;
-      const tile = mapFlat[flatIdx];
+        if (tile > 0) {
+          const isDoor = this.isDoorTile(flatIdx, doorStatesFlat);
+          const doorState = isDoor ? doorStatesFlat[flatIdx] : NaN;
+          const isDoorOpen = isDoor && !Number.isNaN(doorState) && Math.abs(doorState) >= 0.45;
 
-      if (tile > 0) {
-        const doorState = doorStatesFlat[flatIdx];
-        const isOpenDoor = doorState !== undefined && Math.abs(doorState) > 0.5;
-        if (!isOpenDoor) return false;
+          if (!isDoorOpen) {
+            // Circle-to-AABB distance check allows enemies to smoothly glide around wall corners
+            const clampX = Math.max(gx, Math.min(newX, gx + 1));
+            const clampY = Math.max(gy, Math.min(newY, gy + 1));
+            const dx = newX - clampX;
+            const dy = newY - clampY;
+            if (dx * dx + dy * dy < r * r) {
+              if (isDoor) {
+                enemy.isWaitingForDoor = true;
+                if (!Number.isNaN(doorState) && (doorState <= 0 || doorState < 0.45)) {
+                  this.onEnemyOpenDoorCallback?.(gx, gy, enemy.x, enemy.y);
+                }
+              }
+              return false;
+            }
+          }
+        }
       }
     }
 
     // Check collision against thin walls (preventing walking through them)
-    // We treat the thin wall as a line segment and ensure the enemy's bounding box doesn't cross it
     for (const wall of thinWalls) {
-      // Create a slightly expanded bounding box around the wall segment to act as collision thickness
-      const wallThickness = 0.1; 
+      const wallThickness = 0.08; 
       const minX = Math.min(wall.x1, wall.x2) - wallThickness;
       const maxX = Math.max(wall.x1, wall.x2) + wallThickness;
       const minY = Math.min(wall.y1, wall.y2) - wallThickness;
       const maxY = Math.max(wall.y1, wall.y2) + wallThickness;
 
       if (
-        newX + radius > minX &&
-        newX - radius < maxX &&
-        newY + radius > minY &&
-        newY - radius < maxY
+        newX + r > minX &&
+        newX - r < maxX &&
+        newY + r > minY &&
+        newY - r < maxY
       ) {
         return false;
       }
     }
 
+    // Allow enemies to freely pass through each other so they never jam in doorways or narrow corridors
     enemy.x = newX;
     enemy.y = newY;
     return true;
+  }
+
+  /**
+   * Updates the BFS distance field from the player position across all walkable cells.
+   * Runs efficiently on grid (40x40 = 1600 cells in <0.05ms).
+   */
+  public updateBfsGrid(
+    playerX: number,
+    playerY: number,
+    mapFlat: Int32Array,
+    mapWidth: number,
+    mapHeight: number,
+    doorStatesFlat: Float64Array,
+    lockedDoors?: Record<string, string>,
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
+  ): void {
+    const totalCells = mapWidth * mapHeight;
+    if (totalCells <= 0) return;
+    if (!this.bfsDistGrid || this.bfsDistGrid.length !== totalCells) {
+      this.bfsDistGrid = new Int16Array(totalCells);
+    }
+    this.bfsDistGrid.fill(-1);
+
+    const targetPx = Math.floor(playerX);
+    const targetPy = Math.floor(playerY);
+    if (targetPx < 0 || targetPx >= mapWidth || targetPy < 0 || targetPy >= mapHeight) {
+      return;
+    }
+
+    const startIdx = targetPy * mapWidth + targetPx;
+    this.bfsDistGrid[startIdx] = 0;
+
+    const queue = new Int32Array(totalCells);
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = startIdx;
+
+    const thinWallBlockedCells = new Set<number>();
+    if (thinWalls && thinWalls.length > 0) {
+      for (let i = 0; i < thinWalls.length; i++) {
+        const wall = thinWalls[i];
+        const minCX = Math.max(0, Math.floor(Math.min(wall.x1, wall.x2)));
+        const maxCX = Math.min(mapWidth - 1, Math.floor(Math.max(wall.x1, wall.x2) - 1e-4));
+        const minCY = Math.max(0, Math.floor(Math.min(wall.y1, wall.y2)));
+        const maxCY = Math.min(mapHeight - 1, Math.floor(Math.max(wall.y1, wall.y2) - 1e-4));
+        for (let cy = minCY; cy <= maxCY; cy++) {
+          for (let cx = minCX; cx <= maxCX; cx++) {
+            thinWallBlockedCells.add(cy * mapWidth + cx);
+          }
+        }
+      }
+    }
+
+    const isWalkable = (cx: number, cy: number): boolean => {
+      if (cx < 0 || cx >= mapWidth || cy < 0 || cy >= mapHeight) return false;
+      const idx = cy * mapWidth + cx;
+      if (thinWallBlockedCells.has(idx)) return false;
+      const tile = mapFlat[idx];
+      if (tile === 0) return true; // Empty floor
+      // If it's a door:
+      if (this.isDoorTile(idx, doorStatesFlat)) {
+        const doorState = doorStatesFlat[idx];
+        // Open door is passable
+        if (!Number.isNaN(doorState) && Math.abs(doorState) > 0.5) return true;
+        // If closed, check if locked
+        const key = `${cx},${cy}`;
+        if (lockedDoors && lockedDoors[key]) {
+          return false; // Locked by keycard -> enemies cannot open
+        }
+        return true; // Unlocked door -> enemies can open and pass through
+      }
+      return false; // Solid wall or obstacle
+    };
+
+    while (head < tail) {
+      const curr = queue[head++];
+      const cx = curr % mapWidth;
+      const cy = Math.floor(curr / mapWidth);
+      const currDist = this.bfsDistGrid[curr];
+
+      const neighbors = [
+        [cx + 1, cy],
+        [cx - 1, cy],
+        [cx, cy + 1],
+        [cx, cy - 1],
+      ];
+
+      for (let i = 0; i < 4; i++) {
+        const nx = neighbors[i][0];
+        const ny = neighbors[i][1];
+        if (isWalkable(nx, ny)) {
+          const nIdx = ny * mapWidth + nx;
+          if (this.bfsDistGrid[nIdx] === -1) {
+            this.bfsDistGrid[nIdx] = currDist + 1;
+            queue[tail++] = nIdx;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Returns the next coordinate along the shortest BFS path towards the player.
+   */
+  public getNextPathStep(
+    enemyX: number,
+    enemyY: number,
+    mapWidth: number,
+    mapHeight: number,
+    doorStatesFlat?: Float64Array,
+    enemyId?: number
+  ): { x: number; y: number } | null {
+    if (!this.bfsDistGrid) return null;
+
+    const ex = Math.floor(enemyX);
+    const ey = Math.floor(enemyY);
+    if (ex < 0 || ex >= mapWidth || ey < 0 || ey >= mapHeight) return null;
+
+    const currIdx = ey * mapWidth + ex;
+    const currDist = this.bfsDistGrid[currIdx];
+    if (currDist <= 0) return null; // Already in player cell or unreachable
+
+    // Check adjacent 8 neighbors for the cell that is closest to player (dist < currDist)
+    const cardinalNeighbors = [
+      [ex + 1, ey],
+      [ex - 1, ey],
+      [ex, ey + 1],
+      [ex, ey - 1],
+    ];
+
+    let bestDist = currDist;
+    let bestCell: [number, number] | null = null;
+
+    for (let i = 0; i < 4; i++) {
+      const nx = cardinalNeighbors[i][0];
+      const ny = cardinalNeighbors[i][1];
+      if (nx >= 0 && nx < mapWidth && ny >= 0 && ny < mapHeight) {
+        const nIdx = ny * mapWidth + nx;
+        const nDist = this.bfsDistGrid[nIdx];
+        if (nDist >= 0 && nDist < bestDist) {
+          bestDist = nDist;
+          bestCell = [nx, ny];
+        }
+      }
+    }
+
+    // Check 4 diagonal neighbors with corner-cutting prevention
+    const diagNeighbors = [
+      [ex + 1, ey + 1, ex + 1, ey, ex, ey + 1],
+      [ex - 1, ey + 1, ex - 1, ey, ex, ey + 1],
+      [ex + 1, ey - 1, ex + 1, ey, ex, ey - 1],
+      [ex - 1, ey - 1, ex - 1, ey, ex, ey - 1],
+    ];
+
+    for (let i = 0; i < 4; i++) {
+      const [nx, ny, c1x, c1y, c2x, c2y] = diagNeighbors[i];
+      if (nx >= 0 && nx < mapWidth && ny >= 0 && ny < mapHeight) {
+        const c1Idx = c1y * mapWidth + c1x;
+        const c2Idx = c2y * mapWidth + c2x;
+        const c1Dist = this.bfsDistGrid[c1Idx];
+        const c2Dist = this.bfsDistGrid[c2Idx];
+        // Both adjacent cardinal neighbors must be walkable to prevent cutting solid corners
+        if (c1Dist >= 0 && c2Dist >= 0) {
+          const nIdx = ny * mapWidth + nx;
+          const nDist = this.bfsDistGrid[nIdx];
+          if (nDist >= 0 && nDist <= bestDist) {
+            bestDist = nDist;
+            bestCell = [nx, ny];
+          }
+        }
+      }
+    }
+
+    if (!bestCell) return null;
+
+    const nextX = bestCell[0];
+    const nextY = bestCell[1];
+
+    const currCenterX = ex + 0.5;
+    const currCenterY = ey + 0.5;
+
+    // If next cell is a closed door, trigger door open
+    if (doorStatesFlat) {
+      const nextIdx = nextY * mapWidth + nextX;
+      if (this.isDoorTile(nextIdx, doorStatesFlat)) {
+        const doorState = doorStatesFlat[nextIdx];
+        if (doorState === 0) {
+          this.onEnemyOpenDoorCallback?.(nextX, nextY, currCenterX, currCenterY);
+        }
+      }
+    }
+
+    // Corner alignment check: if the next step turns in an axis where the enemy is not yet centered,
+    // guide the enemy to the center of the current cell first to prevent clipping the inner corner wall!
+    const stepDirX = nextX - ex;
+    const stepDirY = nextY - ey;
+
+    if (stepDirX !== 0 && stepDirY === 0 && this.cachedMapFlat && this.cachedMapWidth && this.cachedMapHeight) {
+      const mw = this.cachedMapWidth;
+      const mh = this.cachedMapHeight;
+      // Horizontal step: if enemy is displaced vertically, check if moving horizontally clips a corner wall
+      const yDistFromCenter = Math.abs(enemyY - currCenterY);
+      if (yDistFromCenter > 0.16) {
+        const testTileY = enemyY < currCenterY ? ey - 1 : ey + 1;
+        if (testTileY >= 0 && testTileY < mh) {
+          const cornerWall = this.cachedMapFlat[testTileY * mw + nextX];
+          if (cornerWall > 0) {
+            return { x: currCenterX, y: currCenterY };
+          }
+        }
+      }
+    } else if (stepDirY !== 0 && stepDirX === 0 && this.cachedMapFlat && this.cachedMapWidth && this.cachedMapHeight) {
+      const mw = this.cachedMapWidth;
+      const mh = this.cachedMapHeight;
+      // Vertical step: if enemy is displaced horizontally, check if moving vertically clips a corner wall
+      const xDistFromCenter = Math.abs(enemyX - currCenterX);
+      if (xDistFromCenter > 0.16) {
+        const testTileX = enemyX < currCenterX ? ex - 1 : ex + 1;
+        if (testTileX >= 0 && testTileX < mw) {
+          const cornerWall = this.cachedMapFlat[nextY * mw + testTileX];
+          if (cornerWall > 0) {
+            return { x: currCenterX, y: currCenterY };
+          }
+        }
+      }
+    }
+
+    // Add per-enemy lateral lane offset to distribute troopers across the corridor
+    let laneOffsetX = 0;
+    let laneOffsetY = 0;
+    if (enemyId !== undefined) {
+      const perpX = -stepDirY;
+      const perpY = stepDirX;
+      const lane = ((enemyId % 3) - 1) * 0.10;
+      // Ensure lane offset stays inside the walkable corridor tile
+      const testOffX = nextX + 0.5 + perpX * lane;
+      const testOffY = nextY + 0.5 + perpY * lane;
+      if (Math.floor(testOffX) === nextX && Math.floor(testOffY) === nextY) {
+        laneOffsetX = perpX * lane;
+        laneOffsetY = perpY * lane;
+      }
+    }
+
+    return {
+      x: nextX + 0.5 + laneOffsetX,
+      y: nextY + 0.5 + laneOffsetY,
+    };
   }
 
   public update(
@@ -915,13 +1463,17 @@ export class RaycastEnemyManager {
     laserManager?: RaycastLaserManager,
     playerDirX?: number,
     playerDirY?: number,
-    activeGrenades?: readonly { x: number; y: number; radius?: number }[]
+    activeGrenades?: readonly { x: number; y: number; radius?: number }[],
+    lockedDoors?: Record<string, string>,
+    tileTypeFlags?: Uint8Array
   ): void {
     this.cachedMapFlat = mapFlat;
     this.cachedMapWidth = mapWidth;
     this.cachedMapHeight = mapHeight;
     this.cachedDoorStatesFlat = doorStatesFlat;
+    this.cachedTileTypeFlags = tileTypeFlags;
     this.cachedThinWalls = thinWalls;
+    const dt = delta / 60; // Delta time in seconds
 
     const losChecker = (x1: number, y1: number, x2: number, y2: number) =>
       this.checkLineOfSight(
@@ -1088,7 +1640,333 @@ export class RaycastEnemyManager {
       );
     };
 
+    // Alert state logic: only enemies within awareness radius around the player
+    // or spawned as reinforcement wave know the player's position.
+    // Cap active hunters to the nearest 12 enemies (plus wave enemies and active pursuers)
+    // so distant enemies across the entire facility don't cause 60-man bottlenecks at doorways.
+    if (this.isAlertActive) {
+      const candidates: Array<{ enemy: RaycastEnemy; dist: number }> = [];
+      for (let i = 0; i < this.enemies.length; i++) {
+        const enemy = this.enemies[i];
+        if (!enemy.isDead && enemy.config.type !== RaycastEnemyType.DIAGONA) {
+          const distToPlayer = Math.hypot(enemy.x - playerX, enemy.y - playerY);
+          const isWaveEnemy = this.waveEnemyIds.has(enemy.id);
+          const isNearPlayer = distToPlayer <= RaycastEnemyManager.ALERT_AWARENESS_RADIUS;
+
+          if (isWaveEnemy) {
+            enemy.hasTarget = true;
+            enemy.lastKnownPlayerX = playerX;
+            enemy.lastKnownPlayerY = playerY;
+            enemy.searchTimer = 999999;
+            if (enemy.state === "idle") enemy.state = "chase";
+          } else if (isNearPlayer) {
+            candidates.push({ enemy, dist: distToPlayer });
+          }
+        }
+      }
+
+      candidates.sort((a, b) => a.dist - b.dist);
+      const hunterCap = 12;
+      for (let i = 0; i < candidates.length; i++) {
+        const { enemy } = candidates[i];
+        if (i < hunterCap || enemy.state === "chase" || enemy.state === "attack") {
+          enemy.hasTarget = true;
+          enemy.lastKnownPlayerX = playerX;
+          enemy.lastKnownPlayerY = playerY;
+          enemy.searchTimer = enemy.lostSightDuration;
+          if (enemy.state === "idle") {
+            enemy.state = "chase";
+          }
+        }
+      }
+
+      // Wave Spawner Update (spawns sequentially in waves regardless of total enemies on map)
+      if (this.enemySpawnPoints.length > 0) {
+        if (this.waveCooldownTimer > 0) {
+          this.waveCooldownTimer = Math.max(0, this.waveCooldownTimer - dt);
+        }
+
+        // Check if a new wave should be triggered (continuous endless waves during alert)
+        const maxWaves = this.waveConfig.maxWaves ?? Infinity;
+        const maxCap = this.waveConfig.enemyThreshold ?? 20;
+        const currentAlive = this.enemies.filter((e) => !e.isDead).length;
+
+        if (
+          this.wavesSpawned < maxWaves &&
+          this.currentWaveRemaining === 0 &&
+          this.waveCooldownTimer <= 0 &&
+          currentAlive < maxCap
+        ) {
+          this.wavesSpawned++;
+          this.currentWaveRemaining = this.waveConfig.enemiesPerWave;
+          this.spawnIntervalTimer = 0; // Spawn first enemy immediately
+
+          // Find closest enemy spawnpoint to player (preferring reachable BFS path distance)
+          let closestSp: { x: number; y: number } | null = null;
+          let closestDist = Infinity;
+          for (let i = 0; i < this.enemySpawnPoints.length; i++) {
+            const sp = this.enemySpawnPoints[i];
+            const spCellX = Math.floor(sp.x);
+            const spCellY = Math.floor(sp.y);
+            const spIdx = spCellY * mapWidth + spCellX;
+            const bfsDist = this.bfsDistGrid && spIdx >= 0 && spIdx < this.bfsDistGrid.length ? this.bfsDistGrid[spIdx] : -1;
+            const d = (bfsDist > 0) ? bfsDist : Math.hypot(sp.x - playerX, sp.y - playerY) * 2.0;
+            if (d < closestDist) {
+              closestDist = d;
+              closestSp = sp;
+            }
+          }
+          this.activeWaveSpawnPoint = closestSp;
+
+          if (this.activeWaveSpawnPoint) {
+            this.onWaveStartCallback?.(
+              this.wavesSpawned,
+              this.waveConfig.maxWaves,
+              this.activeWaveSpawnPoint
+            );
+          }
+        }
+
+        // Spawn enemies in current wave with interval spacing
+        if (this.currentWaveRemaining > 0 && this.activeWaveSpawnPoint) {
+          this.spawnIntervalTimer -= dt;
+          if (this.spawnIntervalTimer <= 0) {
+            const interval =
+              this.waveConfig.spawnIntervalSeconds ??
+              (this.waveConfig.spawnIntervalFrames ? this.waveConfig.spawnIntervalFrames / 60 : 1.15);
+            this.spawnIntervalTimer = interval;
+            this.currentWaveRemaining--;
+
+            const sp = this.activeWaveSpawnPoint;
+            const dx = playerX - sp.x;
+            const dy = playerY - sp.y;
+            const dist = Math.hypot(dx, dy);
+            const dirX = dist > 0.001 ? dx / dist : 0;
+            const dirY = dist > 0.001 ? dy / dist : 1;
+
+            // Offset perpendicular to spawn direction so troopers emerge staggered
+            const perpX = -dirY;
+            const perpY = dirX;
+            const offsetIdx = (this.currentWaveRemaining % 3) - 1; // -1, 0, 1
+            const spawnX = sp.x + perpX * (offsetIdx * 0.28);
+            const spawnY = sp.y + perpY * (offsetIdx * 0.28);
+
+            const trooperConfig =
+              raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER] ||
+              getRaycastEnemyConfig("stormtrooper");
+
+            if (trooperConfig) {
+              const trooper = this.spawnEnemy(
+                trooperConfig,
+                spawnX,
+                spawnY,
+                dirX,
+                dirY
+              );
+              trooper.state = "chase";
+              trooper.hasTarget = true;
+              trooper.lastKnownPlayerX = playerX;
+              trooper.lastKnownPlayerY = playerY;
+              trooper.searchTimer = 999999;
+              this.waveEnemyIds.add(trooper.id);
+            }
+
+            if (this.currentWaveRemaining === 0) {
+              const cooldown =
+                this.waveConfig.waveCooldownSeconds ??
+                (this.waveConfig.waveCooldownFrames ? this.waveConfig.waveCooldownFrames / 60 : 10.0);
+              this.waveCooldownTimer = cooldown;
+            }
+          }
+        }
+      }
+    }
+
+    // Update BFS distance grid for corridor/room navigation whenever alert is active OR any enemy is chasing/has target
+    const hasActivePursuit =
+      this.isAlertActive ||
+      this.enemies.some(
+        (e) => !e.isDead && e.config.type !== RaycastEnemyType.DIAGONA && (e.state === "chase" || e.hasTarget)
+      );
+
+    if (hasActivePursuit) {
+      const px = Math.floor(playerX);
+      const py = Math.floor(playerY);
+      this.bfsUpdateTimer += dt;
+      if (
+        px !== this.lastBfsPlayerCellX ||
+        py !== this.lastBfsPlayerCellY ||
+        this.bfsUpdateTimer >= 0.25 ||
+        !this.bfsDistGrid
+      ) {
+        this.bfsUpdateTimer = 0;
+        this.lastBfsPlayerCellX = px;
+        this.lastBfsPlayerCellY = py;
+        this.updateBfsGrid(playerX, playerY, mapFlat, mapWidth, mapHeight, doorStatesFlat, lockedDoors, thinWalls);
+      }
+    }
+
+    // Ensure A* pathfinder grid is initialized and updated
+    const thinWallBlockedCells = new Set<number>();
+    if (thinWalls && thinWalls.length > 0) {
+      for (let i = 0; i < thinWalls.length; i++) {
+        const wall = thinWalls[i];
+        const minCX = Math.max(0, Math.floor(Math.min(wall.x1, wall.x2)));
+        const maxCX = Math.min(mapWidth - 1, Math.floor(Math.max(wall.x1, wall.x2) - 1e-4));
+        const minCY = Math.max(0, Math.floor(Math.min(wall.y1, wall.y2)));
+        const maxCY = Math.min(mapHeight - 1, Math.floor(Math.max(wall.y1, wall.y2) - 1e-4));
+        for (let cy = minCY; cy <= maxCY; cy++) {
+          for (let cx = minCX; cx <= maxCX; cx++) {
+            thinWallBlockedCells.add(cy * mapWidth + cx);
+          }
+        }
+      }
+    }
+
+    const isCellWalkable = (cx: number, cy: number): boolean => {
+      if (cx < 0 || cx >= mapWidth || cy < 0 || cy >= mapHeight) return false;
+      const idx = cy * mapWidth + cx;
+      if (thinWallBlockedCells.has(idx)) return false;
+      const tile = mapFlat[idx];
+      if (tile === 0) return true; // Empty floor
+      // If it's a door:
+      if (this.isDoorTile(idx, doorStatesFlat)) {
+        const doorState = doorStatesFlat[idx];
+        const key = `${cx},${cy}`;
+        if (lockedDoors && lockedDoors[key] && !this.isAlertActive) {
+          // Locked by keycard -> enemies cannot open it unless base alert security override is active
+          return !Number.isNaN(doorState) && Math.abs(doorState) >= 0.45;
+        }
+        // Unlocked door or alert security override -> passable (enemies can open it)
+        return true;
+      }
+      return false; // Solid wall or obstacle
+    };
+
+    const astarGrid: IAStarGrid = {
+      width: mapWidth,
+      height: mapHeight,
+      isWalkable: isCellWalkable,
+    };
+
+    if (!this.astar || this.astar.getGrid().width !== mapWidth || this.astar.getGrid().height !== mapHeight) {
+      this.astar = new AStarPathfinder(astarGrid, {
+        allowDiagonal: true,
+        preventCornerCutting: true,
+        heuristic: "octile",
+        maxIterations: 5000,
+      });
+    } else {
+      this.astar.setGrid(astarGrid);
+    }
+
+    // Flocking separation pass: comfortable personal space in open rooms and corridors
+    // Near doorways, separation is constrained along the corridor axis to prevent lateral wall jamming while avoiding pileups
+    const aliveMobileEnemies = this.enemies.filter(
+      (e) => !e.isDead && e.config.type !== RaycastEnemyType.DIAGONA
+    );
+
+    const getDoorwayAxis = (ex: number, ey: number, radius: number = 2.5): { isEWWall: boolean; isNSWall: boolean } | null => {
+      const ecx = Math.floor(ex);
+      const ecy = Math.floor(ey);
+      const rCells = Math.ceil(radius);
+      for (let dy = -rCells; dy <= rCells; dy++) {
+        for (let dx = -rCells; dx <= rCells; dx++) {
+          const nx = ecx + dx;
+          const ny = ecy + dy;
+          if (nx >= 0 && nx < mapWidth && ny >= 0 && ny < mapHeight) {
+            const idx = ny * mapWidth + nx;
+            if (this.isDoorTile(idx, doorStatesFlat)) {
+              const d = Math.hypot(nx + 0.5 - ex, ny + 0.5 - ey);
+              if (d < radius) {
+                const isWallW = nx > 0 && mapFlat[ny * mapWidth + (nx - 1)] > 0;
+                const isWallE = nx + 1 < mapWidth && mapFlat[ny * mapWidth + (nx + 1)] > 0;
+                const isWallN = ny > 0 && mapFlat[(ny - 1) * mapWidth + nx] > 0;
+                const isWallS = ny + 1 < mapHeight && mapFlat[(ny + 1) * mapWidth + nx] > 0;
+                return { isEWWall: isWallW || isWallE, isNSWall: isWallN || isWallS };
+              }
+            }
+          }
+        }
+      }
+      return null;
+    };
+
+    const minSpacing = 0.55;
+    for (let i = 0; i < aliveMobileEnemies.length; i++) {
+      const e1 = aliveMobileEnemies[i];
+      for (let j = i + 1; j < aliveMobileEnemies.length; j++) {
+        const e2 = aliveMobileEnemies[j];
+        if (e1.isWaitingForDoor || e2.isWaitingForDoor) continue;
+
+        const dx = e2.x - e1.x;
+        const dy = e2.y - e1.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < minSpacing * minSpacing && distSq > 0.000001) {
+          const dist = Math.sqrt(distSq);
+          const overlap = (minSpacing - dist) * 0.5;
+          let pushX = (dx / dist) * overlap * 0.15;
+          let pushY = (dy / dist) * overlap * 0.15;
+
+          // Check if either entity is near a doorway corridor
+          const doorAxis = getDoorwayAxis(e1.x, e1.y, 2.5) || getDoorwayAxis(e2.x, e2.y, 2.5);
+          if (doorAxis) {
+            if (doorAxis.isEWWall) {
+              // Passage is North-South: suppress lateral push (X) to avoid scraping wall jambs,
+              // but push vertically (Y) to keep enemies in clean single file!
+              pushX = 0;
+              pushY = (dy >= 0 ? 1 : -1) * overlap * 0.25;
+            } else if (doorAxis.isNSWall) {
+              // Passage is East-West: suppress vertical push (Y), push horizontally (X)
+              pushY = 0;
+              pushX = (dx >= 0 ? 1 : -1) * overlap * 0.25;
+            }
+          }
+
+          this.tryMoveEnemy(e1, e1.x - pushX, e1.y - pushY, mapFlat, mapWidth, mapHeight, doorStatesFlat, thinWalls, false);
+          this.tryMoveEnemy(e2, e2.x + pushX, e2.y + pushY, mapFlat, mapWidth, mapHeight, doorStatesFlat, thinWalls, false);
+        }
+      }
+    }
+
     for (const enemy of this.enemies) {
+      // Check if enemy is currently near a doorway (within 2.2 tiles of any door tile)
+      let minDoorDist = Infinity;
+      let nearestDoorX = -1;
+      let nearestDoorY = -1;
+      const ecx = Math.floor(enemy.x);
+      const ecy = Math.floor(enemy.y);
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = ecx + dx;
+          const ny = ecy + dy;
+          if (nx >= 0 && nx < mapWidth && ny >= 0 && ny < mapHeight) {
+            const nIdx = ny * mapWidth + nx;
+            if (this.isDoorTile(nIdx, doorStatesFlat)) {
+              const doorCenterDist = Math.hypot(nx + 0.5 - enemy.x, ny + 0.5 - enemy.y);
+              if (doorCenterDist < minDoorDist) {
+                minDoorDist = doorCenterDist;
+                nearestDoorX = nx;
+                nearestDoorY = ny;
+              }
+            }
+          }
+        }
+      }
+      enemy.nearestDoorDist = minDoorDist;
+      enemy.isNearDoor = minDoorDist <= 2.2;
+      enemy.nearestDoorCell = nearestDoorX >= 0 ? { x: nearestDoorX, y: nearestDoorY } : null;
+      enemy.doorOnSightLine = this.findDoorOnSegment(
+        enemy.x,
+        enemy.y,
+        playerX,
+        playerY,
+        mapFlat,
+        mapWidth,
+        mapHeight,
+        doorStatesFlat
+      );
+
       const dx = playerX - enemy.x;
       const dy = playerY - enemy.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1096,6 +1974,123 @@ export class RaycastEnemyManager {
       const lof = lofChecker(enemy.x, enemy.y, playerX, playerY);
       const isBehindWall = !lof;
       const canSee = los && enemy.isPointInVisionCone(playerX, playerY);
+
+      let pathStep: { x: number; y: number } | null = null;
+      const isWaveEnemy = this.waveEnemyIds.has(enemy.id);
+      const isAlertTracked =
+        (this.isAlertActive && dist <= RaycastEnemyManager.ALERT_AWARENESS_RADIUS) ||
+        isWaveEnemy;
+
+      const inRange = dist <= enemy.config.attackRange && los && lof;
+      const shootingThroughDoor = enemy.doorOnSightLine !== null;
+      const inDoorway = enemy.nearestDoorDist < 1.2;
+      const hasCleanFiringPosition =
+        inRange &&
+        !shootingThroughDoor &&
+        !inDoorway &&
+        enemy.state === "attack";
+
+      const shouldPathfind =
+        (enemy.state === "chase" || (enemy.hasTarget && enemy.searchTimer > 0) || isWaveEnemy) &&
+        enemy.config.type !== RaycastEnemyType.DIAGONA &&
+        !(enemy.state === "attack" && hasCleanFiringPosition);
+
+      if (shouldPathfind) {
+        if (enemy.pathCooldown > 0) {
+          enemy.pathCooldown = Math.max(0, enemy.pathCooldown - dt);
+        }
+
+        // Target real-time player location if directly visible or wave enemy, otherwise pursue last known position
+        const targetCoordX = (canSee || isWaveEnemy) ? playerX : (enemy.hasTarget ? enemy.lastKnownPlayerX : playerX);
+        const targetCoordY = (canSee || isWaveEnemy) ? playerY : (enemy.hasTarget ? enemy.lastKnownPlayerY : playerY);
+
+        const targetCellX = Math.floor(targetCoordX);
+        const targetCellY = Math.floor(targetCoordY);
+
+        const needsRepath =
+          !enemy.pathFollower.hasPath() ||
+          enemy.pathCooldown <= 0 ||
+          targetCellX !== Math.floor(enemy.pathTargetX) ||
+          targetCellY !== Math.floor(enemy.pathTargetY);
+
+        const isSegmentClear = (x1: number, y1: number, x2: number, y2: number): boolean => {
+          if (!lofChecker(x1, y1, x2, y2)) return false;
+          const segDx = x2 - x1;
+          const segDy = y2 - y1;
+          const segLen = Math.hypot(segDx, segDy);
+          if (segLen < 0.001) return true;
+          const offX = (-segDy / segLen) * 0.20;
+          const offY = (segDx / segLen) * 0.20;
+          if (!lofChecker(x1 + offX, y1 + offY, x2 + offX, y2 + offY)) return false;
+          if (!lofChecker(x1 - offX, y1 - offY, x2 - offX, y2 - offY)) return false;
+          return true;
+        };
+
+        if (needsRepath && this.astar) {
+          const rawPath = this.astar.findPath(enemy.x, enemy.y, targetCoordX, targetCoordY);
+          if (rawPath.length > 0) {
+            // Mark door tile AND cardinally adjacent approach/exit tiles as crucial so entities approach doorways cardinally
+            const isCrucialDoorNode = (node: { x: number; y: number }): boolean => {
+              const idx = node.y * mapWidth + node.x;
+              if (this.isDoorTile(idx, doorStatesFlat)) return true;
+              const cardinals = [
+                { x: node.x + 1, y: node.y },
+                { x: node.x - 1, y: node.y },
+                { x: node.x, y: node.y + 1 },
+                { x: node.x, y: node.y - 1 },
+              ];
+              for (const c of cardinals) {
+                if (c.x >= 0 && c.x < mapWidth && c.y >= 0 && c.y < mapHeight) {
+                  if (this.isDoorTile(c.y * mapWidth + c.x, doorStatesFlat)) {
+                    return true;
+                  }
+                }
+              }
+              return false;
+            };
+            const smoothedPath = AStarPathfinder.smoothPath(rawPath, isSegmentClear, isCrucialDoorNode);
+            enemy.pathFollower.setPath(smoothedPath, true);
+            enemy.pathTargetX = targetCoordX;
+            enemy.pathTargetY = targetCoordY;
+            // Stagger repath frequency across enemies (~0.35s - 0.60s)
+            enemy.pathCooldown = 0.35 + (enemy.id % 6) * 0.05;
+          }
+        }
+
+        // Check doorway immediately ahead to open unlocked doors smoothly
+        if (enemy.nearestDoorCell && enemy.nearestDoorDist <= 1.5) {
+          const nIdx = enemy.nearestDoorCell.y * mapWidth + enemy.nearestDoorCell.x;
+          if (this.isDoorTile(nIdx, doorStatesFlat) && doorStatesFlat[nIdx] === 0) {
+            this.onEnemyOpenDoorCallback?.(enemy.nearestDoorCell.x, enemy.nearestDoorCell.y, enemy.x, enemy.y);
+          }
+        } else {
+          const frontX = Math.floor(enemy.x + enemy.dirX * 0.7);
+          const frontY = Math.floor(enemy.y + enemy.dirY * 0.7);
+          if (frontX >= 0 && frontX < mapWidth && frontY >= 0 && frontY < mapHeight) {
+            const fIdx = frontY * mapWidth + frontX;
+            if (this.isDoorTile(fIdx, doorStatesFlat) && doorStatesFlat[fIdx] === 0) {
+              this.onEnemyOpenDoorCallback?.(frontX, frontY, enemy.x, enemy.y);
+            }
+          }
+        }
+
+        // Advance follower and obtain active waypoint with natural arrival radius (0.35)
+        // Pass isSegmentClear to enable lookahead pure-pursuit shortcutting directly to visible waypoints
+        const currentWp = enemy.pathFollower.advance(enemy.x, enemy.y, 0.35, isSegmentClear);
+        if (currentWp) {
+          pathStep = { x: currentWp.x, y: currentWp.y };
+        } else {
+          // Fallback to BFS step if available
+          pathStep = this.getNextPathStep(
+            enemy.x,
+            enemy.y,
+            mapWidth,
+            mapHeight,
+            doorStatesFlat,
+            enemy.id
+          );
+        }
+      }
 
       enemy.update(
         delta,
@@ -1107,7 +2102,8 @@ export class RaycastEnemyManager {
         lofChecker,
         playerDirX,
         playerDirY,
-        activeGrenades
+        activeGrenades,
+        pathStep
       );
 
       // Trigger stormtrooper voicelines based on visibility & proximity
@@ -1331,8 +2327,13 @@ export class RaycastEnemyManager {
     for (const enemy of this.enemies) {
       if (enemy.isDead) continue;
 
-      // Strict line-of-fire check: enemies only detect the player if there are NO walls between them and the player
+      const isAlreadyEngaged = enemy.state === "chase" || enemy.hasTarget;
+      const distToShooter = Math.hypot(enemy.x - shooterX, enemy.y - shooterY);
+
+      // Line-of-fire check: unalerted distant enemies only hear gunfire if line-of-fire is clear or within acoustic proximity (<= 6.0)
       if (
+        !isAlreadyEngaged &&
+        distToShooter > 6.0 &&
         this.cachedMapFlat &&
         this.cachedMapWidth &&
         this.cachedMapHeight &&
@@ -1350,11 +2351,9 @@ export class RaycastEnemyManager {
           this.cachedThinWalls
         );
         if (!hasClearLine) {
-          continue; // Blocked by solid wall, closed door, or thin wall: enemy in another room cannot detect player
+          continue; // Blocked by solid wall, closed door, or thin wall: distant enemy in another room cannot detect player
         }
       }
-
-      const distToShooter = Math.hypot(enemy.x - shooterX, enemy.y - shooterY);
       const distToImpact = Math.hypot(enemy.x - targetX, enemy.y - targetY);
 
       // Check distance from enemy to laser trajectory line segment

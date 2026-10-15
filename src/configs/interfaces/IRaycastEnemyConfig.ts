@@ -36,6 +36,9 @@ export interface IRaycastEnemyConfig {
   fov?: number; // Optional alias for visionConeAngle
   attackRange: number; // Range at which enemy stops chasing and fires (e.g. 5.5)
   minDistance: number; // Minimum distance to maintain from player (e.g. 2.0)
+  lostSightDuration?: number; // Duration in seconds enemy pursues/searches last known position after losing sight of player before giving up and returning to idle (e.g. 3.0s). If > 30, auto-converted from legacy frames. Default: 3.0
+  /** @deprecated Use lostSightDuration */
+  lostSightDurationFrames?: number; // Legacy alias for lostSightDuration in frames
   rateOfFire: number; // Attack cooldown in ms between blaster shots (e.g. 900)
   damage: number; // Damage dealt to player per shot (e.g. 10)
   accuracy: number; // Hit chance 0..1 (e.g. 0.65)
@@ -63,11 +66,13 @@ export interface IRaycastEnemyConfig {
   floatingBob?: boolean; // Organic floating bobbing motion while hovering
   shoulderOffset?: number; // Distance in tiles from center to left/right shoulders for cover clearance checks (default: 0.35)
   coverClearanceOffset?: number; // Extra offset distance to step out past cover edges into open space (default: 1.5)
-  stepOutFrames?: number; // Duration in ticks/frames the enemy continues moving out into the open upon spotting player (default: 30)
+  stepOutDuration?: number; // Duration in seconds the enemy continues moving out into the open upon spotting player (default: 0.5s)
+  /** @deprecated Use stepOutDuration */
+  stepOutFrames?: number; // Legacy alias for stepOutDuration in frames
   animationConfig?: IRaycastEnemyAnimationConfig;
   isMelee?: boolean; // True if enemy fights with sword/melee instead of ranged blaster
-  shieldDuration?: number; // Duration in ticks the enemy stops and holds shield (e.g. 120 ticks = 2s)
-  shieldInterval?: number; // Period/cooldown in ticks between using shield (e.g. 240 ticks = 4s)
+  shieldDuration?: number; // Duration in seconds the enemy stops and holds shield (e.g. 2.0s). If > 10, auto-converted from legacy frames. Default: 2.0
+  shieldInterval?: number; // Period/cooldown in seconds between using shield (e.g. 3.0s). If > 10, auto-converted from legacy frames. Default: 3.0
   meleeHitSound?: ISoundConfig; // Sound played when melee strike hits player (e.g. hit_flesh)
   stepSounds?: ISoundConfig[]; // Periodic footstep sounds while moving
   deflectSound?: ISoundConfig; // Sound played when deflecting projectile

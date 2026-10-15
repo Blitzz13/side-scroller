@@ -476,7 +476,11 @@ export class RaycastHUD extends Container {
     }
   }
 
-  public showToast(message: string, borderColor: number = 0x00e5ff): void {
+  public showToast(
+    message: string,
+    borderColor: number = 0x00e5ff,
+    durationSeconds: number = 2.5
+  ): void {
     this.toastText.text = message;
     const paddingX = 20;
     const paddingY = 8;
@@ -498,7 +502,8 @@ export class RaycastHUD extends Container {
     this.toastText.position.set(-textW / 2, 0);
     this.toastContainer.visible = true;
     this.toastContainer.alpha = 1;
-    this.toastTimer = 150; // ~2.5 seconds at 60fps
+    // Backward compatibility: if caller passed > 10, it's legacy frames (e.g. 150 -> 2.5s)
+    this.toastTimer = durationSeconds > 10 ? durationSeconds / 60 : durationSeconds;
   }
 
   public flashScreen(color: number, maxAlpha: number = 0.3): void {
@@ -521,6 +526,8 @@ export class RaycastHUD extends Container {
   }
 
   public update(delta: number): void {
+    const dt = delta / 60;
+
     // 1. Screen flash fade
     if (this.flashAlpha > 0) {
       this.flashAlpha = Math.max(0, this.flashAlpha - 0.02 * delta);
@@ -529,9 +536,9 @@ export class RaycastHUD extends Container {
 
     // 2. Toast fade out
     if (this.toastTimer > 0) {
-      this.toastTimer -= delta;
-      if (this.toastTimer < 30) {
-        this.toastContainer.alpha = this.toastTimer / 30;
+      this.toastTimer -= dt;
+      if (this.toastTimer < 0.5) {
+        this.toastContainer.alpha = Math.max(0, this.toastTimer / 0.5);
       }
       if (this.toastTimer <= 0) {
         this.toastContainer.visible = false;

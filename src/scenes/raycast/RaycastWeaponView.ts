@@ -175,7 +175,8 @@ export class RaycastWeaponView extends Container {
     const flashCfg = this.currentWeapon.muzzleFlash;
     const isEnabled = flashCfg?.enabled ?? true;
     if (isEnabled) {
-      this.flashTimer = flashCfg?.duration ?? 5;
+      const rawDur = flashCfg?.duration ?? 0.08;
+      this.flashTimer = rawDur > 1 ? rawDur / 60 : rawDur;
       this.drawMuzzleFlash();
     } else {
       this.flashTimer = 0;
@@ -418,9 +419,11 @@ export class RaycastWeaponView extends Container {
     this.weaponSprite.y = this.basePosY + bobY + this.recoilOffset;
     this.weaponSprite.rotation = this.recoilRotation;
 
+    const dt = delta / 60;
+
     // 3. Update muzzle flash timer and locked position
     if (this.flashTimer > 0) {
-      this.flashTimer -= delta;
+      this.flashTimer -= dt;
       if (this.flashTimer <= 0) {
         this.muzzleFlash.visible = false;
         if (this.flashSprite) this.flashSprite.visible = false;

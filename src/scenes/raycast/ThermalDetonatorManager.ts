@@ -349,7 +349,7 @@ export class ThermalDetonatorManager {
         const tile = mapFlat[flatIdx];
         if (tile > 0) {
           const doorState = doorStatesFlat[flatIdx];
-          const isOpen = doorState !== undefined && Math.abs(doorState) > 0.6;
+          const isOpen = doorState !== undefined && !Number.isNaN(doorState) && Math.abs(doorState) > 0.6;
           if (!isOpen) return true;
         }
       }

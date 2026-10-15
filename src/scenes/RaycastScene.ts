@@ -237,6 +237,7 @@ export class RaycastScene extends BaseScene {
   private battleMusicInstance: any = null;
   private baseAlarmInstance: any = null;
   private isAlertActive: boolean = false;
+  private enemySpawnPoints: Array<{ x: number; y: number }> = [];
   private firstgid: number = 1;
   private currentLevel: string = "level1";
   private isLevelTransitioning: boolean = false;
@@ -818,6 +819,7 @@ export class RaycastScene extends BaseScene {
     if (this.stationaryObjectManager) this.stationaryObjectManager.clear();
     if (this.playerController) this.playerController.resetKeycards();
     this.stopAlertAudio();
+    this.enemySpawnPoints = [];
 
     let mapData: any;
     try {
@@ -1005,8 +1007,24 @@ export class RaycastScene extends BaseScene {
     };
     await this.enemyManager.initSpritesheets();
     this.enemyManager.parseMapEnemies(mapData, firstgid, this.tileMeta, offsetX, offsetY);
+    if (this.enemySpawnPoints.length > 0) {
+      this.enemyManager.setEnemySpawnPoints(this.enemySpawnPoints);
+    }
     this.enemyManager.setOnAlertCallback((alertedEnemy) => {
-      this.triggerAlertAudio();
+      this.triggerAlert();
+    });
+    this.enemyManager.setOnEnemyOpenDoorCallback((cellX, cellY, enemyX, enemyY) => {
+      return this.checkAndInteractEnemyDoor(cellX, cellY, enemyX, enemyY);
+    });
+    this.enemyManager.setOnWaveStartCallback((wave, maxWaves, sp) => {
+      const waveLabel = maxWaves && Number.isFinite(maxWaves) ? `(Wave ${wave}/${maxWaves})` : `(Wave ${wave})`;
+      this.hud?.showToast(`[!] Imperial Reinforcements! ${waveLabel}`, 0xff9900, 3.0);
+      this.hud?.flashScreen(0xff6600, 0.25);
+      if (sound.exists("stormtrooper_there_he_is")) {
+        try {
+          sound.play("stormtrooper_there_he_is", { volume: 0.65 });
+        } catch {}
+      }
     });
     await this.stationaryObjectManager.initSpritesheets();
     this.stationaryObjectManager.parseMapObjects(mapData, this.tileMeta, firstgid, offsetX, offsetY);
@@ -1441,6 +1459,20 @@ export class RaycastScene extends BaseScene {
         for (const obj of spawnLayer.objects) {
           const objName = (obj.name || "").toLowerCase();
           const objType = (obj.type || "").toLowerCase();
+          if (
+            objName.includes("enemy_spawn") ||
+            objType.includes("enemy_spawn") ||
+            (objName.includes("enemy") && objName.includes("spawn"))
+          ) {
+            const tileW = mapData.tilewidth || 64;
+            const tileH = mapData.tileheight || 64;
+            const spX = obj.x / tileW + offsetX + 0.5;
+            const spY = obj.y / tileH + offsetY + 0.5;
+            if (!this.enemySpawnPoints.some((p) => Math.hypot(p.x - spX, p.y - spY) < 0.1)) {
+              this.enemySpawnPoints.push({ x: spX, y: spY });
+            }
+            continue;
+          }
           if (objName.includes("enemy") || objType.includes("enemy")) continue;
           if (
             objName.includes("player") ||
@@ -1476,12 +1508,19 @@ export class RaycastScene extends BaseScene {
           const imgStr = (meta.image || "").toLowerCase();
           const typeStr = (meta.type || this.tileTypes[info.gid] || meta.tileClass || "").toLowerCase();
 
-          // Ignore enemy spawn tiles
+          // Collect enemy spawn tiles
           if (
             tileId === 38 ||
+            imgStr.includes("enemy_spawn") ||
+            typeStr.includes("enemy_spawn") ||
             imgStr.includes("enemy") ||
             typeStr.includes("enemy")
           ) {
+            const spX = lx + offsetX + 0.5;
+            const spY = ly + offsetY + 0.5;
+            if (!this.enemySpawnPoints.some((p) => Math.hypot(p.x - spX, p.y - spY) < 0.1)) {
+              this.enemySpawnPoints.push({ x: spX, y: spY });
+            }
             return;
           }
 
@@ -1512,6 +1551,10 @@ export class RaycastScene extends BaseScene {
           this.uPlaneUniform[1] = this.player.planeY;
         }
       });
+    }
+
+    if (this.enemySpawnPoints.length > 0) {
+      this.enemyManager.setEnemySpawnPoints(this.enemySpawnPoints);
     }
 
     // LevelFinish layer parsing (level exit trigger zones)
@@ -1567,6 +1610,7 @@ export class RaycastScene extends BaseScene {
     this.floorMapFlat = new Int32Array(totalCells);
     this.ceilingMapFlat = new Int32Array(totalCells);
     this.doorStatesFlat = new Float64Array(totalCells);
+    this.doorStatesFlat.fill(NaN);
     this.tileTypeFlags = new Uint8Array(totalCells);
     this.doorOrientationsFlat = new Uint8Array(totalCells);
     this.doorSlideModesFlat = new Uint8Array(totalCells);
@@ -1890,9 +1934,17 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  public triggerAlert(): void {
+    if (this.isAlertActive) return;
+    this.triggerAlertAudio();
+    this.hud?.showToast("[!] BASE ALERT ACTIVATED! [!]", 0xff2222, 3.3);
+    this.hud?.flashScreen(0xff0000, 0.35);
+  }
+
   public triggerAlertAudio(): void {
     if (this.isAlertActive) return;
     this.isAlertActive = true;
+    this.enemyManager?.setAlertActive(true, this.player?.x, this.player?.y);
 
     // Stop calm background music if running
     if (this.bgMusicInstance) {
@@ -1985,6 +2037,62 @@ export class RaycastScene extends BaseScene {
       } catch {}
     }
     this.isAlertActive = false;
+    this.enemyManager?.setAlertActive(false);
+    this.playBackgroundMusic();
+  }
+
+  private checkAndInteractEnemyDoor(x: number, y: number, enemyX?: number, enemyY?: number): boolean {
+    if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) return false;
+    const flatIdx = y * this.mapWidth + x;
+    if (this.tileTypeFlags[flatIdx] !== RaycastScene.TILE_DOOR) return false;
+
+    const key = `${x},${y}`;
+    if (this.lockedDoors[key] && !this.isAlertActive) return false; // Enemies cannot open keycard locked doors unless base alert security override is active
+
+    const currentState = this.doorStatesFlat[flatIdx];
+
+    // If door is currently closing (currentState < 0), enemies cannot cancel or reopen it
+    // UNLESS they are physically inside the doorway threshold (pinch protection)
+    if (currentState < 0) {
+      if (enemyX !== undefined && enemyY !== undefined) {
+        const distToCenter = Math.hypot(enemyX - (x + 0.5), enemyY - (y + 0.5));
+        // Pinch protection: if enemy is physically trapped inside the doorway threshold (< 0.65 tiles from center)
+        if (distToCenter < 0.65) {
+          const startOpen = Math.max(0.05, Math.abs(currentState));
+          this.doorStates[key] = startOpen;
+          this.doorStatesFlat[flatIdx] = startOpen;
+          try {
+            sound.play("door_1", { volume: 0.45 });
+          } catch (e) {
+            console.warn("Failed to play door_1 sound for enemy:", e);
+          }
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // If door is closed (currentState === 0)
+    if (currentState === 0) {
+      if (enemyX !== undefined && enemyY !== undefined) {
+        const distToCenter = Math.hypot(enemyX - (x + 0.5), enemyY - (y + 0.5));
+        // Only open if the enemy is directly in front of the door (dist <= 1.15)
+        if (distToCenter > 1.15) {
+          return false;
+        }
+      }
+      const startOpen = 0.01;
+      this.doorStates[key] = startOpen;
+      this.doorStatesFlat[flatIdx] = startOpen;
+      try {
+        sound.play("door_1", { volume: 0.45 });
+      } catch (e) {
+        console.warn("Failed to play door_1 sound for enemy:", e);
+      }
+      return true;
+    }
+
+    return false;
   }
 
   private enforceNearestScaleMode(): void {
@@ -2725,7 +2833,9 @@ export class RaycastScene extends BaseScene {
       this.laserManager,
       this.player.dirX,
       this.player.dirY,
-      this.detonatorManager?.activeDetonators
+      this.detonatorManager?.activeDetonators,
+      this.lockedDoors,
+      this.tileTypeFlags
     );
 
     // Check for item pickups
@@ -2912,6 +3022,7 @@ export class RaycastScene extends BaseScene {
     if (this.isLevelTransitioning) return;
     this.isLevelTransitioning = true;
     this.removeControls();
+    this.stopAlertAudio();
 
     const kills = this.enemyManager ? this.enemyManager.killedEnemies : 0;
     const total = this.enemyManager ? this.enemyManager.totalEnemies : 0;
@@ -3167,21 +3278,26 @@ export class RaycastScene extends BaseScene {
       } else {
         const keyName = reqKey.charAt(0).toUpperCase() + reqKey.slice(1) + " Keycard";
         this.hud.showToast(`[!] Access Granted (${keyName})`, 0x00e5ff);
+        delete this.lockedDoors[key]; // Door is permanently unlocked once opened with keycard
       }
     }
 
-    if (currentState === 0) {
-      this.doorStates[key] = 0.01;
-      this.doorStatesFlat[flatIdx] = 0.01;
+    if (currentState <= 0) {
+      // Open closed door or reverse closing door
+      const startOpen = currentState < 0 ? Math.max(0.05, Math.abs(currentState)) : 0.01;
+      this.doorStates[key] = startOpen;
+      this.doorStatesFlat[flatIdx] = startOpen;
       try {
         sound.play("door_1", { volume: 0.5 });
       } catch (e) {
         console.warn("Failed to play door_1 sound:", e);
       }
       return true;
-    } else if (currentState === 1) {
-      this.doorStates[key] = -1;
-      this.doorStatesFlat[flatIdx] = -1;
+    } else if (currentState > 0) {
+      // Close open door or reverse opening door
+      const startClose = -Math.max(0.05, currentState);
+      this.doorStates[key] = startClose;
+      this.doorStatesFlat[flatIdx] = startClose;
       try {
         sound.play("door_1", { volume: 0.4 });
       } catch (e) {

@@ -4,6 +4,7 @@ import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfi
 import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
 import { RaycastDirectionalObject } from "./RaycastDirectionalObject";
 import { IEnemyItemDrop } from "./types";
+import { AStarPathFollower } from "../../plugins/pathfinding";
 
 export type EnemyAIState = "idle" | "chase" | "attack" | "dead";
 export type DiagonaPhase =
@@ -25,6 +26,20 @@ export class RaycastEnemy extends RaycastDirectionalObject {
   public itemDrop?: IEnemyItemDrop;
   public triggerAlert: boolean = false;
   public onAlertTriggered?: (enemy: RaycastEnemy) => void;
+
+  // A* Pathfinding agent properties
+  public pathFollower: AStarPathFollower = new AStarPathFollower();
+  public pathTargetX: number = -1;
+  public pathTargetY: number = -1;
+  public pathCooldown: number = 0;
+  public isWaitingForDoor: boolean = false;
+  public isWaitingForAlly: boolean = false;
+  public isNearDoor: boolean = false;
+  public nearestDoorDist: number = Infinity;
+  public nearestDoorCell: { x: number; y: number } | null = null;
+  public doorOnSightLine: { x: number; y: number } | null = null;
+  public shoulderVisibilityLostTimer: number = 0;
+  public advanceTimer: number = 0;
 
   // Vision cone settings (degrees) - adjustable per enemy, except Viper Probe Droid (always 360)
   public static defaultVisionConeAngle: number = 120;
@@ -119,6 +134,132 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     return hasLineOfSight(this.x, this.y, playerX, playerY);
   }
 
+  /**
+   * Tactical combat formation slot matrix.
+   * Defines staggered firing positions so enemies naturally split into
+   * front row, middle row, and rear row, with left/center/right lateral offsets.
+   * Distances are scaled relative to enemy attack range so all slots stay inside firing range.
+   */
+  public static readonly COMBAT_FORMATION_SLOTS: Array<{ distRatio: number; lateral: number }> = [
+    { distRatio: 0.58, lateral: -1.0 }, // Slot 0: Front Row, Left Flank (~3.2 tiles for range 5.5)
+    { distRatio: 0.78, lateral: +0.0 }, // Slot 1: Mid Row, Center Corridor (~4.3 tiles for range 5.5)
+    { distRatio: 0.92, lateral: +1.1 }, // Slot 2: Back Row, Right Flank (~5.0 tiles for range 5.5)
+    { distRatio: 0.62, lateral: +0.9 }, // Slot 3: Front Row, Right Flank (~3.4 tiles for range 5.5)
+    { distRatio: 0.82, lateral: -1.1 }, // Slot 4: Mid Row, Left Flank (~4.5 tiles for range 5.5)
+    { distRatio: 0.90, lateral: -0.6 }, // Slot 5: Back Row, Left-Center (~4.9 tiles for range 5.5)
+  ];
+
+  /**
+   * Checks that a straight walk from (x1,y1) to (x2,y2) is free of walls, testing the center
+   * line plus two parallel lines offset by roughly the enemy's body radius.
+   */
+  private isStraightLineClear(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    lineCheck: (x1: number, y1: number, x2: number, y2: number) => boolean
+  ): boolean {
+    if (!lineCheck(x1, y1, x2, y2)) return false;
+    const segDx = x2 - x1;
+    const segDy = y2 - y1;
+    const segLen = Math.hypot(segDx, segDy);
+    if (segLen < 0.001) return true;
+    const off = 0.3;
+    const offX = (-segDy / segLen) * off;
+    const offY = (segDx / segLen) * off;
+    return (
+      lineCheck(x1 + offX, y1 + offY, x2 + offX, y2 + offY) &&
+      lineCheck(x1 - offX, y1 - offY, x2 - offX, y2 - offY)
+    );
+  }
+
+  /**
+   * Calculates the designated tactical combat target position and preferred shooting distance.
+   * Ensures the formation slot is within attack range and maintains line of fire.
+   */
+  public getCombatTargetPosition(
+    playerX: number,
+    playerY: number,
+    hasLineOfSight: (x1: number, y1: number, x2: number, y2: number) => boolean,
+    hasLineOfFire?: (x1: number, y1: number, x2: number, y2: number) => boolean
+  ): { x: number; y: number; preferredDist: number } {
+    const dx = playerX - this.x;
+    const dy = playerY - this.y;
+    const currentDist = Math.hypot(dx, dy);
+
+    const isMelee = Boolean(this.config.isMelee);
+    const attackRange = this.config.attackRange ?? (isMelee ? 1.2 : 5.5);
+
+    if (currentDist < 0.001) {
+      return { x: this.x, y: this.y, preferredDist: isMelee ? 1.0 : attackRange * 0.75 };
+    }
+
+    const fromPlayerX = -dx / currentDist;
+    const fromPlayerY = -dy / currentDist;
+    const perpX = -fromPlayerY;
+    const perpY = fromPlayerX;
+
+    let preferredDist: number;
+    let preferredLateral: number;
+
+    if (isMelee) {
+      preferredDist = 1.0;
+      const meleeOffsets = [-0.7, 0.0, +0.7, -0.4, +0.4, 0.0];
+      preferredLateral = meleeOffsets[this.id % meleeOffsets.length];
+    } else {
+      const slot = RaycastEnemy.COMBAT_FORMATION_SLOTS[this.id % RaycastEnemy.COMBAT_FORMATION_SLOTS.length];
+      preferredDist = Math.max(2.6, Math.min(attackRange - 0.35, attackRange * slot.distRatio));
+      preferredLateral = slot.lateral;
+    }
+
+    const checkClear = (x: number, y: number): boolean => {
+      if (!hasLineOfSight(playerX, playerY, x, y)) return false;
+      if (hasLineOfFire && !hasLineOfFire(playerX, playerY, x, y)) return false;
+      return true;
+    };
+
+    // 1. Full lateral offset
+    const fullX = playerX + fromPlayerX * preferredDist + perpX * preferredLateral;
+    const fullY = playerY + fromPlayerY * preferredDist + perpY * preferredLateral;
+    if (checkClear(fullX, fullY)) {
+      return { x: fullX, y: fullY, preferredDist };
+    }
+
+    // 2. Half lateral offset
+    const halfX = playerX + fromPlayerX * preferredDist + perpX * (preferredLateral * 0.5);
+    const halfY = playerY + fromPlayerY * preferredDist + perpY * (preferredLateral * 0.5);
+    if (checkClear(halfX, halfY)) {
+      return { x: halfX, y: halfY, preferredDist };
+    }
+
+    // 3. Direct radial line at preferred distance
+    const directX = playerX + fromPlayerX * preferredDist;
+    const directY = playerY + fromPlayerY * preferredDist;
+    if (checkClear(directX, directY)) {
+      return { x: directX, y: directY, preferredDist };
+    }
+
+    // 4. If preferred distance is blocked behind the enemy by a wall, test current distance
+    if (preferredDist > currentDist && currentDist >= (this.config.minDistance ?? 2.0)) {
+      const curFullX = playerX + fromPlayerX * currentDist + perpX * preferredLateral;
+      const curFullY = playerY + fromPlayerY * currentDist + perpY * preferredLateral;
+      if (checkClear(curFullX, curFullY)) {
+        return { x: curFullX, y: curFullY, preferredDist: currentDist };
+      }
+      if (checkClear(this.x, this.y)) {
+        return { x: this.x, y: this.y, preferredDist: currentDist };
+      }
+    }
+
+    // 5. Fallback: maintain distance along line to player
+    return {
+      x: playerX + fromPlayerX * preferredDist,
+      y: playerY + fromPlayerY * preferredDist,
+      preferredDist,
+    };
+  }
+
   public triggerAlertEvent(): void {
     if (!this.triggerAlert) return;
     this.onAlertTriggered?.(this);
@@ -146,7 +287,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
       if (this.diagonaPhase === "hidden" || this.diagonaPhase === "peeking") {
         this.diagonaPhase = "emerging";
         this.state = "chase";
-        this.diagonaAnimTimer = 36;
+        this.diagonaAnimTimer = 0.6;
         this.playAnimation("coming_out", false, 0.11);
         const dist = Math.hypot(sourceX - this.x, sourceY - this.y);
         this.playDiagonaSound("diagona_coming_out", dist);
@@ -158,7 +299,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     this.lastKnownPlayerX = sourceX;
     this.lastKnownPlayerY = sourceY;
     this.hasTarget = true;
-    this.searchTimer = 600; // ~10 seconds of active searching / investigation
+    this.searchTimer = this.lostSightDuration;
 
     if (forceFaceSource) {
       const dx = sourceX - this.x;
@@ -233,13 +374,26 @@ export class RaycastEnemy extends RaycastDirectionalObject {
   public lastKnownPlayerY: number = 0;
   public hasTarget: boolean = false;
   public searchTimer: number = 0;
+  public get lostSightDuration(): number {
+    const raw =
+      this.config.lostSightDuration ??
+      (this.config.lostSightDurationFrames ? this.config.lostSightDurationFrames / 60 : 4.0);
+    return raw > 30 ? raw / 60 : raw;
+  }
   public repositionCooldown: number = 0;
   public wanderDirX: number = 0;
   public wanderDirY: number = 0;
   public stuckFrames: number = 0;
-  public stepOutFrames: number = 0;
+  public stepOutTimer: number = 0;
+  public get stepOutFrames(): number {
+    return this.stepOutTimer * 60;
+  }
+  public set stepOutFrames(val: number) {
+    this.stepOutTimer = val > 10 ? val / 60 : val;
+  }
   public clearanceDir: number = 0;
   public clearanceTimer: number = 0;
+  public attackStanceFrames: number = 0;
 
   // Sound instance tracking to allow immediate stopping on death
   public onDeathCallback?: (enemy: RaycastEnemy) => void;
@@ -562,7 +716,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     }
 
     this.health = Math.max(0, this.health - amount);
-    this.painTimer = 8; // Flash red for ~8 frames
+    this.painTimer = 0.13; // Flash red for ~0.13s
 
     if (this.config.type === RaycastEnemyType.DIAGONA) {
       if (this.health <= 0) {
@@ -591,19 +745,19 @@ export class RaycastEnemy extends RaycastDirectionalObject {
             : 999;
         if (distToSource <= 2.2) {
           this.diagonaPhase = "full_emerging";
-          this.diagonaAnimTimer = 44;
+          this.diagonaAnimTimer = 0.73;
           this.playAnimation("full_come_out", false, 0.09);
           this.playDiagonaSound("diagona_coming_out", distToSource);
         } else {
           this.diagonaPhase = "stalking";
-          this.diagonaSubmergedTimer = 240;
+          this.diagonaSubmergedTimer = 4.0;
         }
       }
       if (sourceX !== undefined && sourceY !== undefined) {
         this.lastKnownPlayerX = sourceX;
         this.lastKnownPlayerY = sourceY;
         this.hasTarget = true;
-        this.searchTimer = 600;
+        this.searchTimer = this.lostSightDuration;
       }
 
       this.playDiagonaSound("diagona_damage_1");
@@ -675,6 +829,8 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     speed: number,
     tryMoveEnemy: (enemy: RaycastEnemy, newX: number, newY: number) => boolean
   ): boolean {
+    this.isWaitingForDoor = false;
+    this.isWaitingForAlly = false;
     const tdx = targetX - this.x;
     const tdy = targetY - this.y;
     const dist = Math.hypot(tdx, tdy);
@@ -691,29 +847,30 @@ export class RaycastEnemy extends RaycastDirectionalObject {
       return true;
     }
 
-    // 2. Sliding on axes
-    if (tryMoveEnemy(this, this.x + baseDirX * speed, this.y)) {
+    // If waiting for a door to finish opening, or queued behind an ally, wait patiently without feeling walls
+    if (this.isWaitingForDoor || this.isWaitingForAlly) {
       this.stuckFrames = 0;
-      this.dirX = baseDirX;
-      this.dirY = 0;
-      return true;
-    }
-    if (tryMoveEnemy(this, this.x, this.y + baseDirY * speed)) {
-      this.stuckFrames = 0;
-      this.dirX = 0;
-      this.dirY = baseDirY;
-      return true;
+      return false;
     }
 
-    // 3. Multi-angle feelers for steering around corners and obstacles
-    const angleDeviations = [
-      Math.PI / 6, -Math.PI / 6,
-      Math.PI / 4, -Math.PI / 4,
-      Math.PI / 3, -Math.PI / 3,
-      Math.PI / 2, -Math.PI / 2,
-      (2 * Math.PI) / 3, -(2 * Math.PI) / 3,
-      (3 * Math.PI) / 4, -(3 * Math.PI) / 4,
-    ];
+    // 2. Multi-angle feelers for fluid diagonal steering around corners, allies, and obstacles
+    // When approaching or passing through a doorway, suppress wide angles (>= 60 deg) to prevent sliding sideways along door walls
+    const angleDeviations = this.nearestDoorDist < 1.6
+      ? [
+          Math.PI / 12, -Math.PI / 12,
+          Math.PI / 6, -Math.PI / 6,
+          Math.PI / 4, -Math.PI / 4,
+          Math.PI / 3, -Math.PI / 3,
+        ]
+      : [
+          Math.PI / 12, -Math.PI / 12,
+          Math.PI / 6, -Math.PI / 6,
+          Math.PI / 4, -Math.PI / 4,
+          Math.PI / 3, -Math.PI / 3,
+          Math.PI / 2, -Math.PI / 2,
+          (2 * Math.PI) / 3, -(2 * Math.PI) / 3,
+          (3 * Math.PI) / 4, -(3 * Math.PI) / 4,
+        ];
 
     const baseAngle = Math.atan2(baseDirY, baseDirX);
 
@@ -728,18 +885,92 @@ export class RaycastEnemy extends RaycastDirectionalObject {
         this.dirY = testDirY;
         return true;
       }
-      if (tryMoveEnemy(this, this.x + testDirX * speed, this.y)) {
+    }
+
+    // 3. Sliding on axes with dominant axis evaluated first to avoid rigid Manhattan stepping
+    const absX = Math.abs(baseDirX);
+    const absY = Math.abs(baseDirY);
+
+    if (absX >= absY) {
+      if (tryMoveEnemy(this, this.x + baseDirX * speed, this.y)) {
         this.stuckFrames = 0;
-        this.dirX = testDirX;
+        this.dirX = baseDirX;
         this.dirY = 0;
         return true;
       }
-      if (tryMoveEnemy(this, this.x, this.y + testDirY * speed)) {
+      if (tryMoveEnemy(this, this.x, this.y + baseDirY * speed)) {
         this.stuckFrames = 0;
         this.dirX = 0;
-        this.dirY = testDirY;
+        this.dirY = baseDirY;
         return true;
       }
+    } else {
+      if (tryMoveEnemy(this, this.x, this.y + baseDirY * speed)) {
+        this.stuckFrames = 0;
+        this.dirX = 0;
+        this.dirY = baseDirY;
+        return true;
+      }
+      if (tryMoveEnemy(this, this.x + baseDirX * speed, this.y)) {
+        this.stuckFrames = 0;
+        this.dirX = baseDirX;
+        this.dirY = 0;
+        return true;
+      }
+    }
+
+    // Secondary single-axis feelers if both primary axes were blocked (suppressed near doorways to prevent lateral wall sliding)
+    if (this.nearestDoorDist >= 1.6) {
+      for (const dev of angleDeviations) {
+        const testAngle = baseAngle + dev;
+        const testDirX = Math.cos(testAngle);
+        const testDirY = Math.sin(testAngle);
+
+        if (tryMoveEnemy(this, this.x + testDirX * speed, this.y)) {
+          this.stuckFrames = 0;
+          this.dirX = testDirX;
+          this.dirY = 0;
+          return true;
+        }
+        if (tryMoveEnemy(this, this.x, this.y + testDirY * speed)) {
+          this.stuckFrames = 0;
+          this.dirX = 0;
+          this.dirY = testDirY;
+          return true;
+        }
+      }
+    }
+
+    // 4. If stuck against a corner or obstacle, nudge towards the center of the current cell or doorway opening
+    if (this.stuckFrames >= 2) {
+      let cellCenterX = Math.floor(this.x) + 0.5;
+      let cellCenterY = Math.floor(this.y) + 0.5;
+
+      // If near a doorway, nudge towards the doorway opening center to clear door jamb corners
+      if (this.nearestDoorCell && this.nearestDoorDist < 1.8) {
+        cellCenterX = this.nearestDoorCell.x + 0.5;
+        cellCenterY = this.nearestDoorCell.y + 0.5;
+      }
+
+      const toCenterX = cellCenterX - this.x;
+      const toCenterY = cellCenterY - this.y;
+      const centerDist = Math.hypot(toCenterX, toCenterY);
+      if (centerDist > 0.04) {
+        const nudgeSpeed = Math.min(speed, centerDist);
+        const nudgeX = (toCenterX / centerDist) * nudgeSpeed;
+        const nudgeY = (toCenterY / centerDist) * nudgeSpeed;
+        if (tryMoveEnemy(this, this.x + nudgeX, this.y + nudgeY)) {
+          this.dirX = toCenterX / centerDist;
+          this.dirY = toCenterY / centerDist;
+          this.stuckFrames = 0;
+          return true;
+        }
+      }
+    }
+
+    if (this.stuckFrames >= 25) {
+      this.pathFollower.clear();
+      this.pathCooldown = 0;
     }
 
     this.stuckFrames++;
@@ -756,10 +987,13 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     hasLineOfFire?: (x1: number, y1: number, x2: number, y2: number) => boolean,
     playerDirX?: number,
     playerDirY?: number,
-    activeGrenades?: readonly { x: number; y: number; radius?: number }[]
+    activeGrenades?: readonly { x: number; y: number; radius?: number }[],
+    pathNextStep?: { x: number; y: number } | null
   ): void {
+    const dt = delta / 60;
+
     if (this.painTimer > 0) {
-      this.painTimer = Math.max(0, this.painTimer - delta);
+      this.painTimer = Math.max(0, this.painTimer - dt);
     }
 
     if (this.state === "dead") {
@@ -786,28 +1020,32 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     }
 
     if (this.shootingTimer > 0) {
-      this.shootingTimer = Math.max(0, this.shootingTimer - delta);
+      this.shootingTimer = Math.max(0, this.shootingTimer - dt);
     }
     if (this.meleeTimer > 0) {
-      this.meleeTimer = Math.max(0, this.meleeTimer - delta);
+      this.meleeTimer = Math.max(0, this.meleeTimer - dt);
     }
 
     // Update periodic shield logic
     const hasShield = Boolean(this.animations.shield || this.config.shieldDuration);
     if (hasShield) {
+      const rawShieldDuration = this.config.shieldDuration ?? 2.0;
+      const shieldDuration = rawShieldDuration > 20 ? rawShieldDuration / 60 : rawShieldDuration;
+      const rawInterval = this.config.shieldInterval ?? 3.0;
+      const baseInterval = rawInterval > 20 ? rawInterval / 60 : rawInterval;
+
       if (this.isShielding) {
-        this.shieldTimer -= delta;
+        this.shieldTimer -= dt;
         this.isMoving = false;
         if (this.shieldTimer <= 0) {
           this.isShielding = false;
-          const baseInterval = this.config.shieldInterval ?? 240;
           this.shieldCooldownTimer = baseInterval * (0.8 + Math.random() * 0.4);
         }
       } else if (this.state === "chase" || this.state === "attack") {
-        this.shieldCooldownTimer -= delta;
+        this.shieldCooldownTimer -= dt;
         if (this.shieldCooldownTimer <= 0 && this.meleeTimer <= 0) {
           this.isShielding = true;
-          this.shieldTimer = this.config.shieldDuration ?? 120;
+          this.shieldTimer = shieldDuration;
           this.isMoving = false;
         }
       }
@@ -841,7 +1079,8 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     const los = hasLineOfSight(this.x, this.y, playerX, playerY);
     const lof = hasLineOfFire ? hasLineOfFire(this.x, this.y, playerX, playerY) : los;
     const inCone = this.isPointInVisionCone(playerX, playerY);
-    const seesPlayer = los && inCone && dist <= (this.config.sightRange ?? 12);
+    const hasCombatAwareness = this.state === "chase" || this.state === "attack" || this.hasTarget;
+    const seesPlayer = los && (inCone || (hasCombatAwareness && dist <= (this.config.sightRange ?? 12))) && dist <= (this.config.sightRange ?? 12);
 
     const dirToPlayerX = dist > 0.001 ? dx / dist : 0;
     const dirToPlayerY = dist > 0.001 ? dy / dist : 1;
@@ -851,7 +1090,8 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     // Check visibility from left and right shoulders to ensure enemy emerges fully from corner edges
     const shoulderOffset = this.config.shoulderOffset ?? 0.35;
     const clearanceMultiplier = this.config.coverClearanceOffset ?? 1.5;
-    const defaultStepOut = this.config.stepOutFrames ?? 30;
+    const rawStepOut = this.config.stepOutDuration ?? (this.config.stepOutFrames ? this.config.stepOutFrames / 60 : 0.5);
+    const defaultStepOut = rawStepOut > 10 ? rawStepOut / 60 : rawStepOut;
 
     const losLeft = hasLineOfSight(this.x - perpX * shoulderOffset, this.y - perpY * shoulderOffset, playerX, playerY);
     const losRight = hasLineOfSight(this.x + perpX * shoulderOffset, this.y + perpY * shoulderOffset, playerX, playerY);
@@ -861,22 +1101,33 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     const fullVisibility = los && losLeft && losRight && lof && lofLeft && lofRight;
 
     if (seesPlayer && !this.wasSeeingPlayer) {
-      this.stepOutFrames = defaultStepOut; // Step forward/out into open room/hallway when first acquiring target
+      this.stepOutTimer = dist <= this.config.attackRange ? 0 : defaultStepOut;
       this.justSpottedPlayer = true;
       this.triggerAlertEvent();
       this.timeTargetVisible = 0;
       this.shotsFiredAtTarget = 0;
       this.sightLostTimer = 0;
 
-      // Delay initial shot after first spotting player so enemy does not instantly fire on frame 0
-      const reactionDelay = this.config.initialReactionDelay ?? 400;
+      // Small natural reaction delay before first shot so enemy does not instagib on frame 0
+      const reactionDelay = Math.min(180, this.config.initialReactionDelay ?? 180);
       const now = Date.now();
       this.lastShotTime = Math.max(this.lastShotTime, now - this.config.rateOfFire + reactionDelay);
+    } else if (this.wasSeeingPlayer && !seesPlayer) {
+      // Just lost direct sight of the player around a corner or door!
+      // Immediately reset path cooldown so enemy repaths around the corner next frame
+      this.pathCooldown = 0;
+      this.hasTarget = true;
+      this.lastKnownPlayerX = playerX;
+      this.lastKnownPlayerY = playerY;
+      this.searchTimer = this.lostSightDuration;
+      if (this.state === "idle" || this.state === "attack") {
+        this.state = "chase";
+      }
     }
     this.wasSeeingPlayer = seesPlayer;
 
-    if (this.stepOutFrames > 0) {
-      this.stepOutFrames = Math.max(0, this.stepOutFrames - delta);
+    if (this.stepOutTimer > 0) {
+      this.stepOutTimer = Math.max(0, this.stepOutTimer - dt);
     }
 
     // Track sight / target knowledge
@@ -886,7 +1137,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
       this.lastKnownPlayerX = playerX;
       this.lastKnownPlayerY = playerY;
       this.hasTarget = true;
-      this.searchTimer = 600; // Search/reposition for ~10 seconds at 60fps
+      this.searchTimer = this.lostSightDuration;
     } else {
       this.sightLostTimer += delta * (1000 / 60);
       if (this.sightLostTimer > 1000) {
@@ -895,9 +1146,14 @@ export class RaycastEnemy extends RaycastDirectionalObject {
         this.shotsFiredAtTarget = 0;
       }
       if (this.searchTimer > 0) {
-        this.searchTimer = Math.max(0, this.searchTimer - delta);
+        this.searchTimer = Math.max(0, this.searchTimer - dt);
         if (this.searchTimer <= 0) {
           this.hasTarget = false;
+          this.pathFollower.clear();
+          if (this.state === "chase") {
+            this.state = "idle";
+            this.isMoving = false;
+          }
         }
       }
     }
@@ -905,12 +1161,14 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     if (dist > 0.001) {
       // Face towards player when active and not actively moving
       if (this.state !== "idle" && !this.isMoving) {
-        if (seesPlayer) {
+        if (seesPlayer || (hasCombatAwareness && los)) {
           this.dirX = dx / dist;
           this.dirY = dy / dist;
         } else if (this.hasTarget) {
-          const tdx = this.lastKnownPlayerX - this.x;
-          const tdy = this.lastKnownPlayerY - this.y;
+          const targetCoordX = pathNextStep ? pathNextStep.x : this.lastKnownPlayerX;
+          const targetCoordY = pathNextStep ? pathNextStep.y : this.lastKnownPlayerY;
+          const tdx = targetCoordX - this.x;
+          const tdy = targetCoordY - this.y;
           const tdist = Math.hypot(tdx, tdy);
           if (tdist > 0.001) {
             this.dirX = tdx / tdist;
@@ -933,8 +1191,8 @@ export class RaycastEnemy extends RaycastDirectionalObject {
 
     // Footstep audio while moving
     if (this.isMoving && this.config.stepSounds && this.config.stepSounds.length > 0 && !this.isDead) {
-      this.stepSoundTimer += delta;
-      if (this.stepSoundTimer >= 22) {
+      this.stepSoundTimer += dt;
+      if (this.stepSoundTimer >= 0.36) {
         this.stepSoundTimer = 0;
         const snd = this.config.stepSounds[
           Math.floor(Math.random() * this.config.stepSounds.length)
@@ -976,7 +1234,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
         this.hasTarget = true;
         this.lastKnownPlayerX = playerX;
         this.lastKnownPlayerY = playerY;
-        this.searchTimer = 600;
+        this.searchTimer = this.lostSightDuration;
         if (dist > 0.001) {
           this.dirX = dx / dist;
           this.dirY = dy / dist;
@@ -984,17 +1242,50 @@ export class RaycastEnemy extends RaycastDirectionalObject {
       }
     }
 
+    const inAttackRange = dist <= this.config.attackRange && los && lof;
+    const inDoorway = this.nearestDoorDist < 1.2;
+    const shootingThroughDoor = this.doorOnSightLine !== null;
+
+    // Ranged enemies stop and shoot when within attackRange with direct line of sight and line of fire,
+    // outside of door thresholds. Melee enemies stop to attack when within melee attack range.
+    const canStopAndAttack =
+      inAttackRange &&
+      !shootingThroughDoor &&
+      !inDoorway &&
+      (this.config.isMelee ? dist <= (this.config.attackRange ?? 1.25) : true);
+
     if (this.state === "idle") {
       this.isMoving = false;
-      // Alerted by direct sight within forward vision cone
-      if (seesPlayer) {
-        this.state = dist <= this.config.attackRange && lof ? "attack" : "chase";
+      this.shoulderVisibilityLostTimer = 0;
+      // Alerted by direct sight within forward vision cone OR target memory
+      if (seesPlayer || this.hasTarget) {
+        if (canStopAndAttack && !closestThreatGrenade) {
+          this.state = "attack";
+          this.isMoving = false;
+          this.pathFollower.clear();
+          this.shoulderVisibilityLostTimer = 0;
+        } else {
+          this.state = "chase";
+        }
       }
     } else if (this.state === "chase") {
-      if (!closestThreatGrenade && dist <= this.config.attackRange && fullVisibility && inCone && this.stepOutFrames <= 0) {
+      if (this.advanceTimer > 0) {
+        this.advanceTimer = Math.max(0, this.advanceTimer - dt);
+      }
+      this.attackStanceFrames = 0;
+
+      if (canStopAndAttack && !closestThreatGrenade) {
         this.state = "attack";
         this.isMoving = false;
+        this.pathFollower.clear();
+        this.shoulderVisibilityLostTimer = 0;
       } else {
+        // Suppressive fire on the move: enemies breaching through doors or repositioning
+        // fire with slightly lowered accuracy (0.6x) to pressure the player without stopping
+        if (seesPlayer && lof && dist <= this.config.attackRange && !closestThreatGrenade) {
+          this.tryFireAtPlayer(dist, 0.6, onShootPlayer);
+        }
+
         // Move / reposition towards player, or flee from / attack around grenade
         let speed = this.config.speed * delta;
         let tx = playerX;
@@ -1031,49 +1322,42 @@ export class RaycastEnemy extends RaycastDirectionalObject {
             ty = this.y + awayY * 4.0;
           }
         } else if (this.clearanceTimer > 0) {
-          this.clearanceTimer = Math.max(0, this.clearanceTimer - delta);
+          this.clearanceTimer = Math.max(0, this.clearanceTimer - dt);
         }
 
         if (!closestThreatGrenade) {
-          if (seesPlayer) {
-            // If we see player but are partially covered behind a corner, steer smoothly towards the clear shoulder
-            if (!losLeft && losRight) {
-              this.clearanceDir = 1;
-              this.clearanceTimer = 20;
-            } else if (losLeft && !losRight) {
-              this.clearanceDir = -1;
-              this.clearanceTimer = 20;
-            } else if (losLeft && losRight && this.clearanceTimer <= 0) {
-              this.clearanceDir = 0;
+          if (!seesPlayer && this.hasTarget) {
+            const distToLast = Math.hypot(this.x - this.lastKnownPlayerX, this.y - this.lastKnownPlayerY);
+            if (distToLast < 0.6) {
+              // Arrived at last known player position: halt and search the area
+              this.isMoving = false;
+              this.pathFollower.clear();
+              return;
             }
+          }
 
-            if (this.clearanceTimer > 0 && this.clearanceDir !== 0) {
-              // Diagonal steering: blend forward and lateral clearance at balanced 45-degree angle
-              const steerLateral = 0.95 * this.clearanceDir;
-              tx = this.x + (perpX * steerLateral + dirToPlayerX) * 1.5;
-              ty = this.y + (perpY * steerLateral + dirToPlayerY) * 1.5;
+          if (seesPlayer && lof && !inDoorway) {
+            if (dist < this.config.minDistance && !this.config.isMelee) {
+              tx = this.x;
+              ty = this.y;
+            } else {
+              tx = playerX;
+              ty = playerY;
+            }
+          } else if (pathNextStep) {
+            tx = pathNextStep.x;
+            ty = pathNextStep.y;
+          } else if (seesPlayer && lof) {
+            if (dist < this.config.minDistance && !this.config.isMelee) {
+              tx = this.x;
+              ty = this.y;
             } else {
               tx = playerX;
               ty = playerY;
             }
           } else if (this.hasTarget) {
-            const toLastDist = Math.hypot(this.lastKnownPlayerX - this.x, this.lastKnownPlayerY - this.y);
-            if (toLastDist > 0.4) {
-              tx = this.lastKnownPlayerX;
-              ty = this.lastKnownPlayerY;
-            } else {
-              // Reached last known position without spotting player -> reposition / sweep around corner
-              if (this.repositionCooldown <= 0) {
-                const randAngle = Math.random() * Math.PI * 2;
-                this.wanderDirX = Math.cos(randAngle);
-                this.wanderDirY = Math.sin(randAngle);
-                this.repositionCooldown = 60 + Math.random() * 60;
-              } else {
-                this.repositionCooldown -= delta;
-              }
-              tx = this.x + this.wanderDirX * 2.5;
-              ty = this.y + this.wanderDirY * 2.5;
-            }
+            tx = this.lastKnownPlayerX;
+            ty = this.lastKnownPlayerY;
           } else {
             // Lost target completely and search timer expired -> return to idle
             this.state = "idle";
@@ -1087,59 +1371,24 @@ export class RaycastEnemy extends RaycastDirectionalObject {
         const moved = this.moveTowards(tx, ty, speed, tryMoveEnemy);
         const actualMovedDist = Math.hypot(this.x - oldX, this.y - oldY);
         this.isMoving = moved && actualMovedDist > 0.0001;
-
-        // While stepping out from cover into full view, can fire or strike if within attack range
-        if (seesPlayer && lof && dist <= this.config.attackRange) {
-          const now = Date.now();
-          if (now - this.lastShotTime >= this.config.rateOfFire) {
-            this.lastShotTime = now;
-            if (this.config.isMelee) {
-              this.meleeTimer = 22;
-            } else {
-              this.shootingTimer = 12;
-            }
-
-            if (this.config.attackSounds && this.config.attackSounds.length > 0) {
-              const snd = this.config.attackSounds[
-                Math.floor(Math.random() * this.config.attackSounds.length)
-              ];
-              try {
-                const res = sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
-                this.trackSoundInstance(res);
-              } catch (e) {
-                console.warn("Failed to play enemy attack sound:", e);
-              }
-            }
-
-            onShootPlayer(this, this.config.damage, this.config.accuracy, dist);
-          }
-        }
       }
     } else if (this.state === "attack") {
       this.isMoving = false;
-      const attackExitDist = this.config.attackRange + (this.config.isMelee ? 0.35 : 1.2);
-      if (dist > attackExitDist || !seesPlayer || !lof) {
+      if (dist > 0.001) {
+        this.dirX = dx / dist;
+        this.dirY = dy / dist;
+      }
+      const maxAttackDist = this.config.attackRange + (this.config.isMelee ? 0.35 : 0.5);
+
+      if (
+        dist > maxAttackDist ||
+        !los ||
+        !lof ||
+        closestThreatGrenade ||
+        shootingThroughDoor ||
+        inDoorway
+      ) {
         this.state = "chase";
-      } else if (!fullVisibility && !this.config.isMelee) {
-        // Partially occluded by corner cover -> step out into the open
-        const speed = this.config.speed * delta * 0.8;
-        let stepX = 0;
-        let stepY = 0;
-        if (!losLeft && losRight) {
-          stepX = perpX * speed;
-          stepY = perpY * speed;
-        } else if (losLeft && !losRight) {
-          stepX = -perpX * speed;
-          stepY = -perpY * speed;
-        } else {
-          stepX = dirToPlayerX * speed;
-          stepY = dirToPlayerY * speed;
-        }
-        const oldX = this.x;
-        const oldY = this.y;
-        tryMoveEnemy(this, this.x + stepX, this.y + stepY);
-        const movedDist = Math.hypot(this.x - oldX, this.y - oldY);
-        this.isMoving = movedDist > 0.0001;
       } else {
         // Maintain stopping distance
         if (dist < this.config.minDistance) {
@@ -1150,38 +1399,51 @@ export class RaycastEnemy extends RaycastDirectionalObject {
           const oldX = this.x;
           const oldY = this.y;
 
-          tryMoveEnemy(this, this.x + backX, this.y + backY);
+          if (!tryMoveEnemy(this, this.x + backX, this.y + backY)) {
+            if (!tryMoveEnemy(this, this.x + backX, this.y)) {
+              tryMoveEnemy(this, this.x, this.y + backY);
+            }
+          }
 
           const movedDist = Math.hypot(this.x - oldX, this.y - oldY);
           this.isMoving = movedDist > 0.0001;
         }
       }
 
-      // Fire or strike at player on cooldown
-      const now = Date.now();
-      if (now - this.lastShotTime >= this.config.rateOfFire) {
-        this.lastShotTime = now;
-        if (this.config.isMelee) {
-          this.meleeTimer = 22;
-        } else {
-          this.shootingTimer = 12; // Show shooting frame for ~12 ticks
-        }
+      // Fire or strike at player on cooldown (full accuracy)
+      this.tryFireAtPlayer(dist, 1.0, onShootPlayer);
+    }
+  }
 
-        // Play blaster or sword attack sound
-        if (this.config.attackSounds && this.config.attackSounds.length > 0) {
-          const snd = this.config.attackSounds[
-            Math.floor(Math.random() * this.config.attackSounds.length)
-          ];
-          try {
-            const res = sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
-            this.trackSoundInstance(res);
-          } catch (e) {
-            console.warn("Failed to play enemy attack sound:", e);
-          }
-        }
-
-        onShootPlayer(this, this.config.damage, this.config.accuracy, dist);
+  private tryFireAtPlayer(
+    dist: number,
+    accuracyMultiplier: number,
+    onShootPlayer: (enemy: RaycastEnemy, damage: number, accuracy: number, distance: number) => void
+  ): void {
+    const now = Date.now();
+    if (now - this.lastShotTime >= this.config.rateOfFire) {
+      this.lastShotTime = now;
+      if (this.config.isMelee) {
+        this.meleeTimer = 0.36; // Show melee frame for ~0.36s (was 22 frames)
+      } else {
+        this.shootingTimer = 0.20; // Show shooting frame for ~0.20s (was 12 frames)
       }
+
+      // Play blaster or sword attack sound
+      if (this.config.attackSounds && this.config.attackSounds.length > 0) {
+        const snd = this.config.attackSounds[
+          Math.floor(Math.random() * this.config.attackSounds.length)
+        ];
+        try {
+          const res = sound.play(snd.src, { volume: snd.volume, loop: snd.loop });
+          this.trackSoundInstance(res);
+        } catch (e) {
+          console.warn("Failed to play enemy attack sound:", e);
+        }
+      }
+
+      const effectiveAccuracy = this.config.accuracy * accuracyMultiplier;
+      onShootPlayer(this, this.config.damage, effectiveAccuracy, dist);
     }
   }
 
@@ -1197,11 +1459,12 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     playerDirY?: number,
     activeGrenades?: readonly { x: number; y: number; radius?: number }[]
   ): void {
+    const dt = delta / 60;
     if (this.shootingTimer > 0) {
-      this.shootingTimer = Math.max(0, this.shootingTimer - delta);
+      this.shootingTimer = Math.max(0, this.shootingTimer - dt);
     }
     if (this.meleeTimer > 0) {
-      this.meleeTimer = Math.max(0, this.meleeTimer - delta);
+      this.meleeTimer = Math.max(0, this.meleeTimer - dt);
     }
 
     // Scan for nearby active thermal detonators threatening Diagona
@@ -1285,12 +1548,12 @@ export class RaycastEnemy extends RaycastDirectionalObject {
           this.hasTarget = true;
           this.lastKnownPlayerX = playerX;
           this.lastKnownPlayerY = playerY;
-          this.searchTimer = 600;
+          this.searchTimer = this.lostSightDuration;
 
           // Stop playing hiding animation and play coming out!
           this.diagonaPhase = "emerging";
           this.state = "chase";
-          this.diagonaAnimTimer = 36; // ~600ms to rise out of water
+          this.diagonaAnimTimer = 0.6; // ~600ms to rise out of water (was 36 frames)
           this.playAnimation("coming_out", false, 0.11);
           this.playDiagonaSound("diagona_coming_out", dist);
         }
@@ -1300,19 +1563,19 @@ export class RaycastEnemy extends RaycastDirectionalObject {
       case "emerging": {
         this.isMoving = false;
         this.state = "chase";
-        this.diagonaAnimTimer = Math.max(0, this.diagonaAnimTimer - delta);
+        this.diagonaAnimTimer = Math.max(0, this.diagonaAnimTimer - dt);
         if (this.diagonaAnimTimer <= 0) {
           if (dist <= 2.2) {
             // Already close to player -> fully come out!
             this.diagonaPhase = "full_emerging";
-            this.diagonaAnimTimer = 44;
+            this.diagonaAnimTimer = 0.73; // (was 44 frames)
             this.playAnimation("full_come_out", false, 0.09);
             this.playDiagonaSound("diagona_coming_out", dist);
           } else {
             // Approaches player with head out
             this.diagonaPhase = "stalking";
-            this.diagonaSubmergedTimer = 240;
-            this.diagonaBlinkTimer = 140 + Math.random() * 120;
+            this.diagonaSubmergedTimer = 4.0; // (was 240 frames)
+            this.diagonaBlinkTimer = 2.3 + Math.random() * 2.0;
             this.diagonaBlinkDuration = 0;
             this.playAnimation("idle_1", false);
           }
@@ -1326,18 +1589,18 @@ export class RaycastEnemy extends RaycastDirectionalObject {
 
         // Handle blinking: idle_1 (open eye) to idle_2 (blink) spaced out
         if (this.diagonaBlinkDuration > 0) {
-          this.diagonaBlinkDuration -= delta;
+          this.diagonaBlinkDuration -= dt;
           if (this.diagonaBlinkDuration <= 0) {
             this.playAnimation("idle_1", false);
-            this.diagonaBlinkTimer = 160 + Math.random() * 180;
+            this.diagonaBlinkTimer = 2.6 + Math.random() * 3.0; // was 160 + Math.random() * 180 frames
           } else {
             this.playAnimation("idle_2", false);
           }
         } else {
-          this.diagonaBlinkTimer -= delta;
+          this.diagonaBlinkTimer -= dt;
           if (this.diagonaBlinkTimer <= 0) {
             this.playAnimation("idle_2", false);
-            this.diagonaBlinkDuration = 16; // ~260ms blink
+            this.diagonaBlinkDuration = 0.27; // ~270ms blink (was 16 frames)
           } else {
             this.playAnimation("idle_1", false);
           }
@@ -1367,17 +1630,17 @@ export class RaycastEnemy extends RaycastDirectionalObject {
           this.hasTarget = true;
           this.lastKnownPlayerX = playerX;
           this.lastKnownPlayerY = playerY;
-          this.searchTimer = 600;
+          this.searchTimer = this.lostSightDuration;
 
           if (dist <= 2.2) {
             this.diagonaPhase = "full_emerging";
-            this.diagonaAnimTimer = 44;
+            this.diagonaAnimTimer = 0.73; // (was 44 frames)
             this.playAnimation("full_come_out", false, 0.09);
             this.playDiagonaSound("diagona_coming_out", dist);
           } else {
             this.diagonaPhase = "stalking";
             this.state = "chase";
-            this.diagonaSubmergedTimer = 240;
+            this.diagonaSubmergedTimer = 4.0; // (was 240 frames)
           }
         }
         break;
@@ -1388,24 +1651,24 @@ export class RaycastEnemy extends RaycastDirectionalObject {
 
         // Head/eyestalk is out while moving: keep showing idle_1 with spaced out blinks
         if (this.diagonaBlinkDuration > 0) {
-          this.diagonaBlinkDuration -= delta;
+          this.diagonaBlinkDuration -= dt;
           if (this.diagonaBlinkDuration <= 0) {
             this.playAnimation("idle_1", false);
-            this.diagonaBlinkTimer = 160 + Math.random() * 180;
+            this.diagonaBlinkTimer = 2.6 + Math.random() * 3.0;
           } else {
             this.playAnimation("idle_2", false);
           }
         } else {
-          this.diagonaBlinkTimer -= delta;
+          this.diagonaBlinkTimer -= dt;
           if (this.diagonaBlinkTimer <= 0) {
             this.playAnimation("idle_2", false);
-            this.diagonaBlinkDuration = 16;
+            this.diagonaBlinkDuration = 0.27;
           } else {
             this.playAnimation("idle_1", false);
           }
         }
 
-        this.diagonaSubmergedTimer = Math.max(0, this.diagonaSubmergedTimer - delta);
+        this.diagonaSubmergedTimer = Math.max(0, this.diagonaSubmergedTimer - dt);
 
         const stalkSpeed = (closestThreatGrenade ? 0.038 : 0.026) * delta;
         const oldX = this.x;
@@ -1420,7 +1683,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
 
         if (reachedCloseRange || stuckNearPlayer || stalkTimeout) {
           this.diagonaPhase = "full_emerging";
-          this.diagonaAnimTimer = 44; // ~730ms dramatic full emergence sequence
+          this.diagonaAnimTimer = 0.73; // ~730ms dramatic full emergence sequence (was 44 frames)
           this.playAnimation("full_come_out", false, 0.09);
           this.playDiagonaSound("diagona_coming_out", dist);
           this.isMoving = false;
@@ -1430,7 +1693,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
 
       case "hiding": {
         this.isMoving = false;
-        this.diagonaAnimTimer = Math.max(0, this.diagonaAnimTimer - delta);
+        this.diagonaAnimTimer = Math.max(0, this.diagonaAnimTimer - dt);
         if (this.diagonaAnimTimer <= 0) {
           this.diagonaPhase = "hidden";
           this.state = "idle";
@@ -1442,7 +1705,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
 
       case "full_emerging": {
         this.isMoving = false;
-        this.diagonaAnimTimer = Math.max(0, this.diagonaAnimTimer - delta);
+        this.diagonaAnimTimer = Math.max(0, this.diagonaAnimTimer - dt);
         if (this.diagonaAnimTimer <= 0) {
           this.diagonaPhase = "surfaced";
           this.state = "chase";
@@ -1465,14 +1728,14 @@ export class RaycastEnemy extends RaycastDirectionalObject {
           this.lastKnownPlayerX = playerX;
           this.lastKnownPlayerY = playerY;
           this.hasTarget = true;
-          this.searchTimer = 600;
+          this.searchTimer = this.lostSightDuration;
         } else if (this.hasTarget) {
-          this.searchTimer = Math.max(0, this.searchTimer - delta);
+          this.searchTimer = Math.max(0, this.searchTimer - dt);
           if (this.searchTimer <= 0) {
             // Lost player, duck down into hiding then return to idle
             this.diagonaPhase = "hiding";
             this.diagonaResetToIdleAfterHide = true;
-            this.diagonaAnimTimer = 18;
+            this.diagonaAnimTimer = 0.3; // (was 18 frames)
             this.playAnimation("hiding", false, 0.12);
             this.hasTarget = false;
             this.isMoving = false;
@@ -1481,7 +1744,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
         } else {
           this.diagonaPhase = "hiding";
           this.diagonaResetToIdleAfterHide = true;
-          this.diagonaAnimTimer = 18;
+          this.diagonaAnimTimer = 0.3; // (was 18 frames)
           this.playAnimation("hiding", false, 0.12);
           this.isMoving = false;
           return;
@@ -1512,7 +1775,7 @@ export class RaycastEnemy extends RaycastDirectionalObject {
         const now = Date.now();
         if (now - this.lastShotTime >= this.config.rateOfFire) {
           this.lastShotTime = now;
-          this.meleeTimer = 18; // ~300ms showing attack frame
+          this.meleeTimer = 0.3; // ~300ms showing attack frame (was 18 frames)
           this.playAnimation("attack", false);
           this.playDiagonaSound("diagona_attack", dist);
           onShootPlayer(this, this.config.damage, this.config.accuracy, dist);

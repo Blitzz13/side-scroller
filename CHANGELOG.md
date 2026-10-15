@@ -2,6 +2,209 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-15] - Time-Based Delta Timers Conversion (Seconds)
+
+### 1. Frame-to-Time Conversion across Enemies, Waves, HUD, and Weapon Views
+- **Delta-Time Conversion in Seconds (`dt = delta / 60`)**:
+  - Replaced all legacy frame counters across the Raycaster engine with real elapsed time in seconds (`dt = delta / 60`), guaranteeing consistent AI timing, wave pacing, and UI animations regardless of display refresh rate (60Hz, 120Hz, 144Hz, 240Hz, or variable delta).
+- **Enemy Wave Spawner Timers** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Updated `IEnemyWaveConfig` to use `spawnIntervalSeconds: number` (1.15s) and `waveCooldownSeconds: number` (10.0s).
+  - Maintained backward compatibility via deprecated `spawnIntervalFrames` and `waveCooldownFrames` aliases.
+  - Converted `waveCooldownTimer`, `spawnIntervalTimer`, and `bfsUpdateTimer` (renamed from frame counter, updating every 0.25s) to decrement in seconds using `dt`.
+  - Converted A* repath staggering (`pathCooldown`) to seconds (`0.35s + (id % 6) * 0.05s`, ~0.35s - 0.60s) decremented by `dt`.
+- **Enemy AI Timers** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Converted `lostSightDuration` across all enemy configs to seconds (`4.0s` for Stormtroopers, Officers, and Commandos; `3.0s` for Droids and Dark Troopers). Added auto-detection fallback: values `> 30` are automatically converted from legacy frames (`val / 60`).
+  - Added `stepOutDuration` (seconds) with backward-compatible `stepOutFrames` getter/setter and fallback conversion.
+  - Converted `painTimer` (~0.13s), `shootingTimer` (~0.20s), `meleeTimer` (~0.36s), `shieldTimer` (2.0s), `shieldCooldownTimer` (3.0s), `stepSoundTimer` (0.36s), `advanceTimer`, and `clearanceTimer` to count down with `dt`.
+  - Converted Diagona aquatic predator state timers (`diagonaAnimTimer`, `diagonaSubmergedTimer`, `diagonaBlinkTimer`, and `diagonaBlinkDuration`) to seconds with `dt`.
+- **HUD Toast & Screen Notifications** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Updated `showToast(message, borderColor, durationSeconds: number = 2.5)`. Legacy frame inputs (e.g. `150`, `180`, `200`) are automatically divided by 60.
+  - Toast fade-out now smoothly transitions over the final 0.5s of display time using `dt = delta / 60`.
+- **Weapon View Muzzle Flash** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Converted `flashTimer` to seconds (~0.08s), decremented by `dt = delta / 60`.
+
+## [2026-10-15] - Diagonal Movement Pursuit, Lookahead Path Smoothing & Alert Reinforcement Spawns
+
+### 1. Diagonal Movement Pursuit & Smooth Path Smoothing
+- **Direct Diagonal Pursuit When Clear Line of Fire** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Issue**: In `chase` state, enemies always prioritized `pathNextStep` grid waypoints over direct `playerX, playerY` pursuit even when standing in open rooms with direct line of sight and line of fire. Consequently, enemies moved rigidly in cardinal or stepped lines along grid cell centers instead of bee-lining directly on the diagonal towards the player.
+  - **Fix**: When `seesPlayer && lof && !inDoorway`, enemies now pursue `playerX, playerY` directly across the Euclidean diagonal vector in 2D space (halting if within `minDistance` for ranged combat). Cardinal grid waypoints from `pathNextStep` are reserved for corridor/doorway traversal or when line of sight is obstructed.
+- **A* Pathfinder Diagonal Neighbor Prioritization** ([`src/plugins/pathfinding/AStarPathfinder.ts`](file:///D:/Projects/side-scroller/src/plugins/pathfinding/AStarPathfinder.ts)):
+  - In `getValidNeighbors`, diagonal neighbors are now generated before cardinal neighbors so that on equal cost/heuristic ties, true diagonal shortcuts across open rooms are naturally selected rather than cardinal zigzags.
+- **Expanded Waypoint Follower Lookahead** ([`src/plugins/pathfinding/AStarPathfinder.ts`](file:///D:/Projects/side-scroller/src/plugins/pathfinding/AStarPathfinder.ts)):
+  - In `AStarPathFollower.advance`, increased lookahead shortcutting from `currentIndex + 2` to `currentIndex + 8`. Enemies in open rooms now skip intermediate tile-center nodes and pursue directly to room corners and door approaches while still strictly respecting `isCrucial` doorway entrance nodes.
+- **Matched Clearance Offset for Path Smoothing** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Reduced side clearance offsets in `isSegmentClear` from `0.30` to `0.20` to accurately reflect the enemy's physical collision radius (`0.24`), enabling string-pulling path smoothing to smoothly cut diagonal paths across open rooms without being falsely blocked by wide margins.
+- **BFS Diagonal Step Preference** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - In `getNextPathStep`, updated diagonal candidate evaluation from `nDist < bestDist` to `nDist <= bestDist`. On equal BFS distance ties in open spaces, enemies now step diagonally rather than strictly following cardinal lines.
+
+### 2. Alert Reinforcement Spawns & Security Door Overrides
+- **Root Cause of Wave Spawns Not Appearing**:
+  - In `level2.json`, when the alert officer is encountered in the command room `(18.2, 32.2)`, all surrounding entrances (`(12, 25)`, `(20, 29)`, `(7, 31)`, `(15, 34)`) require a Blue Keycard.
+  - When the player opened `(12, 25)` and entered, the door automatically closed behind them.
+  - Because `lockedDoors["12,25"]` was never deleted upon unlocking, and enemies were strictly forbidden from opening any keycard door, the closed door re-locked itself against enemies.
+  - The closest spawn point `(26.5, 28.5)` was blocked by locked door `(20, 29)` (distance ~10 tiles) and could not pathfind through `(12, 25)` (distance ~32 tiles) either. Newly spawned wave troopers were completely locked out, unable to pathfind into the room, and stood frozen outside where the player never saw them.
+- **Permanent Keycard Door Unlocking** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - In `tryInteractDoor`, when access is granted with a keycard, `delete this.lockedDoors[key]` is executed so the security door remains permanently unlocked and passable once breached.
+- **Base Alert Security Door Override for Imperial Forces** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - In `checkAndInteractEnemyDoor` and `isCellWalkable`, Imperial enemies now have base security clearance during active base alerts (`this.isAlertActive`), allowing them to open locked doors in their own facility to respond to the alarm and pursue the intruder.
+- **Reachable Wave Spawner Spawn Point Selection** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Updated wave spawn point selection in `update` to utilize `this.bfsDistGrid` path distance instead of pure Euclidean distance through solid walls, guaranteeing the active wave spawn point has a connected, reachable path to the player.
+- **Spawn Point Persistence** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Ensured `this.enemySpawnPoints` in `parseMapEnemies` preserves previously set spawn points instead of re-initializing to an empty array.
+  - Synced spawn points from `RaycastScene` directly after `parseMapEnemies` initialization.
+
+### 3. Continuous Endless Reinforcement Waves During Alert
+- **Endless Wave Progression** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Updated `IEnemyWaveConfig.maxWaves` to be optional and defaulted to `Infinity` so reinforcement waves continue indefinitely as long as the base alarm is sounding.
+  - Added an active enemy concurrency threshold (`enemyThreshold: 20`) to prevent infinite entity accumulation / performance drops if the player idles without engaging.
+- **Wave Announcement Banner** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Updated toast banner on new wave arrival to display `[!] Imperial Reinforcements! (Wave ${wave})` (omitting finite `/maxWaves` denominator for continuous waves).
+
+### 1. Root Cause Resolution: `doorStatesFlat` Typed Array Sentinel Bug
+- **Bug Analysis**:
+  - `this.doorStatesFlat = new Float64Array(totalCells);` in [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) defaulted all cells to `0`.
+  - In [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), multiple routines checked if a cell was a door using: `if (doorStatesFlat[idx] !== undefined)`.
+  - Because typed array indexing never returns `undefined` for allocated indices, `doorStatesFlat[idx] !== undefined` evaluated to `true` for **every single tile on the entire map**!
+  - **Cascading Failures**:
+    1. **A* Wall Clipping**: In `isCellWalkable`, solid walls (`tile > 0`) checked `doorStatesFlat[idx] !== undefined` and returned `true`. A* treated all solid walls (including door jambs) as unlocked doors and routed paths directly through solid wall corners into rooms.
+    2. **Permanent Wall Jamming**: Colliding with any wall in `tryMoveEnemy` triggered `if (doorState !== undefined) { enemy.isWaitingForDoor = true; }`. In `RaycastEnemy.ts`, `isWaitingForDoor` suppressed all feelers and unstick logic, causing enemies to freeze against wall corners waiting for solid walls to "open".
+    3. **Suppressed Stationary Attack Stance**: `findDoorOnSegment` and `nearestDoorDist` evaluated every enemy's own tile as a door, permanently setting `shootingThroughDoor = true` and `inDoorway = true` across the map. Consequently, `canStopAndAttack` could never become `true`, forcing enemies to stay in `chase` and charge directly into the player's face instead of stopping to shoot at weapon range.
+- **Fix**:
+  - Initialized `doorStatesFlat` with `NaN` in [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) via `this.doorStatesFlat.fill(NaN)`.
+  - Passed `this.tileTypeFlags` to `this.enemyManager.update(...)`.
+  - Added robust `isDoorTile(flatIdx, doorStatesFlat)` method in [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts) which checks `tileTypeFlags[flatIdx] === 2 (TILE_DOOR)` and `!Number.isNaN(doorStatesFlat[flatIdx])`.
+  - Replaced all unchecked `doorStatesFlat[...] !== undefined` and raw door indexing across `RaycastEnemyManager.ts` (`checkLineOfSight`, `findDoorOnSegment`, `findRayWallDistance`, `tryMoveEnemy`, `updateBfsGrid`, `getNextPathStep`, `isCellWalkable`, `getDoorwayAxis`, `nearestDoorDist`, `isCrucialDoorNode`, and door opening checks) with `isDoorTile`.
+  - Added `!Number.isNaN(doorState)` guard to [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts).
+
+### 2. Clean Room Arrival & Stop-and-Shoot Distance Enforcement
+- **Arrival at Last Known Position** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - When pursuing the player's last known location (`!seesPlayer && this.hasTarget`), if distance to `(lastKnownPlayerX, lastKnownPlayerY)` is less than `0.6` tiles, the enemy halts (`isMoving = false`), clears path followers, and holds position while searching until `searchTimer` expires or the player re-emerges.
+  - Prevents spiratic walking, corner wall charging, and jittering once reaching the room.
+- **Ranged Safety Distance in Chase State** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - If a ranged enemy in `chase` state is within `minDistance` (e.g. 2.0 - 2.2 tiles) with clear line of fire, they hold position rather than walking into the player.
+  - In `attack` state, enemies remain stationary to fire and backpedal if the player encroaches inside `minDistance`.
+
+## [2026-10-15] - Stop-and-Shoot Weapon Range Combat, Configurable Lost Sight Timer & Doorway Unsnagging
+
+### 1. Stop-and-Shoot Weapon Range Combat
+- **Instant Stationary Firing Stance in Weapon Range** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Root Cause of Enemies Walking into the Player**: Previously, `cleanFiringPosition` required `reachedCombatSlot` (`distToCombatPos < 0.65`). Because `combatPos` was computed from the player's dynamic position every frame, moving or strafing caused `distToCombatPos` to rarely drop below 0.65 tiles. As a result, ranged enemies remained trapped in `chase` state and continued walking towards the player's coordinates while firing on the move, rather than stopping in weapon range.
+  - Replaced restrictive formation slot distance requirements with clean line-of-fire clearance (`canStopAndAttack`):
+    - Enemies within weapon range (`dist <= attackRange`) with direct line of sight and line of fire (`los && lof`), who are not shooting through a closed door or standing within a doorway threshold (`nearestDoorDist >= 1.2`), immediately transition to `state = "attack"`.
+    - Upon entering `attack` state, movement is halted (`isMoving = false`), pathfinding waypoints are cleared (`pathFollower.clear()`), and the enemy fires on cooldown with full accuracy.
+  - **Tactical Back-Stepping**: If the player closes to within `minDistance` (e.g. 2.0 tiles for Stormtroopers), the enemy executes controlled backward steps to maintain shooting distance without charging forward.
+
+### 2. Configurable Lost Sight Search Timer (`lostSightDuration`)
+- **Configurable Enemy Target Search Duration** ([`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Added `lostSightDuration?: number` (ticks/frames, default: 180 = ~3.0s at 60fps) to `IRaycastEnemyConfig`.
+  - Configured tailored search durations across all enemy archetypes:
+    - `Stormtrooper`: 180 ticks (3.0s)
+    - `Viper Probe Droid`: 150 ticks (2.5s)
+    - `Imperial Officer`: 240 ticks (4.0s)
+    - `Imperial Commando`: 240 ticks (4.0s)
+    - `Phase 1 Dark Trooper`: 240 ticks (4.0s)
+    - `Dianoga`: 180 ticks (3.0s)
+- **Clean Disengagement & Return to Idle** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - When line of sight is broken, enemies pursue to the player's last known position (`lastKnownPlayerX`, `lastKnownPlayerY`) for the duration of `lostSightDuration`.
+  - When `searchTimer` reaches zero, the enemy clears target memory (`hasTarget = false`), clears path followers (`pathFollower.clear()`), stops moving (`isMoving = false`), and cleanly transitions to `state = "idle"`.
+  - Idle enemies without active targets do not run background A* queries towards the player through solid walls.
+
+### 3. Corridor Approach Flocking & Doorway Unsnagging
+- **Corridor Single-File Flocking** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Root Cause of Stopping at Door Sides**: In narrow approach hallways outside doorways, unconstrained 2D flocking separation previously pushed trailing enemies laterally into wall jambs. When the player moved out of sight around the corner, the stuck enemy lost line of sight and froze against the wall.
+  - Expanded `getDoorwayAxis` check radius from 1.4 to 2.5 tiles. Throughout the entire approach and departure corridor, lateral separation forces are suppressed (`pushX = 0` or `pushY = 0`), keeping multiple pursuing enemies in neat single file without pushing anyone into jamb walls.
+- **Doorway Jamb Unsnagging & Feelers** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Added `±60°` (`±Math.PI / 3`) feelers near doorways so enemies who contact a wall jamb can peel around the corner directly into the door opening.
+  - When stuck near a doorway (`nearestDoorDist < 1.8`), stuck nudging steers towards the center of the doorway opening (`nearestDoorCell`) rather than towards the enemy's obstacle-adjacent cell center.
+  - Raised stuck frame path-clear threshold from 10 to 25 frames to allow natural corner peeling without discarding paths.
+- **Ahead-of-Time Enemy Door Opening** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Enemies look ahead up to 1.5 tiles towards `nearestDoorCell` and open closed unlocked doors before contact, ensuring unimpeded door transit.
+
+## [2026-10-14] - Modular A* Pathfinding Plugin, Alert Wave Spawner, Fluid Diagonal Navigation & Direct Range Combat
+
+### 1. Modular A* Pathfinding Engine Plugin
+- **Reusable TypeScript Plugin Architecture** ([`src/plugins/pathfinding/AStarPathfinder.ts`](file:///D:/Projects/side-scroller/src/plugins/pathfinding/AStarPathfinder.ts), [`src/plugins/pathfinding/index.ts`](file:///D:/Projects/side-scroller/src/plugins/pathfinding/index.ts)):
+  - Built an independent, 100% TypeScript A* pathfinding and path-following plugin with clean interfaces (`IAStarGrid`, `AStarNode`, `AStarPathFollower`). Completely decoupled from the raycast engine for easy reuse across 2D/3D scenes.
+  - **Diagonal Movement & Corner Snag Prevention**: Evaluates 8-directional neighbor transitions with Euclidean heuristic and diagonal corner-cutting prevention (`canTraverse`).
+  - **Raycast Path Smoothing (`smoothPath`)**: Optimizes raw grid paths using line-of-fire clearance raycasts to skip intermediate nodes and construct direct straight-line vectors across open rooms.
+  - **Cardinal Doorway Approach (`isCrucialDoorNode`)**: Forces paths through doors and approach tiles to remain cardinally aligned, guaranteeing enemies enter door frames straight on without grazing side door jambs.
+  - **Predictive Waypoint Following (`AStarPathFollower`)**: Implements pure pursuit waypoint lookahead and automatic advance with a 0.35 arrival radius and line-of-sight shortcutting.
+
+### 2. Base Alert Wave Spawner & Persistent Alert Audio
+- **Enemy Spawn Points & Wave Spawner System** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Parses enemy spawn points from `Spawns` object and tile layers (`level2.json`) without rendering spawn indicator tiles as visible in-game geometry.
+  - When the base alarm triggers, selects the closest enemy spawn point to the player and spawns reinforcement waves of Stormtroopers in controlled periodic intervals (e.g. 3 waves, 2-3 enemies per wave, 12s cooldown).
+  - Wave spawning triggers regardless of remaining map enemy counts, preventing soft-locks if stray enemies are missed.
+  - **Persistent Combat Audio & Alarm**: Alert siren (`base_alarm`) and battle theme (`battle_theme`) persist until the level is finished or the player dies, preventing premature reversion to calm music. Added HUD alert toast and red screen flash notifications on wave arrivals.
+  - **Proximity Alert Awareness Radius**: Nearby enemies within 24 tiles (`ALERT_AWARENESS_RADIUS`) automatically awaken and pathfind towards the player upon alert.
+
+### 3. Anti-Jam Pass-Through & Fluid Diagonal Steering
+- **Enemy Jamming & Doorway Deadlock Elimination** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Removed hard enemy-to-enemy physical collisions and queuing deadlocks from `tryMoveEnemy`. Enemies can now freely pass through each other in narrow corridors and doorways, completely resolving doorway bottleneck pileups.
+  - **Open-Room Flocking Separation**: Implemented a gentle separation pass (`minSpacing = 0.55`) in open spaces, ensuring stationary shooting enemies maintain natural personal space without overlapping sprites.
+  - **Automated Enemy Door Interaction**: Enemies look ahead up to 2.5 tiles along their path and trigger door opening for closed normal doors (`checkAndInteractEnemyDoor`), while strictly respecting keycard-locked doors.
+- **Natural Diagonal Movement Feelers** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Replaced rigid single-axis Manhattan movement with multi-angle feelers (`±15°`, `±30°`, `±45°`, `±60°`, `±75°`, `±90°`) and axis-dominant sliding. Enemies smoothly slide along walls and round corners diagonally.
+
+### 4. Immediate Stop-and-Shoot on Range Entry & Combat Stance
+- **Direct Attack Range Transition** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Fixed an issue where enemies walked all the way to the player's coordinate and froze instead of shooting from range.
+  - Defined direct `inAttackRange = dist <= this.config.attackRange && los && lof`. The instant an enemy has line of sight and line of fire within weapon range, it cancels movement (`isMoving = false`), clears path waypoints (`pathFollower.clear()`), and immediately enters `attack` state to fire on cooldown.
+  - Enemies only pursue forward if the player is genuinely out of weapon range (`dist > attackRange`) or concealed behind a wall (`!los || !lof`).
+  - Excluded attacking and in-range enemies from redundant A* pursuit paths to `(playerX, playerY)` in `RaycastEnemyManager`.
+- **Removed Artificial Delays & Doorway Invalidation**:
+  - Removed `isNearDoor` from invalidating attack stance or blocking shooting; being near a door frame no longer prevents enemies from firing.
+  - Removed forced 30-frame step-out delays when enemies spot the player in range, and tuned initial reaction delay to a crisp 180ms.
+- **Combat Tracking & Tactical Repositioning**:
+  - Enabled continuous combat awareness (`hasCombatAwareness`) so enemies keep tracking and aiming directly at the player without losing sight when the player strafes.
+  - If the player approaches closer than `minDistance` (e.g. 2.0 tiles), the enemy executes tactical back-steps while continuously firing.
+
+### 5. Doorway Pile-Up Fix (Alerted Enemies Not Entering Rooms)
+- **Wall-Aware Formation Steering** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Root Cause**: When an enemy outside a room glimpsed the player through the doorway (but was still out of weapon range), it steered in a straight line to its formation slot instead of following its A* path. The slot was on the far side of the wall, so the enemy walked into the wall next to the door, slid sideways along it with the movement feelers, and piled up with the others without ever entering.
+  - Added `isStraightLineClear()` (center line plus ±0.3 body-width rays). Enemies now steer straight to their formation slot only when that line is wall-free and they are not near a door; otherwise they follow the A* path through the doorway.
+- **Path Clearance & Search Budget** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Widened the path smoothing/shortcut clearance from ±0.20 to ±0.30 tiles (the enemy collision radius is 0.24), so shortcuts no longer clip door jambs.
+  - Raised the A* `maxIterations` from 1500 to 5000 so distant alerted enemies can still find long detours through doorways.
+
+### 6. Doorway Breach & Clean Firing Positions
+- **Clean Firing Position Verification** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Root Cause of Door Frame Bunching**: When enemies in a corridor glimpsed the player through an open doorway, their single center ray hit the player, causing them to immediately enter stationary `attack` stance at the door frame. Slight player movements broke this narrow sight wedge, triggering rapid jitter between `chase` and `attack` against the door jamb.
+  - Introduced `cleanFiringPosition`: enemies only enter stationary firing stance if they are within attack range, have full visibility (both shoulders see the player), are **not shooting through a doorway** (`doorOnSightLine === null`), and are **not standing within a doorway frame** (`nearestDoorDist >= 1.3`).
+  - Added a 30-frame hysteresis counter (`shoulderVisibilityLostTimer`) before exiting `attack` mode due to partial shoulder obstruction, eliminating single-frame state jitter.
+- **Suppressive Moving Fire on the Move**:
+  - Extracted centralized firing logic (`tryFireAtPlayer`) shared by both `attack` and `chase` states.
+  - Enemies breaching corridors and doorways continuously lay down suppressive fire on the move (`0.6x` accuracy multiplier) while following their A* path through the door, creating intense combat pressure without freezing outside rooms.
+- **Doorway-Aware Flocking & Hunter Cap** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Replaced the wide 2.2-tile door separation blackout zone with `isInsideDoorway` (checked strictly on the doorway tile itself). Personal space separation (`minSpacing = 0.55`) remains active in corridors and outside doorways, preventing enemies from stacking at door jambs.
+  - Implemented `findDoorOnSegment` using DDA to detect when a sight line crosses any door tile.
+  - Integrated thin walls into A* pathfinding and BFS distance grids (`thinWallBlockedCells`), preventing impossible path calculations through security barriers.
+  - Capped active alert hunters to the nearest 12 candidates (plus reinforcement waves and enemies with existing combat engagement), preventing 60+ distant enemies from causing facility-wide bottleneck jams.
+
+### 7. Manual Door Toggle & Doorway Bee-Line Funneling
+- **Manual Door State Toggling & Motion Reversal** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **Root Cause of Doors Stuck Open & Looping Audio**: Previously, `checkAndInteractDoor` only allowed toggling when `currentState === 0` (closed) or `currentState === 1` (open), ignoring any in-motion state. Simultaneously, `checkDoorAt` in `RaycastEnemyManager` ran a distant 2.5-tile lookahead across 4 waypoints every frame that immediately reopened any closing door (`currentState < 0`) and replayed `door_1` audio the exact moment the player pressed `[E]`.
+  - **Seamless Motion Reversal**: Player can now press `[E]` to toggle doors from any state: doors opening or open (`currentState > 0`) reverse immediately to closing (`-Math.max(0.05, currentState)`), and doors closing or closed (`currentState <= 0`) reverse to opening (`Math.max(0.05, Math.abs(currentState))`).
+  - **Enemy Door Opening Constraints & Pinch Protection**: Enemies can no longer cancel or reopen closing doors from the outside (`distToCenter >= 0.65`). Added physical pinch protection: if an enemy is physically trapped within the doorway threshold (`distToCenter < 0.65`), the closing door safely reverses to open, preventing trapped entities or soft-locks.
+  - Closed doors require enemies to be directly adjacent (`dist <= 1.15`) along their movement vector, eliminating distant pre-triggers.
+- **Doorway Corridor Flocking Blackout & Bee-Line Funneling** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Doorway Separation Blackout**: Replaced the 1-tile door cell check with `isNearDoorway(ex, ey, 1.8)` in the flocking separation pass. Enemies in the approach corridor outside doorways no longer shove each other laterally into door frames.
+  - **Doorway Center Line Bee-Line Alignment**: When enemies approach within `1.6` tiles of a doorway, their movement target coordinate is snapped directly to the doorway centerline (`doorX + 0.5` for North/South passages, `doorY + 0.5` for East/West passages).
+  - **Suppression of Sideways Wall-Sliding**: In `RaycastEnemy.ts:moveTowards`, wide feelers (60°, 75°, 90°) and secondary single-axis feelers are suppressed within `1.6` tiles of doorways. Instead of sliding sideways along outer corridor walls into blind spots when blocked, enemies advance in single file straight through the doorway.
+  - When in the doorway approach zone (`nearestDoorDist < 1.6 || shootingThroughDoor || inDoorway`), enemies strictly follow their A* path through the door center, preventing formation slots on the far side of walls from pulling enemies into outer wall corners.
+
+### 8. Room Breach, Doorway Clearance & Formation Combat
+- **Room Penetration & Formation Combat Stance** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Root Cause of Door Threshold Bunching**: Previously, alerted enemies in `chase` mode switched to stationary `attack` stance the exact microsecond they stepped 1.3 tiles past a door frame. Because `attackRange` was ≤ 5.5 and line of fire was clear into the room, every enemy entering the doorway immediately cleared their path and permanently froze in place at the room entrance.
+  - **Formation Slot Arrival Requirement**: Ranged enemies now continue advancing in `chase` mode through doorways into rooms while laying down suppressive fire. They only settle into stationary `attack` stance once they reach their assigned tactical formation slot (`distToCombatPos < 0.65`) and are safely clear of the door threshold (`nearestDoorDist >= 1.8`), or if obstructed (`stuckFrames > 30`).
+  - **Doorway Zone Steer vs. Room Formation Steer**: When outside a room (`shootingThroughDoor === true`), enemies strictly follow their A* path through the door. Once inside the room (`shootingThroughDoor === false`), they steer directly towards their distinct formation slots (`combatPos`), fanning out naturally across the room instead of stacking.
+- **Directional Flocking Separation & Doorway Path Cleanliness** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Directional Passage Separation**: Replaced the 1.8-tile total separation blackout with directional corridor separation (`getDoorwayAxis`). In doorway corridors, lateral push (`pushX` for NS passages, `pushY` for EW passages) is suppressed to prevent wall-jamming, while longitudinal push remains active to keep approaching enemies in clean single-file queues without collapsing into a single point.
+  - **Removed Destructive Target Clobbering**: Removed path target coordinate overwriting in `RaycastEnemyManager`, allowing A* waypoints to smoothly direct entities through doorways and deep into rooms.
+
+---
+
 ## [2026-10-12] - True 3D Perspective Opening Crawl Shader & Galaxy Background
 
 ### 1. Authentic Star Wars 3D Opening Crawl Shader & Alignment
