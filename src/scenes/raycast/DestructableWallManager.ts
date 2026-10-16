@@ -85,6 +85,8 @@ export class DestructableWallManager {
       let offset = 0;
       let linkIds: any = [];
       let isEnabling = false;
+      let isObjective = false;
+      let objectiveKey = "";
 
       // Extract custom properties from object and layer
       const allProps = [...(layer.properties || []), ...(obj.properties || [])];
@@ -125,6 +127,13 @@ export class DestructableWallManager {
           linkIds = pVal;
         } else if (pName === "isenabling") {
           isEnabling = Boolean(pVal);
+        } else if (pName === "objective" && typeof pVal === "object" && pVal !== null) {
+          if (pVal.isObjective !== undefined) isObjective = Boolean(pVal.isObjective);
+          if (pVal.objectiveKey !== undefined) objectiveKey = String(pVal.objectiveKey).trim();
+        } else if (pName === "isobjective") {
+          isObjective = Boolean(pVal);
+        } else if (pName === "objectivekey") {
+          objectiveKey = String(pVal).trim();
         }
       }
 
@@ -139,6 +148,8 @@ export class DestructableWallManager {
         offset,
         linkIds,
         isEnabling,
+        isObjective,
+        objectiveKey,
       });
 
       this.walls.push(wall);

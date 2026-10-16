@@ -39,6 +39,7 @@ import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
 import floorCeilingVert from "./raycast/shaders/floorCeiling.vert";
 import floorCeilingFrag from "./raycast/shaders/floorCeiling.frag";
 import { RaycastMinimap } from "../plugins/minimap";
+import { RaycastMissionManager } from "./raycast/objectives";
 import {
   calculateMapBounds,
   extractTiledGidAndRotation,
@@ -217,6 +218,7 @@ export class RaycastScene extends BaseScene {
   private weaponView!: RaycastWeaponView;
   private hud!: RaycastHUD;
   private minimap!: RaycastMinimap;
+  private missionManager!: RaycastMissionManager;
   private playerController!: RaycastPlayerController;
   private pickupManager!: RaycastPickupManager;
   private breakableManager!: RaycastBreakableManager;
@@ -451,8 +453,9 @@ export class RaycastScene extends BaseScene {
     // Overlay mobile on-screen controls (only on mobile devices)
     if (this.isMobileDevice()) {
       this.hud.adaptForMobile();
-      // MobileControls includes the touch map button; hide HUD duplicate
+      // MobileControls includes the touch map and objectives buttons; hide HUD duplicates
       this.hud.setMapButtonVisible(false);
+      this.hud.setObjectivesButtonVisible(false);
       this.mobileControls = new MobileControls();
       this.mobileControls.zIndex = 80;
       this.mobileControls.on("action", () => this.tryOpenDoor());
@@ -462,8 +465,21 @@ export class RaycastScene extends BaseScene {
         this.playerController.setSprinting(active);
       });
       this.mobileControls.on("toggleMinimap", () => this.minimap.toggle());
+      this.mobileControls.on("toggleObjectives", () => this.missionManager.toggleObjectives());
       this.addChild(this.mobileControls);
     }
+
+    // Mission Objectives & Triggers Manager
+    this.missionManager = new RaycastMissionManager({
+      onTriggerAlarm: () => this.triggerAlert(),
+      showToast: (text, color, duration) => this.hud?.showToast(text, color, duration),
+      showPrompt: (text) => this.hud?.setPrompt(text),
+      hidePrompt: () => this.hud?.clearPrompt(),
+    });
+    const missionUI = this.missionManager.getUIContainer();
+    missionUI.zIndex = 95;
+    this.hud.on("toggleObjectives", () => this.missionManager.toggleObjectives());
+    this.addChild(missionUI);
 
     // Tactical Minimap & Holomap Datapad Plugin
     this.minimap = new RaycastMinimap({
@@ -647,6 +663,11 @@ export class RaycastScene extends BaseScene {
         { id: 34, image: "assets/raycast/pickups/key_card_red.png", type: "PickupItem", properties: [{ name: "type", value: "red_keycard" }] },
         { id: 36, image: "assets/raycast/textures/grilled_wall.jpg", type: "DestructableWall", properties: [{ name: "tileType", value: "thickWall" }] },
         { id: 39, image: "assets/raycast/textures/grilled_wall_destroyed.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 40, image: "assets/raycast/textures/level_off.png", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 41, image: "assets/raycast/textures/lever_on.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 42, image: "assets/raycast/textures/piped_wall.png", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 43, image: "assets/raycast/textures/computer_wall.png", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 44, image: "assets/raycast/textures/electronic_wall.png", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
       ];
     }
   }
@@ -754,6 +775,9 @@ export class RaycastScene extends BaseScene {
   }
 
   private handleBreakableDestroyed(broken: RaycastBreakable, context: string = ""): void {
+    if (broken.isObjective && broken.objectiveKey) {
+      this.missionManager?.completeObjective(broken.objectiveKey);
+    }
     if (broken.isWallBlock) {
       this.handleWallBlockDestroyed(broken);
     } else {
@@ -1029,6 +1053,9 @@ export class RaycastScene extends BaseScene {
     this.updateLevelFinishZonesStatus();
     this.destructableWallManager.onWallDeactivated = (wall) => {
       this.hud.showToast(`[!] Security Barrier Deactivated!`, 0x00ffcc);
+      if (wall.isObjective && wall.objectiveKey) {
+        this.missionManager?.completeObjective(wall.objectiveKey);
+      }
       try {
         sound.play("door_1", { volume: 0.4 });
       } catch (e) {
@@ -1062,6 +1089,11 @@ export class RaycastScene extends BaseScene {
     // Initialize thermal detonator manager textures & frames
     await this.detonatorManager.initTextures();
     await this.laserManager.initTextures();
+
+    // Initialize mission triggers and objectives
+    if (this.missionManager) {
+      await this.missionManager.init(mapData, levelName, offsetX, offsetY);
+    }
 
     // Spawn initial thermal detonator pickups for quick player testing only on test_level
     if (levelName === "test_level") {
@@ -1246,7 +1278,12 @@ export class RaycastScene extends BaseScene {
             meta.image = imgPath.split(/[\\/]/).pop() || "";
             if (
               imgPath.toLowerCase().includes("computer_panel") ||
-              imgPath.toLowerCase().includes("grilled_wall")
+              imgPath.toLowerCase().includes("grilled_wall") ||
+              imgPath.toLowerCase().includes("computer_wall") ||
+              imgPath.toLowerCase().includes("electronic_wall") ||
+              imgPath.toLowerCase().includes("piped_wall") ||
+              imgPath.toLowerCase().includes("lever") ||
+              imgPath.toLowerCase().includes("level_off")
             ) {
               meta.type = TileType.THICK_WALL;
               meta.tileType = TileType.THICK_WALL;
@@ -1604,6 +1641,23 @@ export class RaycastScene extends BaseScene {
     for (const finishLayer of finishLayers) {
       if (finishLayer.objects && Array.isArray(finishLayer.objects)) {
         for (const obj of finishLayer.objects) {
+          const objType = (obj.type || "").toLowerCase();
+          const hasTriggerProps =
+            obj.properties &&
+            obj.properties.some((p: any) => {
+              const pName = (p.name || "").toLowerCase();
+              return (
+                pName === "voicelinesontrigger" ||
+                pName === "trigerevent" ||
+                pName === "triggerevent" ||
+                pName === "shouldbepressed" ||
+                pName === "triggeralarm"
+              );
+            });
+          if (objType === "triger" || objType === "trigger" || hasTriggerProps) {
+            continue;
+          }
+
           const objW = obj.width || tileW;
           const objH = obj.height || tileH;
           const x1 = obj.x / tileW + offsetX;
@@ -2243,6 +2297,11 @@ export class RaycastScene extends BaseScene {
       }
     } catch {}
     try {
+      if (this.missionManager) {
+        this.missionManager.destroy();
+      }
+    } catch {}
+    try {
       if (this.pickupManager) {
         this.pickupManager.dispose();
       }
@@ -2766,8 +2825,17 @@ export class RaycastScene extends BaseScene {
     if (key === "m") {
       this.minimap?.toggle();
     }
-    if (key === "escape" && this.minimap?.isOpen) {
-      this.minimap?.hide();
+    // Toggle Objectives Datapad (Tab) / Close on ESC
+    if (e.key === "Tab" || e.code === "Tab") {
+      e.preventDefault();
+      this.missionManager?.toggleObjectives();
+    }
+    if (key === "escape") {
+      if (this.missionManager?.isObjectivesOpen) {
+        this.missionManager.hideObjectives();
+      } else if (this.minimap?.isOpen) {
+        this.minimap.hide();
+      }
     }
   };
 
@@ -2829,6 +2897,9 @@ export class RaycastScene extends BaseScene {
       if (this.minimap.isOpen) {
         this.minimap.update(delta);
       }
+    }
+    if (this.missionManager) {
+      this.missionManager.update(this.player.x, this.player.y);
     }
 
     // Build allThinWalls into reusable array without concat allocations
@@ -3081,6 +3152,13 @@ export class RaycastScene extends BaseScene {
     const kills = this.enemyManager ? this.enemyManager.killedEnemies : 0;
     const total = this.enemyManager ? this.enemyManager.totalEnemies : 0;
 
+    if (this.missionManager) {
+      this.missionManager.completeRemainingObjectives();
+      this.missionManager.completeObjective("escape_sector_1");
+      this.missionManager.completeObjective("reach_elevator");
+      this.missionManager.completeObjective("reach_exit");
+    }
+
     this.hud?.setPrompt(null);
     this.hud?.showToast(`[★] Sector Cleared! (${kills}/${total} Hostiles)`, 0x00ffcc);
     try {
@@ -3219,10 +3297,21 @@ export class RaycastScene extends BaseScene {
       return;
     }
 
+    // 0. Prioritize interactive mission trigger prompt
+    const missionPrompt = this.missionManager?.getActivePrompt();
+    if (missionPrompt) {
+      this.hud.setPrompt(missionPrompt, 0x00e5ff);
+      return;
+    }
+
     // 1. Check if player is standing in a LevelFinish zone
     const finishZone = this.getActiveLevelFinishZone();
     if (finishZone) {
-      this.hud.setPrompt("[★] PRESS [E] TO FINISH LEVEL", 0x00ffcc);
+      if (this.missionManager && !this.missionManager.canExitLevel()) {
+        this.hud.setPrompt("[!] COMPLETE OBJECTIVES TO EXIT", 0xffaa00);
+      } else {
+        this.hud.setPrompt("[★] PRESS [E] TO FINISH LEVEL", 0x00ffcc);
+      }
       return;
     }
     const lockedZone = this.getNearbyLockedFinishZone();
@@ -3270,9 +3359,18 @@ export class RaycastScene extends BaseScene {
   private tryOpenDoor() {
     if ((this.stairsManager && this.stairsManager.isTransitioning()) || this.isLevelTransitioning) return;
 
+    // 0. Prioritize interactive mission triggers (terminals, alarms, switches)
+    if (this.missionManager && this.missionManager.handleInteract()) {
+      return;
+    }
+
     // 1. Prioritize level finish if standing in the finish zone
     const finishZone = this.getActiveLevelFinishZone();
     if (finishZone) {
+      if (this.missionManager && !this.missionManager.canExitLevel()) {
+        this.hud.showToast("[!] Complete remaining primary objectives before exiting!", 0xffaa00, 3.0);
+        return;
+      }
       this.finishLevel(finishZone.targetLevel);
       return;
     }

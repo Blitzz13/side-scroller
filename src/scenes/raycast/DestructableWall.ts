@@ -50,6 +50,8 @@ export class DestructableWall {
   public readonly offset: number;
   public readonly linkIds: string[];
   public readonly isEnabling: boolean;
+  public readonly isObjective: boolean;
+  public readonly objectiveKey: string;
 
   public x1: number = 0;
   public y1: number = 0;
@@ -66,6 +68,8 @@ export class DestructableWall {
     this.gridY = config.gridY;
     this.texture = config.texture;
     this.isEnabling = Boolean(config.isEnabling);
+    this.isObjective = Boolean(config.isObjective);
+    this.objectiveKey = String(config.objectiveKey || "").trim();
     this.active = !this.isEnabling;
 
     const rotStr = String(config.rotation || "vertical").toLowerCase();

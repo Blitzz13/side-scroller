@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite } from "pixi.js";
+import { Container, Graphics, Sprite, Text } from "pixi.js";
 import { IDisposable } from "../characters/interfaces/IDisposable";
 import { VirtualJoystick, JoystickVector } from "./VirtualJoystick";
 import { VirtualButton } from "./VirtualButton";
@@ -17,6 +17,7 @@ export class MobileControls extends Container implements IDisposable {
   private btnFullscreen: VirtualButton;
   private btnSprint: VirtualButton;
   private btnMap: Container;
+  private btnObjectives: Container;
   private buttonTurnSpeed: number = 0.04;
 
   constructor() {
@@ -148,6 +149,58 @@ export class MobileControls extends Container implements IDisposable {
       this.btnMap.scale.set(1.0);
     });
     this.addChild(this.btnMap);
+
+    // 11. Objectives Info Button ([i])
+    this.btnObjectives = new Container();
+    this.btnObjectives.position.set(screenW - 230, 60);
+    this.btnObjectives.eventMode = "static";
+    this.btnObjectives.cursor = "pointer";
+
+    const objBg = new Graphics();
+    const drawObjBtnBg = (pressed: boolean) => {
+      objBg.clear();
+      const bgColor = pressed ? 0x004466 : 0x091929;
+      const borderColor = pressed ? 0x00ffff : 0x00e5ff;
+      objBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
+      objBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
+      objBg.drawCircle(0, 0, 36);
+      objBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
+      objBg.drawCircle(0, 0, 31);
+      objBg.endFill();
+    };
+    drawObjBtnBg(false);
+    this.btnObjectives.addChild(objBg);
+
+    const infoLabel = new Text("i", {
+      fontFamily: "Georgia, serif",
+      fontSize: 28,
+      fontWeight: "bold",
+      fontStyle: "italic",
+      fill: 0x00ffff,
+      dropShadow: true,
+      dropShadowColor: 0x002233,
+      dropShadowDistance: 1,
+    });
+    infoLabel.anchor.set(0.5);
+    infoLabel.position.set(0, -1);
+    this.btnObjectives.addChild(infoLabel);
+
+    this.btnObjectives.on("pointerdown", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      drawObjBtnBg(true);
+      this.btnObjectives.scale.set(0.92);
+    });
+    this.btnObjectives.on("pointerup", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      drawObjBtnBg(false);
+      this.btnObjectives.scale.set(1.0);
+      (this as any).emit("toggleObjectives");
+    });
+    this.btnObjectives.on("pointerupoutside", () => {
+      drawObjBtnBg(false);
+      this.btnObjectives.scale.set(1.0);
+    });
+    this.addChild(this.btnObjectives);
   }
 
   public get moveVector(): JoystickVector {
@@ -187,6 +240,7 @@ export class MobileControls extends Container implements IDisposable {
     this.btnFullscreen.dispose();
     this.btnSprint.dispose();
     this.btnMap.destroy({ children: true });
+    this.btnObjectives.destroy({ children: true });
     this.destroy({ children: true });
   }
 }

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "find_command_center",
+    "key": "find_command_center",
+    "title": "Find the Command Center",
+    "description": "Infiltrate the base and locate the Imperial Command Center."
+  },
+  {
+    "id": "disable_command_center_shields",
+    "key": "disable_command_center_shields",
+    "title": "Disable Command Center Shields",
+    "description": "Destroy the shield generator console to bring down the security barriers."
+  },
+  {
+    "id": "find_prisoner_location",
+    "key": "find_prisoner_location",
+    "title": "Find Prisoner Location",
+    "description": "Access the primary terminal to pinpoint where the prisoner is detained."
+  },
+  {
+    "id": "escape",
+    "key": "escape",
+    "title": "Escape",
+    "description": "Find the ventilation shaft that Monmothma showed you in the schematics."
+  }
+]

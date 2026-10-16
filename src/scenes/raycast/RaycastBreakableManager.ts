@@ -273,6 +273,8 @@ export class RaycastBreakableManager {
               let objZ = layerZ ?? meta.z;
               let objAnchor = layerAnchor ?? meta.anchor;
               let linkId: string | undefined;
+              let isObjective = false;
+              let objectiveKey = "";
 
               if (obj.properties) {
                 obj.properties.forEach((prop: any) => {
@@ -292,6 +294,14 @@ export class RaycastBreakableManager {
                   }
                   if (pName === "linkid" || pName === "link" || pName === "id") {
                     linkId = String(pVal);
+                  }
+                  if (pName === "objective" && prop.value && typeof prop.value === "object") {
+                    if (prop.value.isObjective !== undefined) isObjective = Boolean(prop.value.isObjective);
+                    if (prop.value.objectiveKey !== undefined) objectiveKey = String(prop.value.objectiveKey);
+                  } else if (pName === "isobjective") {
+                    isObjective = Boolean(prop.value);
+                  } else if (pName === "objectivekey") {
+                    objectiveKey = String(prop.value);
                   }
                 });
               }
@@ -314,7 +324,9 @@ export class RaycastBreakableManager {
                 objZ,
                 objAnchor,
                 obj.id,
-                linkId
+                linkId,
+                isObjective,
+                objectiveKey
               );
             }
           }
@@ -363,8 +375,8 @@ export class RaycastBreakableManager {
             const objH = obj.height || tileH;
             const centerX = obj.x + objW * 0.5;
             const centerY = gid !== 0 ? obj.y - objH * 0.5 : obj.y + objH * 0.5;
-            const gridX = Math.floor(centerX / tileW);
-            const gridY = Math.floor(centerY / tileH);
+            const gridX = Math.floor(centerX / tileW) + offsetX;
+            const gridY = Math.floor(centerY / tileH) + offsetY;
             const worldX = gridX + 0.5;
             const worldY = gridY + 0.5;
 
@@ -372,6 +384,8 @@ export class RaycastBreakableManager {
             let linkId = String(obj.id);
             let isEnabling = false;
             let linkIds: string[] = [];
+            let isObjective = false;
+            let objectiveKey = "";
 
             if (obj.properties) {
               obj.properties.forEach((prop: any) => {
@@ -380,6 +394,13 @@ export class RaycastBreakableManager {
                   health = parseFloat(prop.value);
                 } else if (pName === "isenabling") {
                   isEnabling = Boolean(prop.value);
+                } else if (pName === "objective" && prop.value && typeof prop.value === "object") {
+                  if (prop.value.isObjective !== undefined) isObjective = Boolean(prop.value.isObjective);
+                  if (prop.value.objectiveKey !== undefined) objectiveKey = String(prop.value.objectiveKey);
+                } else if (pName === "isobjective") {
+                  isObjective = Boolean(prop.value);
+                } else if (pName === "objectivekey") {
+                  objectiveKey = String(prop.value);
                 } else if (
                   pName === "linkids" ||
                   pName === "linkid" ||
@@ -479,6 +500,8 @@ export class RaycastBreakableManager {
               scale: 1.0,
               hitRadius: 0.65,
               blocksMovement: false,
+              isObjective: isObjective,
+              objectiveKey: objectiveKey,
             };
             this.breakables.push(breakable);
           }
@@ -500,7 +523,9 @@ export class RaycastBreakableManager {
     layerZ?: number,
     layerAnchor?: string,
     objId?: number,
-    linkId?: string
+    linkId?: string,
+    isObjective?: boolean,
+    objectiveKey?: string
   ): RaycastBreakable {
     const isTable = type === "table";
     const isPowerCell = type === "power_cell" || type.includes("power_cell") || type.includes("powercell");
@@ -537,6 +562,8 @@ export class RaycastBreakableManager {
       anchor,
       hitRadius,
       blocksMovement: true,
+      isObjective,
+      objectiveKey,
     };
     this.breakables.push(breakable);
     return breakable;

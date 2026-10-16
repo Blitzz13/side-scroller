@@ -50,6 +50,13 @@
                 ]
             },
             {
+                "name": "objective",
+                "propertyType": "Objective",
+                "type": "class",
+                "value": {
+                }
+            },
+            {
                 "name": "offset",
                 "type": "float",
                 "value": 0
@@ -182,6 +189,36 @@
     {
         "color": "#ffa0a0a4",
         "drawFill": true,
+        "id": 18,
+        "members": [
+            {
+                "name": "isObjective",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "objectiveKey",
+                "type": "string",
+                "value": ""
+            }
+        ],
+        "name": "Objective",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
         "id": 1,
         "members": [
             {
@@ -295,6 +332,70 @@
             "ceiling",
             "floor",
             "stairs"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ff00ffff",
+        "drawFill": true,
+        "id": 16,
+        "members": [
+            {
+                "name": "objective",
+                "propertyType": "Objective",
+                "type": "class",
+                "value": {
+                }
+            },
+            {
+                "name": "shouldBePressed",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "trigerEvent",
+                "propertyType": "TrigerEnum",
+                "type": "string",
+                "value": "onEnter"
+            },
+            {
+                "name": "triggerAlarm",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "voicelinesOnTrigger",
+                "type": "list",
+                "value": [
+                    {
+                        "type": "string",
+                        "value": ""
+                    }
+                ]
+            }
+        ],
+        "name": "Triger",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 17,
+        "name": "TrigerEnum",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "onEnter",
+            "onExit"
         ],
         "valuesAsFlags": false
     },

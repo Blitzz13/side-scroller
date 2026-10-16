@@ -64,6 +64,10 @@ export class RaycastHUD extends Container {
   private mapButton: Container;
   private mapButtonBg: Graphics;
 
+  // Mobile Objectives Button (Top-Right)
+  private objectivesButton: Container;
+  private objectivesButtonBg: Graphics;
+
   constructor() {
     super();
 
@@ -394,6 +398,49 @@ export class RaycastHUD extends Container {
     });
     this.mapButton.visible = false;
     this.addChild(this.mapButton);
+
+    // 10. Mobile Objectives Button (Top-Right, left of Map button)
+    this.objectivesButton = new Container();
+    this.objectivesButton.position.set(screenW - 200, 60);
+    this.objectivesButton.eventMode = "static";
+    this.objectivesButton.cursor = "pointer";
+
+    this.objectivesButtonBg = new Graphics();
+    this.drawObjectivesButton(false);
+    this.objectivesButton.addChild(this.objectivesButtonBg);
+
+    const objIcon = new Text("i", {
+      fontFamily: "Georgia, serif",
+      fontSize: 22,
+      fontWeight: "bold",
+      fontStyle: "italic",
+      fill: 0x00ffff,
+      dropShadow: true,
+      dropShadowColor: 0x002233,
+      dropShadowDistance: 1,
+    });
+    objIcon.resolution = dpr;
+    objIcon.anchor.set(0.5);
+    objIcon.position.set(0, -1);
+    this.objectivesButton.addChild(objIcon);
+
+    this.objectivesButton.on("pointerdown", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      this.drawObjectivesButton(true);
+      this.objectivesButton.scale.set(0.92);
+    });
+    this.objectivesButton.on("pointerup", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      this.drawObjectivesButton(false);
+      this.objectivesButton.scale.set(1.0);
+      this.emit("toggleObjectives");
+    });
+    this.objectivesButton.on("pointerupoutside", () => {
+      this.drawObjectivesButton(false);
+      this.objectivesButton.scale.set(1.0);
+    });
+    this.objectivesButton.visible = false;
+    this.addChild(this.objectivesButton);
   }
 
   public addKeycard(color: string, customTexture?: Texture): void {
@@ -522,11 +569,20 @@ export class RaycastHUD extends Container {
     if (this.mapButton) {
       this.mapButton.visible = true;
     }
+    if (this.objectivesButton) {
+      this.objectivesButton.visible = true;
+    }
   }
 
   public setMapButtonVisible(visible: boolean): void {
     if (this.mapButton) {
       this.mapButton.visible = visible;
+    }
+  }
+
+  public setObjectivesButtonVisible(visible: boolean): void {
+    if (this.objectivesButton) {
+      this.objectivesButton.visible = visible;
     }
   }
 
@@ -540,6 +596,18 @@ export class RaycastHUD extends Container {
     this.mapButtonBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
     this.mapButtonBg.drawCircle(0, 0, 22);
     this.mapButtonBg.endFill();
+  }
+
+  private drawObjectivesButton(pressed: boolean): void {
+    this.objectivesButtonBg.clear();
+    const bgColor = pressed ? 0x004466 : 0x091929;
+    const borderColor = pressed ? 0x00ffff : 0x00e5ff;
+    this.objectivesButtonBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
+    this.objectivesButtonBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
+    this.objectivesButtonBg.drawCircle(0, 0, 26);
+    this.objectivesButtonBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
+    this.objectivesButtonBg.drawCircle(0, 0, 22);
+    this.objectivesButtonBg.endFill();
   }
 
   public showToast(

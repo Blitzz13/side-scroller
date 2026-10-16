@@ -407,12 +407,44 @@ export const manifest: AssetsManifest = {
             src: "./assets/raycast/textures/dirty_water.jpg",
           },
           {
+            name: "computer_wall",
+            src: "./assets/raycast/textures/computer_wall.png",
+          },
+          {
+            name: "electronic_wall",
+            src: "./assets/raycast/textures/electronic_wall.png",
+          },
+          {
+            name: "level_off",
+            src: "./assets/raycast/textures/level_off.png",
+          },
+          {
+            name: "lever_on",
+            src: "./assets/raycast/textures/lever_on.jpg",
+          },
+          {
+            name: "piped_wall",
+            src: "./assets/raycast/textures/piped_wall.png",
+          },
+          {
+            name: "sprite_1_1",
+            src: "./assets/raycast/textures/sprite-1-1.png",
+          },
+          {
             name: "level1",
             src: "./assets/raycast/levels/level1.json",
           },
           {
             name: "level2",
             src: "./assets/raycast/levels/level2.json",
+          },
+          {
+            name: "level1_objectives",
+            src: "./assets/raycast/levels/objectives/level1.json",
+          },
+          {
+            name: "level2_objectives",
+            src: "./assets/raycast/levels/objectives/level2.json",
           },
           {
             name: "test_level",

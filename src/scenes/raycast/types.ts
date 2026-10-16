@@ -152,6 +152,10 @@ export interface IDestructableWall {
   offset: number;
   rotation: FlatWallRotation | string;
   wall?: ITile;
+  objective?: {
+    isObjective: boolean;
+    objectiveKey: string;
+  };
 }
 
 export interface IEnemy {
@@ -219,6 +223,8 @@ export interface RaycastBreakable {
   gridX?: number;
   gridY?: number;
   destroyedTextureId?: number;
+  isObjective?: boolean;
+  objectiveKey?: string;
 }
 
 export interface ThinWallDescriptor {
@@ -243,6 +249,8 @@ export interface DestructableWallConfig {
   offset?: number;
   linkIds?: (string | number)[] | string | number;
   isEnabling?: boolean;
+  isObjective?: boolean;
+  objectiveKey?: string;
 }
 
 export * from "../../configs/interfaces/IEnemyVoicelineConfig";
