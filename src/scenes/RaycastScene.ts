@@ -1298,7 +1298,9 @@ export class RaycastScene extends BaseScene {
     }
 
     const wallsLayers = allLayers.filter(
-      (layer: any) => layer.name && layer.name.toLowerCase() === "walls"
+      (layer: any) =>
+        layer.name &&
+        (layer.name.toLowerCase() === "walls" || layer.name.toLowerCase() === "wall")
     );
     for (const wallsLayer of wallsLayers) {
       forEachTileInLayer(wallsLayer, (rawGid: number, lx: number, ly: number) => {
@@ -1310,11 +1312,8 @@ export class RaycastScene extends BaseScene {
             const tileId = gid - firstgid;
             const meta = this.tileMeta[tileId];
             if (meta?.image?.toLowerCase().includes("player_spawn") || tileId === 27) return;
+            // Any sprite in the walls layer is strictly a wall, never registered as a door
             this.map[y][x] = gid;
-            const tileType = this.tileTypes[gid];
-            if (tileType === "door" || tileType === TileType.DOOR) {
-              this.doorStates[`${x},${y}`] = 0;
-            }
           }
         }
       });
@@ -1440,7 +1439,9 @@ export class RaycastScene extends BaseScene {
     }
 
     const doorsLayers = allLayers.filter(
-      (layer: any) => layer.name && layer.name.toLowerCase() === "doors"
+      (layer: any) =>
+        layer.name &&
+        (layer.name.toLowerCase() === "doors" || layer.name.toLowerCase() === "door")
     );
     for (const doorsLayer of doorsLayers) {
       forEachTileInLayer(doorsLayer, (rawGid: number, lx: number, ly: number) => {
@@ -1661,21 +1662,20 @@ export class RaycastScene extends BaseScene {
         this.floorMapFlat[idx] = this.floorMap[y][x];
         this.ceilingMapFlat[idx] = this.ceilingMap[y][x];
 
-        // Convert string tile types to numeric flags
+        // Convert string tile types to numeric flags: only actual doors in doorStates become TILE_DOOR.
+        // Any sprite placed in the wall layer (not in doorStates) is strictly a TILE_WALL.
         const typeStr = this.tileTypes[wallTile];
-        if (typeStr === "door") {
+        const doorKey = `${x},${y}`;
+        const isDoor = doorKey in this.doorStates;
+
+        if (isDoor) {
           this.tileTypeFlags[idx] = RaycastScene.TILE_DOOR;
+          this.doorStatesFlat[idx] = this.doorStates[doorKey];
+          this.doorEntries.push({ key: doorKey, flatIdx: idx, x, y });
         } else if (typeStr === "thinWall") {
           this.tileTypeFlags[idx] = RaycastScene.TILE_THIN;
         } else if (wallTile > 0) {
           this.tileTypeFlags[idx] = RaycastScene.TILE_WALL;
-        }
-
-        // Initialize door states from string-keyed map
-        const doorKey = `${x},${y}`;
-        if (doorKey in this.doorStates) {
-          this.doorStatesFlat[idx] = this.doorStates[doorKey];
-          this.doorEntries.push({ key: doorKey, flatIdx: idx, x, y });
         }
 
         // Track max tile IDs for flat texture array

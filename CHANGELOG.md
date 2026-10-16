@@ -57,7 +57,12 @@ This document logs recent development changes and enhancements made to the Rayca
   - Applied matching dual-ring sci-fi cyber styling and tactile scale response to `RaycastHUD.mapButton` and `HUD.addMapButton`.
   - Prevented button duplication in `RaycastScene` when `MobileControls` is instantiated on mobile.
 
-## [2026-10-15] - Keycard Door Security Enforcement (Enemies Prevented from Opening Keycard Doors)
+### 4. Wall Layer Enforcement (Sprites in Walls Layer Are Strictly Solid Walls)
+- **Problem**: When a door sprite (e.g. `metal_door.jpg` with `tileType === "door"`) was placed on the `Walls` layer (such as decorative blast door panels at `(11, 16)` and `(11, 32)` in `level1.json` or `(16, 19)` in `level2.json`), `RaycastScene` registered the cell into `doorStates` and assigned `RaycastScene.TILE_DOOR` based on tile ID property alone. This allowed players and enemies to open dead-end wall panels.
+- **Fix** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Removed door registration from `wallsLayers` parsing loop.
+  - Made `RaycastScene.TILE_DOOR` assignment strictly conditional on `doorKey in this.doorStates` (doors originating from the dedicated `Doors` layer).
+  - Any tile placed on the `Walls` layer (and not defined in `Doors`) is strictly classified as `RaycastScene.TILE_WALL`, rendering as a solid wall texture that cannot be opened, interacted with, or bypassed by enemies.
 
 ### 1. Keycard Security Doors Protected from Enemy Access
 - **Removed Alert Security Override on Keycard Doors** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
