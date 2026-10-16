@@ -813,6 +813,10 @@ export class RaycastPickupManager {
     }
   }
 
+  public getPickups(): RaycastPickupItem[] {
+    return this.pickups;
+  }
+
   public getVisibleMapObjects(): MapObject[] {
     const list: MapObject[] = [];
 

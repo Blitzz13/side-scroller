@@ -422,6 +422,10 @@ export const manifest: AssetsManifest = {
             name: "imperial_base_background",
             src: "./assets/common/imperial_base_background.jpg",
           },
+          {
+            name: "map_icon",
+            src: "./assets/common/map_icon.png",
+          },
         ],
       },
       {

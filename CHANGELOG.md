@@ -2,6 +2,61 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-16] - Tactical Minimap / Automap Plugin & Mobile HUD Map Button
+
+### 1. Reusable Tactical Minimap & Automap Plugin ([`src/plugins/minimap/RaycastMinimap.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/RaycastMinimap.ts), [`src/plugins/minimap/index.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/index.ts))
+- **Modular Plugin Architecture**:
+  - Implemented `RaycastMinimap` as an independent, decoupled plugin implementing `IDisposable`.
+  - Logically decomposed the monolithic plugin into dedicated, high-cohesion modules:
+    - [`MinimapTypes.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapTypes.ts): Enums (`MinimapTileType`), data provider contracts (`IMinimapDataSource`), options (`IRaycastMinimapOptions`), and layout metrics (`IMinimapViewportMetrics`).
+    - [`MinimapDiscovery.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapDiscovery.ts): Fog-of-war exploration state, 180-ray radial line-of-sight raycaster, and persistent seen object tracker.
+    - [`MinimapRenderer.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapRenderer.ts): Static floor/wall/stairwell/thin-wall rendering and dynamic layer drawing (doors, item badges, hostiles, and player chevron).
+    - [`MinimapUI.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapUI.ts): Datapad Holomap modal window frame, header stats, close button, and legend footer bar.
+    - [`RaycastMinimap.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/RaycastMinimap.ts): Streamlined high-level controller coordinating UI, discovery, and renderer layers.
+    - [`index.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/index.ts): Central barrel re-export preserving 100% backward compatibility.
+  - Connects to any map data provider via `IMinimapDataSource` interface (`mapWidth`, `mapHeight`, `mapFlat`, `tileTypeFlags`, `doorStatesFlat`, `lockedDoors`, `unlockedKeycardDoors`, `thinWalls`, `levelFinishZones`, `player`, `activeEnemies`, `levelName`).
+- **Fog-of-War Room & Corridor Discovery**:
+  - Implemented dynamic line-of-sight raycasting exploration (`updateDiscovery`). Unexplored sectors remain completely hidden in dark fog (`0x040810`).
+  - As the player enters rooms and corridors, radial rays (180 rays up to 14 tiles) scan along line of sight:
+    - Rays reveal walkable corridor grids (`0x0a1624`) and solid walls (`0x152c3f`).
+    - Closed doors block sight, keeping rooms behind them hidden in darkness until opened. Open doors allow sight rays to pass through, revealing the room inside.
+    - Thin wall barriers are revealed when adjacent cells are discovered.
+  - Header displays a real-time exploration gauge: `EXPLORED: XX%` based on discovered walkable sector tiles.
+- **Persistent Seen Objects Tracking**:
+  - Any objects the player sees (pickups, keycards, terminals, holotables, exit zones) are recorded in `discoveredObjects` and **remain permanently marked on the minimap**, even when the player travels to distant rooms.
+  - Color-coded badges and icons:
+    - **Keycards**: Bright glowing badge in the keycard's color (Blue, Red, Yellow) with a pulsing aura.
+    - **Health**: Green medical cross icon inside a circular pill badge.
+    - **Shields**: Cyan deflector shield crest badge.
+    - **Weapons**: Amber blaster icon badge.
+    - **Ammo / Detonators**: Orange ammo crate badge.
+    - **Stationary Terminals & Holotables**: Cyan diamond terminal badge.
+    - **Exit Zones**: Pulsing emerald green finish marker.
+    - **Stairs (Up & Down)**:
+      - Distinct architectural stairwell rendering: replaces generic wall fill with high-tech step treads (horizontal step stripes) and direction chevrons (▲ for UP stairs in bright cyan `0x00e5ff`, ▼ for DOWN stairs in violet/purple `0xc084fc`).
+      - Persistent discovery: when the player discovers the stairwell, it remains permanently marked on the map with glowing pulsing accents.
+      - Legend updated with dedicated `STAIRS (▲/▼)` entry.
+  - When a pickup is collected by the player, it is cleanly removed from the active ground items map.
+- **Enemies on Discovered Map**:
+  - Enemies are displayed as radar blips only when within discovered map sectors.
+- **Zero-Lag Discovery Loop**:
+  - Runs continuous lightweight position-delta checks in `tick()`, updating exploration in real time during gameplay so opening the map with `"M"` or the mobile button displays up-to-date discovered terrain instantly with 60fps performance.
+
+### 2. Desktop Controls ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- Pressing `"m"` (or `"M"`) toggles the tactical automap datapad on and off.
+- Pressing `"Escape"` while the minimap is open immediately closes it.
+
+### 3. Mobile Map Button Integration & HUD Enhancements ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts), [`src/ui/HUD.ts`](file:///D:/Projects/side-scroller/src/ui/HUD.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`assets/common/map_icon.png`](file:///D:/Projects/side-scroller/assets/common/map_icon.png))
+- **`map_icon.png` Recolored, Brightened & Centered**:
+  - Rebuilt [`assets/common/map_icon.png`](file:///D:/Projects/side-scroller/assets/common/map_icon.png): replaced pitch-black pixels with a vibrant Star Wars sci-fi cyber cyan/blue palette (pin head in glowing ice blue `rgb(180, 245, 255)`, map folds in neon cyber cyan `rgb(0, 229, 255)`).
+  - Centered visual mass: adjusted vertical geometry by -2px offset, aligning the center of mass to `(24.53, 24.86)` dead-center within the 50x50 icon canvas.
+- **MobileControls Map Button Styling** ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts)):
+  - Redesigned `btnMap` with a high-tech Star Wars cyber blue background (`0x091929`), glowing cyan border (`2.5px 0x00e5ff`), and concentric inner cyber ring (`31px radius, 0.35 alpha`).
+  - Added tactile scale animation (`scale.set(0.92)` on press, `1.0` on release).
+- **RaycastHUD & HUD Styling** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/ui/HUD.ts`](file:///D:/Projects/side-scroller/src/ui/HUD.ts)):
+  - Applied matching dual-ring sci-fi cyber styling and tactile scale response to `RaycastHUD.mapButton` and `HUD.addMapButton`.
+  - Prevented button duplication in `RaycastScene` when `MobileControls` is instantiated on mobile.
+
 ## [2026-10-15] - Keycard Door Security Enforcement (Enemies Prevented from Opening Keycard Doors)
 
 ### 1. Keycard Security Doors Protected from Enemy Access

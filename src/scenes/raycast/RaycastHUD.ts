@@ -60,6 +60,10 @@ export class RaycastHUD extends Container {
   private targetCrosshairY: number;
   private isCrosshairTargetLocked: boolean = false;
 
+  // Mobile Map Button (Top-Right)
+  private mapButton: Container;
+  private mapButtonBg: Graphics;
+
   constructor() {
     super();
 
@@ -349,6 +353,47 @@ export class RaycastHUD extends Container {
     this.drawCrosshair(false);
     this.crosshairContainer.addChild(this.crosshairGraphics);
     this.addChild(this.crosshairContainer);
+
+    // 9. Mobile Map Button (Top-Right, beside Fullscreen)
+    this.mapButton = new Container();
+    this.mapButton.position.set(screenW - 140, 60);
+    this.mapButton.eventMode = "static";
+    this.mapButton.cursor = "pointer";
+
+    this.mapButtonBg = new Graphics();
+    this.drawMapButton(false);
+    this.mapButton.addChild(this.mapButtonBg);
+
+    let mapIcon: Sprite;
+    try {
+      mapIcon = Sprite.from("assets/common/map_icon.png");
+    } catch {
+      mapIcon = Sprite.from("map_icon");
+    }
+    mapIcon.anchor.set(0.5);
+    mapIcon.width = 32;
+    mapIcon.height = 32;
+    mapIcon.position.set(0, 0);
+    mapIcon.tint = 0xffffff;
+    this.mapButton.addChild(mapIcon);
+
+    this.mapButton.on("pointerdown", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      this.drawMapButton(true);
+      this.mapButton.scale.set(0.92);
+    });
+    this.mapButton.on("pointerup", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      this.drawMapButton(false);
+      this.mapButton.scale.set(1.0);
+      this.emit("toggleMinimap");
+    });
+    this.mapButton.on("pointerupoutside", () => {
+      this.drawMapButton(false);
+      this.mapButton.scale.set(1.0);
+    });
+    this.mapButton.visible = false;
+    this.addChild(this.mapButton);
   }
 
   public addKeycard(color: string, customTexture?: Texture): void {
@@ -474,6 +519,27 @@ export class RaycastHUD extends Container {
     if (this.switchHint) {
       this.switchHint.text = "[TAP / WPN]";
     }
+    if (this.mapButton) {
+      this.mapButton.visible = true;
+    }
+  }
+
+  public setMapButtonVisible(visible: boolean): void {
+    if (this.mapButton) {
+      this.mapButton.visible = visible;
+    }
+  }
+
+  private drawMapButton(pressed: boolean): void {
+    this.mapButtonBg.clear();
+    const bgColor = pressed ? 0x004466 : 0x091929;
+    const borderColor = pressed ? 0x00ffff : 0x00e5ff;
+    this.mapButtonBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
+    this.mapButtonBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
+    this.mapButtonBg.drawCircle(0, 0, 26);
+    this.mapButtonBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
+    this.mapButtonBg.drawCircle(0, 0, 22);
+    this.mapButtonBg.endFill();
   }
 
   public showToast(

@@ -1,4 +1,4 @@
-import { Container } from "pixi.js";
+import { Container, Graphics, Sprite } from "pixi.js";
 import { IDisposable } from "../characters/interfaces/IDisposable";
 import { VirtualJoystick, JoystickVector } from "./VirtualJoystick";
 import { VirtualButton } from "./VirtualButton";
@@ -16,6 +16,7 @@ export class MobileControls extends Container implements IDisposable {
   private btnWeapon: VirtualButton;
   private btnFullscreen: VirtualButton;
   private btnSprint: VirtualButton;
+  private btnMap: Container;
   private buttonTurnSpeed: number = 0.04;
 
   constructor() {
@@ -95,6 +96,58 @@ export class MobileControls extends Container implements IDisposable {
       (this as any).emit("toggleSprint", active);
     });
     this.addChild(this.btnSprint);
+
+    // 10. Map Button ([MAP]) with assets/common/map_icon.png
+    this.btnMap = new Container();
+    this.btnMap.position.set(screenW - 150, 60);
+    this.btnMap.eventMode = "static";
+    this.btnMap.cursor = "pointer";
+
+    const mapBg = new Graphics();
+    const drawBtnBg = (pressed: boolean) => {
+      mapBg.clear();
+      // Star Wars sci-fi cyber theme: deep dark blue fill with glowing cyan border & inner ring
+      const bgColor = pressed ? 0x004466 : 0x091929;
+      const borderColor = pressed ? 0x00ffff : 0x00e5ff;
+      mapBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
+      mapBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
+      mapBg.drawCircle(0, 0, 36);
+      mapBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
+      mapBg.drawCircle(0, 0, 31);
+      mapBg.endFill();
+    };
+    drawBtnBg(false);
+    this.btnMap.addChild(mapBg);
+
+    let mapIcon: Sprite;
+    try {
+      mapIcon = Sprite.from("assets/common/map_icon.png");
+    } catch {
+      mapIcon = Sprite.from("map_icon");
+    }
+    mapIcon.anchor.set(0.5);
+    mapIcon.width = 40;
+    mapIcon.height = 40;
+    mapIcon.position.set(0, 0);
+    mapIcon.tint = 0xffffff;
+    this.btnMap.addChild(mapIcon);
+
+    this.btnMap.on("pointerdown", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      drawBtnBg(true);
+      this.btnMap.scale.set(0.92);
+    });
+    this.btnMap.on("pointerup", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      drawBtnBg(false);
+      this.btnMap.scale.set(1.0);
+      (this as any).emit("toggleMinimap");
+    });
+    this.btnMap.on("pointerupoutside", () => {
+      drawBtnBg(false);
+      this.btnMap.scale.set(1.0);
+    });
+    this.addChild(this.btnMap);
   }
 
   public get moveVector(): JoystickVector {
@@ -133,6 +186,7 @@ export class MobileControls extends Container implements IDisposable {
     this.btnWeapon.dispose();
     this.btnFullscreen.dispose();
     this.btnSprint.dispose();
+    this.btnMap.destroy({ children: true });
     this.destroy({ children: true });
   }
 }

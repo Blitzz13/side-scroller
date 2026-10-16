@@ -63,6 +63,10 @@ export class RaycastStairsManager {
     return this.stairs.get(`${x},${y}`);
   }
 
+  public getStairList(): StairNode[] {
+    return this.stairList;
+  }
+
   public parseMapStairs(
     mapData: any,
     firstgid: number,

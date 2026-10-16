@@ -38,6 +38,7 @@ import { RaycastPickupType } from "../enums/RaycastPickupType";
 import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
 import floorCeilingVert from "./raycast/shaders/floorCeiling.vert";
 import floorCeilingFrag from "./raycast/shaders/floorCeiling.frag";
+import { RaycastMinimap } from "../plugins/minimap";
 import {
   calculateMapBounds,
   extractTiledGidAndRotation,
@@ -215,6 +216,7 @@ export class RaycastScene extends BaseScene {
   private mobileControls!: MobileControls;
   private weaponView!: RaycastWeaponView;
   private hud!: RaycastHUD;
+  private minimap!: RaycastMinimap;
   private playerController!: RaycastPlayerController;
   private pickupManager!: RaycastPickupManager;
   private breakableManager!: RaycastBreakableManager;
@@ -449,6 +451,8 @@ export class RaycastScene extends BaseScene {
     // Overlay mobile on-screen controls (only on mobile devices)
     if (this.isMobileDevice()) {
       this.hud.adaptForMobile();
+      // MobileControls includes the touch map button; hide HUD duplicate
+      this.hud.setMapButtonVisible(false);
       this.mobileControls = new MobileControls();
       this.mobileControls.zIndex = 80;
       this.mobileControls.on("action", () => this.tryOpenDoor());
@@ -457,8 +461,31 @@ export class RaycastScene extends BaseScene {
       this.mobileControls.on("toggleSprint", (active: boolean) => {
         this.playerController.setSprinting(active);
       });
+      this.mobileControls.on("toggleMinimap", () => this.minimap.toggle());
       this.addChild(this.mobileControls);
     }
+
+    // Tactical Minimap & Holomap Datapad Plugin
+    this.minimap = new RaycastMinimap({
+      getMapWidth: () => this.mapWidth,
+      getMapHeight: () => this.mapHeight,
+      getMapFlat: () => this.mapFlat,
+      getTileTypeFlags: () => this.tileTypeFlags,
+      getDoorStatesFlat: () => this.doorStatesFlat,
+      getLockedDoors: () => this.lockedDoors,
+      getUnlockedKeycardDoors: () => this.unlockedKeycardDoors,
+      getThinWalls: () => this.allThinWalls,
+      getLevelFinishZones: () => this.levelFinishZones,
+      getPlayer: () => this.player,
+      getActiveEnemies: () => this.enemyManager?.activeEnemies || [],
+      getPickups: () => this.pickupManager?.getPickups() || [],
+      getStationaryObjects: () => this.stationaryObjectManager?.objects || [],
+      getStairs: () => this.stairsManager?.getStairList() || [],
+      getLevelName: () => this.currentLevel || "Sector 1",
+    });
+    this.minimap.zIndex = 100;
+    this.hud.on("toggleMinimap", () => this.minimap.toggle());
+    this.addChild(this.minimap);
 
     this.setupControls();
     this.loadLevel(startLevel).then(() => {
@@ -820,6 +847,7 @@ export class RaycastScene extends BaseScene {
     if (this.detonatorManager) this.detonatorManager.clear();
     if (this.stationaryObjectManager) this.stationaryObjectManager.clear();
     if (this.playerController) this.playerController.resetKeycards();
+    if (this.minimap) this.minimap.resetDiscovery();
     this.stopAlertAudio();
     this.enemySpawnPoints = [];
 
@@ -1094,6 +1122,11 @@ export class RaycastScene extends BaseScene {
       ) {
         RaycastSaveManager.applySaveToPlayer(this.playerController);
       }
+    }
+
+    if (this.minimap) {
+      this.minimap.updateDiscovery(this.player.x, this.player.y, this.player.dirX, this.player.dirY, true);
+      this.minimap.refreshStaticMap();
     }
   }
 
@@ -2205,6 +2238,11 @@ export class RaycastScene extends BaseScene {
       }
     } catch {}
     try {
+      if (this.minimap) {
+        this.minimap.dispose();
+      }
+    } catch {}
+    try {
       if (this.pickupManager) {
         this.pickupManager.dispose();
       }
@@ -2724,6 +2762,13 @@ export class RaycastScene extends BaseScene {
     if (key === "v") {
       this.cycleDoorSlideMode();
     }
+    // Toggle Minimap (M) / Close on ESC
+    if (key === "m") {
+      this.minimap?.toggle();
+    }
+    if (key === "escape" && this.minimap?.isOpen) {
+      this.minimap?.hide();
+    }
   };
 
   private keyUpHandler = (e: KeyboardEvent) => {
@@ -2779,6 +2824,12 @@ export class RaycastScene extends BaseScene {
       this.stairsManager.update(delta);
     }
     this.pickupManager.update(delta);
+    if (this.minimap) {
+      this.minimap.updateDiscovery(this.player.x, this.player.y, this.player.dirX, this.player.dirY);
+      if (this.minimap.isOpen) {
+        this.minimap.update(delta);
+      }
+    }
 
     // Build allThinWalls into reusable array without concat allocations
     this.allThinWalls.length = 0;
