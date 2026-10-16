@@ -2,6 +2,20 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-15] - Keycard Door Security Enforcement (Enemies Prevented from Opening Keycard Doors)
+
+### 1. Keycard Security Doors Protected from Enemy Access
+- **Removed Alert Security Override on Keycard Doors** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Issue**: In `checkAndInteractEnemyDoor` and `isCellWalkable`, an alert override `(!this.isAlertActive)` allowed enemies to open and pathfind through locked security doors requiring keycards whenever a base alert was triggered. Consequently, enemies anywhere on the map were walking up to red and blue keycard doors (e.g. doors `(20, 29)`, `(12, 4)`, `(7, 9)` in `level2.json`) and opening them without possessing keycards.
+  - **Fix**: Removed `!this.isAlertActive` bypasses. Doors requiring keycards are now strictly impassable to enemies when closed, regardless of whether a base alert is sounding.
+- **Keycard Door Requirement Permanence** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Previously, unlocking a door with a keycard permanently deleted its entry from `this.lockedDoors`. If the player later manually closed the door with `[E]`, enemies approaching the closed door would treat it as an ordinary door and open it.
+  - Now, `this.lockedDoors[key]` is retained permanently, while an `unlockedKeycardDoors` set tracks initial unlock feedback. When the door is closed, enemies can never open it. If the door is currently wide open, entities can walk through the physical doorway.
+- **Pathfinding & Movement Guards Against Keycard Doors** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - In `tryMoveEnemy`, `getNextPathStep`, and doorway lookahead approach checks, added guards verifying that doors in `lockedDoors` are never triggered to open by enemies and do not cause enemies to enter a stationary `isWaitingForDoor` state.
+- **Reachable Wave Spawner Spawn Point Prioritization** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - When picking the active wave spawn point, the manager now strictly filters for spawn points with a valid BFS path (`bfsDist > 0`), ensuring reinforcement waves never spawn in sectors blocked off by closed keycard doors.
+
 ## [2026-10-15] - Time-Based Delta Timers Conversion (Seconds)
 
 ### 1. Frame-to-Time Conversion across Enemies, Waves, HUD, and Weapon Views

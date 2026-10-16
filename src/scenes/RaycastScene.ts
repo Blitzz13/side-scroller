@@ -231,6 +231,7 @@ export class RaycastScene extends BaseScene {
   private shakeIntensity: number = 0;
   private shakeDuration: number = 0;
   private lockedDoors: Record<string, string> = {};
+  private unlockedKeycardDoors: Set<string> = new Set();
   private isLeftMouseDown: boolean = false;
   private isRightMouseDown: boolean = false;
   private bgMusicInstance: any = null;
@@ -813,6 +814,7 @@ export class RaycastScene extends BaseScene {
     this.doorEntries = [];
     this.doorSlideModes = {};
     this.lockedDoors = {};
+    this.unlockedKeycardDoors.clear();
     this.levelFinishZones = [];
     if (this.laserManager) this.laserManager.clear();
     if (this.detonatorManager) this.detonatorManager.clear();
@@ -1426,6 +1428,7 @@ export class RaycastScene extends BaseScene {
 
     // Door keys layer parsing (identifies doors requiring keycards)
     this.lockedDoors = {};
+    this.unlockedKeycardDoors.clear();
     const keysLayers = allLayers.filter(
       (layer: any) => layer.name && layer.name.toLowerCase().includes("key")
     );
@@ -2047,7 +2050,7 @@ export class RaycastScene extends BaseScene {
     if (this.tileTypeFlags[flatIdx] !== RaycastScene.TILE_DOOR) return false;
 
     const key = `${x},${y}`;
-    if (this.lockedDoors[key] && !this.isAlertActive) return false; // Enemies cannot open keycard locked doors unless base alert security override is active
+    if (this.lockedDoors[key]) return false; // Enemies can never open doors that need a keycard
 
     const currentState = this.doorStatesFlat[flatIdx];
 
@@ -3275,10 +3278,10 @@ export class RaycastScene extends BaseScene {
         this.hud.showToast(`[X] Access Denied! Requires ${keyName}`, 0xff3333);
         this.hud.flashScreen(0xff0000, 0.2);
         return false;
-      } else {
+      } else if (!this.unlockedKeycardDoors.has(key)) {
         const keyName = reqKey.charAt(0).toUpperCase() + reqKey.slice(1) + " Keycard";
         this.hud.showToast(`[!] Access Granted (${keyName})`, 0x00e5ff);
-        delete this.lockedDoors[key]; // Door is permanently unlocked once opened with keycard
+        this.unlockedKeycardDoors.add(key);
       }
     }
 

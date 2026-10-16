@@ -48,6 +48,7 @@ export class RaycastEnemyManager {
   private cachedDoorStatesFlat?: Float64Array;
   private cachedTileTypeFlags?: Uint8Array;
   private cachedThinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>;
+  private cachedLockedDoors?: Record<string, string>;
 
   // Alert and Wave Spawning state
   public isAlertActive: boolean = false;
@@ -1166,9 +1167,13 @@ export class RaycastEnemyManager {
             const dy = newY - clampY;
             if (dx * dx + dy * dy < r * r) {
               if (isDoor) {
-                enemy.isWaitingForDoor = true;
-                if (!Number.isNaN(doorState) && (doorState <= 0 || doorState < 0.45)) {
-                  this.onEnemyOpenDoorCallback?.(gx, gy, enemy.x, enemy.y);
+                const doorKey = `${gx},${gy}`;
+                const isKeycardDoor = Boolean(this.cachedLockedDoors && this.cachedLockedDoors[doorKey]);
+                if (!isKeycardDoor) {
+                  enemy.isWaitingForDoor = true;
+                  if (!Number.isNaN(doorState) && (doorState <= 0 || doorState < 0.45)) {
+                    this.onEnemyOpenDoorCallback?.(gx, gy, enemy.x, enemy.y);
+                  }
                 }
               }
               return false;
@@ -1381,12 +1386,14 @@ export class RaycastEnemyManager {
     const currCenterX = ex + 0.5;
     const currCenterY = ey + 0.5;
 
-    // If next cell is a closed door, trigger door open
+    // If next cell is a closed door, trigger door open (only for non-keycard doors)
     if (doorStatesFlat) {
       const nextIdx = nextY * mapWidth + nextX;
       if (this.isDoorTile(nextIdx, doorStatesFlat)) {
         const doorState = doorStatesFlat[nextIdx];
-        if (doorState === 0) {
+        const nextKey = `${nextX},${nextY}`;
+        const isKeycardDoor = Boolean(this.cachedLockedDoors && this.cachedLockedDoors[nextKey]);
+        if (!isKeycardDoor && doorState === 0) {
           this.onEnemyOpenDoorCallback?.(nextX, nextY, currCenterX, currCenterY);
         }
       }
@@ -1473,6 +1480,7 @@ export class RaycastEnemyManager {
     this.cachedDoorStatesFlat = doorStatesFlat;
     this.cachedTileTypeFlags = tileTypeFlags;
     this.cachedThinWalls = thinWalls;
+    this.cachedLockedDoors = lockedDoors;
     const dt = delta / 60; // Delta time in seconds
 
     const losChecker = (x1: number, y1: number, x2: number, y2: number) =>
@@ -1704,16 +1712,33 @@ export class RaycastEnemyManager {
           // Find closest enemy spawnpoint to player (preferring reachable BFS path distance)
           let closestSp: { x: number; y: number } | null = null;
           let closestDist = Infinity;
+          let hasReachableSp = false;
+
+          // 1. First pass: prioritize spawnpoints that have a clear, connected BFS path to player
           for (let i = 0; i < this.enemySpawnPoints.length; i++) {
             const sp = this.enemySpawnPoints[i];
             const spCellX = Math.floor(sp.x);
             const spCellY = Math.floor(sp.y);
             const spIdx = spCellY * mapWidth + spCellX;
             const bfsDist = this.bfsDistGrid && spIdx >= 0 && spIdx < this.bfsDistGrid.length ? this.bfsDistGrid[spIdx] : -1;
-            const d = (bfsDist > 0) ? bfsDist : Math.hypot(sp.x - playerX, sp.y - playerY) * 2.0;
-            if (d < closestDist) {
-              closestDist = d;
-              closestSp = sp;
+            if (bfsDist > 0) {
+              hasReachableSp = true;
+              if (bfsDist < closestDist) {
+                closestDist = bfsDist;
+                closestSp = sp;
+              }
+            }
+          }
+
+          // 2. Fallback: only if no spawnpoint is reachable via BFS, pick closest by Euclidean distance
+          if (!hasReachableSp) {
+            for (let i = 0; i < this.enemySpawnPoints.length; i++) {
+              const sp = this.enemySpawnPoints[i];
+              const d = Math.hypot(sp.x - playerX, sp.y - playerY);
+              if (d < closestDist) {
+                closestDist = d;
+                closestSp = sp;
+              }
             }
           }
           this.activeWaveSpawnPoint = closestSp;
@@ -1833,11 +1858,11 @@ export class RaycastEnemyManager {
       if (this.isDoorTile(idx, doorStatesFlat)) {
         const doorState = doorStatesFlat[idx];
         const key = `${cx},${cy}`;
-        if (lockedDoors && lockedDoors[key] && !this.isAlertActive) {
-          // Locked by keycard -> enemies cannot open it unless base alert security override is active
+        if (lockedDoors && lockedDoors[key]) {
+          // Locked by keycard -> enemies cannot open it, passable only if already open
           return !Number.isNaN(doorState) && Math.abs(doorState) >= 0.45;
         }
-        // Unlocked door or alert security override -> passable (enemies can open it)
+        // Unlocked door -> passable (enemies can open it)
         return true;
       }
       return false; // Solid wall or obstacle
@@ -2057,18 +2082,23 @@ export class RaycastEnemyManager {
           }
         }
 
-        // Check doorway immediately ahead to open unlocked doors smoothly
+        // Check doorway immediately ahead to open unlocked doors smoothly (excluding keycard doors)
         if (enemy.nearestDoorCell && enemy.nearestDoorDist <= 1.5) {
-          const nIdx = enemy.nearestDoorCell.y * mapWidth + enemy.nearestDoorCell.x;
-          if (this.isDoorTile(nIdx, doorStatesFlat) && doorStatesFlat[nIdx] === 0) {
-            this.onEnemyOpenDoorCallback?.(enemy.nearestDoorCell.x, enemy.nearestDoorCell.y, enemy.x, enemy.y);
+          const nCell = enemy.nearestDoorCell;
+          const nIdx = nCell.y * mapWidth + nCell.x;
+          const nKey = `${nCell.x},${nCell.y}`;
+          const isKeycardDoor = Boolean(lockedDoors && lockedDoors[nKey]);
+          if (!isKeycardDoor && this.isDoorTile(nIdx, doorStatesFlat) && doorStatesFlat[nIdx] === 0) {
+            this.onEnemyOpenDoorCallback?.(nCell.x, nCell.y, enemy.x, enemy.y);
           }
         } else {
           const frontX = Math.floor(enemy.x + enemy.dirX * 0.7);
           const frontY = Math.floor(enemy.y + enemy.dirY * 0.7);
           if (frontX >= 0 && frontX < mapWidth && frontY >= 0 && frontY < mapHeight) {
             const fIdx = frontY * mapWidth + frontX;
-            if (this.isDoorTile(fIdx, doorStatesFlat) && doorStatesFlat[fIdx] === 0) {
+            const fKey = `${frontX},${frontY}`;
+            const isKeycardDoor = Boolean(lockedDoors && lockedDoors[fKey]);
+            if (!isKeycardDoor && this.isDoorTile(fIdx, doorStatesFlat) && doorStatesFlat[fIdx] === 0) {
               this.onEnemyOpenDoorCallback?.(frontX, frontY, enemy.x, enemy.y);
             }
           }
