@@ -21,12 +21,37 @@ export const STATIONARY_OBJECT_REGISTRY: Record<string, StationaryObjectConfig> 
     hitRadius: 0.45,
     blocksMovement: true,
   },
+  at_st: {
+    name: "at_st",
+    spritesheet: "assets/raycast/decorations/at_st.json",
+    scale: 1.8,
+    referenceHeight: 300,
+    hitRadius: 0.95,
+    blocksMovement: true,
+  },
+  tie_fighter: {
+    name: "tie_fighter",
+    spritesheet: "assets/raycast/decorations/tie_fighter.json",
+    scale: 1.8,
+    referenceHeight: 250,
+    hitRadius: 0.95,
+    blocksMovement: true,
+  },
+  tie_bomber: {
+    name: "tie_bomber",
+    spritesheet: "assets/raycast/decorations/tie_bomber.json",
+    scale: 1.8,
+    referenceHeight: 250,
+    hitRadius: 0.95,
+    blocksMovement: true,
+  },
 };
 
 export class RaycastStationaryObjectManager {
   private container: Container;
   private spritesheets: Record<string, Spritesheet> = {};
   public objects: RaycastStationaryObject[] = [];
+  public onObjectSpawned?: (gridX: number, gridY: number) => void;
   private nextId: number = 1;
 
   constructor(container: Container) {
@@ -111,18 +136,9 @@ export class RaycastStationaryObjectManager {
     };
     const allLayers = collectLayers(mapData.layers || []);
 
-    const objectLayers = allLayers.filter(
-      (layer: any) =>
-        layer.type === "objectgroup" ||
-        (layer.name &&
-          (layer.name.toLowerCase().includes("object") ||
-            layer.name.toLowerCase().includes("decor") ||
-            layer.name.toLowerCase().includes("prop") ||
-            layer.name.toLowerCase().includes("furniture") ||
-            layer.name.toLowerCase().includes("item")))
-    );
+    const layersToScan = allLayers;
 
-    for (const layer of objectLayers) {
+    for (const layer of layersToScan) {
       let layerScale: number | undefined;
       let layerScaleX: number | undefined;
       let layerScaleY: number | undefined;
@@ -180,6 +196,7 @@ export class RaycastStationaryObjectManager {
           };
 
           this.spawnObject(matchedConfig.name, adjustedTileId, x, y, dirX, dirY, options);
+          this.onObjectSpawned?.(tileX + offsetX, tileY + offsetY);
         });
       } else if (layer.objects && Array.isArray(layer.objects)) {
         // Object layer
@@ -239,6 +256,7 @@ export class RaycastStationaryObjectManager {
           };
 
           this.spawnObject(matchedConfig.name, adjustedTileId, x, y, dirX, dirY, options);
+          this.onObjectSpawned?.(Math.floor(x), Math.floor(y));
         });
       }
     }
@@ -258,6 +276,37 @@ export class RaycastStationaryObjectManager {
       nameStr.includes("holotable")
     ) {
       return STATIONARY_OBJECT_REGISTRY.isb_holotable;
+    }
+    if (
+      imgStr.includes("at_st") ||
+      imgStr.includes("atst") ||
+      typeStr.includes("at_st") ||
+      typeStr.includes("atst") ||
+      nameStr.includes("at_st") ||
+      nameStr.includes("atst")
+    ) {
+      return STATIONARY_OBJECT_REGISTRY.at_st;
+    }
+    if (
+      imgStr.includes("tie_bomber") ||
+      imgStr.includes("bomber") ||
+      typeStr.includes("tie_bomber") ||
+      typeStr.includes("bomber") ||
+      nameStr.includes("tie_bomber") ||
+      nameStr.includes("bomber")
+    ) {
+      return STATIONARY_OBJECT_REGISTRY.tie_bomber;
+    }
+    if (
+      imgStr.includes("tie_fighter") ||
+      imgStr.includes("tie") ||
+      imgStr.includes("fighter") ||
+      typeStr.includes("tie_fighter") ||
+      typeStr.includes("fighter") ||
+      nameStr.includes("tie_fighter") ||
+      nameStr.includes("fighter")
+    ) {
+      return STATIONARY_OBJECT_REGISTRY.tie_fighter;
     }
     return null;
   }

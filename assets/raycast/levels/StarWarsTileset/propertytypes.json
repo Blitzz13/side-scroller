@@ -153,6 +153,50 @@
     {
         "color": "#ffa0a0a4",
         "drawFill": true,
+        "id": 19,
+        "members": [
+            {
+                "name": "action",
+                "propertyType": "LinkAction",
+                "type": "string",
+                "value": "-"
+            },
+            {
+                "name": "linkIds",
+                "type": "list",
+                "value": [
+                ]
+            }
+        ],
+        "name": "Linkable",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 21,
+        "name": "LinkAction",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "-",
+            "enable",
+            "disable"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
         "id": 3,
         "members": [
             {
@@ -160,6 +204,17 @@
                 "propertyType": "Anchor",
                 "type": "string",
                 "value": "ceiling"
+            },
+            {
+                "name": "isDestructible",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "linkIds",
+                "type": "list",
+                "value": [
+                ]
             },
             {
                 "name": "scale",
@@ -191,6 +246,11 @@
         "drawFill": true,
         "id": 18,
         "members": [
+            {
+                "name": "displayMessage",
+                "type": "string",
+                "value": ""
+            },
             {
                 "name": "isObjective",
                 "type": "bool",
@@ -294,6 +354,12 @@
         "id": 13,
         "members": [
             {
+                "name": "align",
+                "propertyType": "Align",
+                "type": "string",
+                "value": "-"
+            },
+            {
                 "name": "open",
                 "propertyType": "DoorOpen",
                 "type": "string",
@@ -303,7 +369,7 @@
                 "name": "tileType",
                 "propertyType": "TileType",
                 "type": "string",
-                "value": "door"
+                "value": "thinWall"
             }
         ],
         "name": "Tile",
@@ -341,6 +407,13 @@
         "id": 16,
         "members": [
             {
+                "name": "link",
+                "propertyType": "Linkable",
+                "type": "class",
+                "value": {
+                }
+            },
+            {
                 "name": "objective",
                 "propertyType": "Objective",
                 "type": "class",
@@ -351,6 +424,12 @@
                 "name": "shouldBePressed",
                 "type": "bool",
                 "value": false
+            },
+            {
+                "name": "soundOnTrigger",
+                "type": "list",
+                "value": [
+                ]
             },
             {
                 "name": "trigerEvent",
@@ -372,6 +451,15 @@
                         "value": ""
                     }
                 ]
+            },
+            {
+                "name": "wait",
+                "propertyType": "Wait",
+                "type": "class",
+                "value": {
+                    "shouldWait": false,
+                    "waitTimeInSeconds": 0
+                }
             }
         ],
         "name": "Triger",
@@ -398,6 +486,36 @@
             "onExit"
         ],
         "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 22,
+        "members": [
+            {
+                "name": "shouldWait",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "waitTimeInSeconds",
+                "type": "float",
+                "value": 0
+            }
+        ],
+        "name": "Wait",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
     },
     {
         "color": "#ffa0a0a4",

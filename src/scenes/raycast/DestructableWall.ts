@@ -13,6 +13,8 @@ export function extractLinkIds(input: any): string[] {
           ids.push(...extractLinkIds(item.value));
         } else if (item.id !== undefined) {
           ids.push(...extractLinkIds(item.id));
+        } else if (item.linkIds !== undefined) {
+          ids.push(...extractLinkIds(item.linkIds));
         }
       } else if (item !== undefined && item !== null) {
         ids.push(...extractLinkIds(item));
@@ -21,6 +23,9 @@ export function extractLinkIds(input: any): string[] {
     return ids;
   }
   if (typeof input === "object") {
+    if (input.linkIds !== undefined) {
+      return extractLinkIds(input.linkIds);
+    }
     if (input.value !== undefined) {
       return extractLinkIds(input.value);
     }
@@ -72,25 +77,43 @@ export class DestructableWall {
     this.objectiveKey = String(config.objectiveKey || "").trim();
     this.active = !this.isEnabling;
 
-    const rotStr = String(config.rotation || "vertical").toLowerCase();
-    this.rotation =
-      rotStr.includes("horiz") ||
-      rotStr === "h" ||
-      rotStr === "ew" ||
-      rotStr === "x" ||
-      rotStr === "90" ||
-      rotStr === "270"
-        ? "horizontal"
-        : "vertical";
+    const rawAlign = String(config.align || "center").toLowerCase().trim();
+    this.align = rawAlign === "-" || rawAlign === "" ? "center" : rawAlign;
 
-    this.align = String(config.align || "center").toLowerCase();
+    const rotStr = String(config.rotation || "").toLowerCase().trim();
+    if (rotStr && rotStr !== "-" && rotStr !== "none") {
+      this.rotation =
+        rotStr.includes("horiz") ||
+        rotStr === "h" ||
+        rotStr === "ew" ||
+        rotStr === "x" ||
+        rotStr === "90" ||
+        rotStr === "270"
+          ? "horizontal"
+          : "vertical";
+    } else {
+      // Auto-determine rotation from alignment if not explicitly set
+      if (
+        this.align === "top" ||
+        this.align === "bottom" ||
+        this.align === "north" ||
+        this.align === "south" ||
+        this.align === "up" ||
+        this.align === "down"
+      ) {
+        this.rotation = "horizontal";
+      } else {
+        this.rotation = "vertical";
+      }
+    }
+
     this.offset =
       typeof config.offset === "number"
         ? config.offset
         : parseFloat(String(config.offset || 0)) || 0;
 
-    // Normalize linkIds into a cleaned array of strings
-    this.linkIds = extractLinkIds(config.linkIds);
+    // Normalize linkIds from direct property or config.link
+    this.linkIds = extractLinkIds(config.linkIds || (config.link ? config.link.linkIds : undefined));
 
     this.calculateGeometry();
   }
@@ -178,50 +201,63 @@ export class DestructableWall {
   }
 
   /**
-   * Binds breakable objects to this wall by matching link IDs.
+   * Binds breakable objects to this wall by matching link IDs in both directions:
+   * 1. Breakables linking TO this wall (Tiled object link feature: breakable.linkIds contains wall.id)
+   * 2. This wall linking TO breakables (wall.linkIds contains breakable objId/id)
    */
   public bindBreakables(
     allBreakables: RaycastBreakable[],
     firstgid: number = 1
   ): void {
-    if (this.linkIds.length === 0) {
-      this.linkedBreakables = [];
-      return;
+    const matchedBreakables = new Set<RaycastBreakable>();
+    const wallIdStr = String(this.id);
+
+    // 1. Check if any breakable links TO this wall
+    for (const b of allBreakables) {
+      if (b.linkIds && b.linkIds.length > 0) {
+        if (
+          b.linkIds.includes(wallIdStr) ||
+          (this.name && b.linkIds.some((lid) => lid.toLowerCase() === this.name.toLowerCase()))
+        ) {
+          matchedBreakables.add(b);
+        }
+      }
     }
 
-    const matchedBreakables = new Set<RaycastBreakable>();
+    // 2. Check if this wall links TO breakables
+    if (this.linkIds.length > 0) {
+      for (const linkId of this.linkIds) {
+        const lidStr = String(linkId).trim();
+        if (!lidStr) continue;
 
-    for (const linkId of this.linkIds) {
-      const lidStr = String(linkId).trim();
-      if (!lidStr) continue;
-
-      // 1. Exact object ID / custom linkId match
-      const exactMatches = allBreakables.filter((b) => {
-        const matchObjId = b.objId !== undefined && String(b.objId) === lidStr;
-        const matchId = String(b.id) === lidStr;
-        const matchLinkId = b.linkId !== undefined && String(b.linkId) === lidStr;
-        return matchObjId || matchId || matchLinkId;
-      });
-
-      if (exactMatches.length > 0) {
-        for (const m of exactMatches) {
-          matchedBreakables.add(m);
-        }
-      } else {
-        // 2. Fallback: match by tileId / GID / name / type
-        const fallbackMatches = allBreakables.filter((b) => {
-          const matchTileId = b.tileId !== undefined && String(b.tileId) === lidStr;
-          const matchGid =
-            b.tileId !== undefined && String(b.tileId + firstgid) === lidStr;
-          const matchName =
-            b.name && b.name.toLowerCase().includes(lidStr.toLowerCase());
-          const matchType =
-            b.type && b.type.toLowerCase().includes(lidStr.toLowerCase());
-          return matchTileId || matchGid || matchName || matchType;
+        // Exact object ID / custom linkId match
+        const exactMatches = allBreakables.filter((b) => {
+          const matchObjId = b.objId !== undefined && String(b.objId) === lidStr;
+          const matchId = String(b.id) === lidStr;
+          const matchLinkId = b.linkId !== undefined && String(b.linkId) === lidStr;
+          return matchObjId || matchId || matchLinkId;
         });
 
-        for (const m of fallbackMatches) {
-          matchedBreakables.add(m);
+        if (exactMatches.length > 0) {
+          for (const m of exactMatches) {
+            matchedBreakables.add(m);
+          }
+        } else {
+          // Fallback: match by tileId / GID / name / type
+          const fallbackMatches = allBreakables.filter((b) => {
+            const matchTileId = b.tileId !== undefined && String(b.tileId) === lidStr;
+            const matchGid =
+              b.tileId !== undefined && String(b.tileId + firstgid) === lidStr;
+            const matchName =
+              b.name && b.name.toLowerCase().includes(lidStr.toLowerCase());
+            const matchType =
+              b.type && b.type.toLowerCase().includes(lidStr.toLowerCase());
+            return matchTileId || matchGid || matchName || matchType;
+          });
+
+          for (const m of fallbackMatches) {
+            matchedBreakables.add(m);
+          }
         }
       }
     }

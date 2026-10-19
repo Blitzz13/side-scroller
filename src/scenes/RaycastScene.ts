@@ -39,7 +39,7 @@ import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
 import floorCeilingVert from "./raycast/shaders/floorCeiling.vert";
 import floorCeilingFrag from "./raycast/shaders/floorCeiling.frag";
 import { RaycastMinimap } from "../plugins/minimap";
-import { RaycastMissionManager } from "./raycast/objectives";
+import { RaycastMissionManager, ITriggerZone } from "./raycast/objectives";
 import {
   calculateMapBounds,
   extractTiledGidAndRotation,
@@ -249,6 +249,12 @@ export class RaycastScene extends BaseScene {
   private levelFinishZones: LevelFinishZone[] = [];
   private currentMapOffsetX: number = 0;
   private currentMapOffsetY: number = 0;
+  private currentMapData: any = null;
+  private mapObjectsById: Map<number, any> = new Map();
+  private animatedWallFrames: Record<number, Texture[][]> = {};
+  private animatedWallTextures: Record<number, Texture[]> = {};
+  private animatedWallTimer: number = 0;
+  private animatedWallFrameIndex: number = 0;
 
   constructor(stage: Container, scale: number, level?: string) {
     super(stage, scale);
@@ -475,6 +481,8 @@ export class RaycastScene extends BaseScene {
       showToast: (text, color, duration) => this.hud?.showToast(text, color, duration),
       showPrompt: (text) => this.hud?.setPrompt(text),
       hidePrompt: () => this.hud?.clearPrompt(),
+      onTriggerFired: (trigger) => this.handleTriggerFired(trigger),
+      onTriggerWaitComplete: (trigger) => this.handleTriggerWaitComplete(trigger),
     });
     const missionUI = this.missionManager.getUIContainer();
     missionUI.zIndex = 95;
@@ -663,11 +671,24 @@ export class RaycastScene extends BaseScene {
         { id: 34, image: "assets/raycast/pickups/key_card_red.png", type: "PickupItem", properties: [{ name: "type", value: "red_keycard" }] },
         { id: 36, image: "assets/raycast/textures/grilled_wall.jpg", type: "DestructableWall", properties: [{ name: "tileType", value: "thickWall" }] },
         { id: 39, image: "assets/raycast/textures/grilled_wall_destroyed.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
-        { id: 40, image: "assets/raycast/textures/level_off.png", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 40, image: "assets/raycast/textures/lever_off.png", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
         { id: 41, image: "assets/raycast/textures/lever_on.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
         { id: 42, image: "assets/raycast/textures/piped_wall.png", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
         { id: 43, image: "assets/raycast/textures/computer_wall.png", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
         { id: 44, image: "assets/raycast/textures/electronic_wall.png", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 45, image: "assets/raycast/textures/worn_piped_wall.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 46, image: "assets/raycast/textures/worn_sewer_wall.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 47, image: "assets/raycast/textures/worn_grilled_wall.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 48, image: "assets/raycast/textures/sewer_wall.jpg", type: "Tile", properties: [{ name: "tileType", value: "thickWall" }] },
+        { id: 49, image: "assets/raycast/textures/sewer_ceiling.jpg", type: "Tile", properties: [{ name: "tileType", value: "ceiling" }] },
+        { id: 50, image: "assets/raycast/textures/sewer_door.jpg", type: "Tile", properties: [{ name: "tileType", value: "door" }, { name: "open", value: "Up" }] },
+        { id: 51, image: "assets/raycast/textures/sewer_waterfall.png", type: "Tile", properties: [{ name: "align", value: "-" }, { name: "tileType", value: "thinWall" }] },
+        { id: 52, image: "assets/raycast/textures/worn_stairs_up.jpg", type: "Tile", properties: [{ name: "tileType", value: "stairs" }, { name: "stairType", value: "up" }] },
+        { id: 53, image: "assets/raycast/textures/worn_stairs_down.jpg", type: "Tile", properties: [{ name: "tileType", value: "stairs" }, { name: "stairType", value: "down" }] },
+        { id: 54, image: "assets/raycast/enemies/prisoner.png", type: "Tile" },
+        { id: 55, image: "assets/raycast/enemies/at_st.png", type: "Tile" },
+        { id: 56, image: "assets/raycast/enemies/tie_fighter.png", type: "Tile" },
+        { id: 57, image: "assets/raycast/enemies/tie_bomber.png", type: "Tile" },
       ];
     }
   }
@@ -787,6 +808,20 @@ export class RaycastScene extends BaseScene {
         this.destructableWallManager.onBreakableDestroyed(broken);
       }
     }
+
+    const linkIds = broken.linkIds;
+    if (linkIds && linkIds.length > 0) {
+      const action = broken.isEnabling ? "enable" : (broken.linkAction || "disable");
+      this.applyLinkAction(linkIds, action);
+      if (broken.wait && broken.wait.shouldWait && broken.wait.waitTimeInSeconds > 0) {
+        setTimeout(() => {
+          const revertAction = action === "disable" ? "enable" : "disable";
+          this.applyLinkAction(linkIds, revertAction);
+          this.updateLevelFinishZonesStatus();
+        }, broken.wait.waitTimeInSeconds * 1000);
+      }
+    }
+    this.updateLevelFinishZonesStatus();
   }
 
   private handleWallBlockDestroyed(broken: RaycastBreakable): void {
@@ -840,22 +875,6 @@ export class RaycastScene extends BaseScene {
     if (this.destructableWallManager) {
       this.destructableWallManager.onBreakableDestroyed(broken);
     }
-
-    // 5. If wall block enables linked objects upon destruction (e.g. LevelFinish zone)
-    if (broken.isEnabling && broken.linkIds && broken.linkIds.length > 0) {
-      for (const linkId of broken.linkIds) {
-        const lidStr = String(linkId).trim();
-        for (const zone of this.levelFinishZones) {
-          if ((zone.id !== undefined && String(zone.id) === lidStr) || zone.targetLevel === lidStr) {
-            zone.enabled = true;
-            this.hud.showToast("[★] Exit Sector Unlocked!", 0x00ffcc);
-            try {
-              sound.play("door_1", { volume: 0.5 });
-            } catch {}
-          }
-        }
-      }
-    }
   }
 
   private async loadLevel(levelName: string) {
@@ -874,6 +893,11 @@ export class RaycastScene extends BaseScene {
     if (this.minimap) this.minimap.resetDiscovery();
     this.stopAlertAudio();
     this.enemySpawnPoints = [];
+    this.animatedWallFrames = {};
+    this.animatedWallTextures = {};
+    this.animatedWallTimer = 0;
+    this.animatedWallFrameIndex = 0;
+    this.mapObjectsById.clear();
 
     let mapData: any;
     try {
@@ -885,6 +909,7 @@ export class RaycastScene extends BaseScene {
         mapData = await Assets.load(`assets/raycast/levels/test_level.json`);
       }
     }
+    this.currentMapData = mapData;
 
     if (mapData.tilesets) {
       for (const tileset of mapData.tilesets) {
@@ -914,11 +939,18 @@ export class RaycastScene extends BaseScene {
               imagePath.includes("enemy_spawn") ||
               imagePath.includes("key_card") ||
               imagePath.includes("keycard") ||
-              imagePath.includes("viper_droid_default")
+              imagePath.includes("viper_droid") ||
+              imagePath.includes("pickups/") ||
+              imagePath.includes("enemies/") ||
+              imagePath.includes("isb_holotable") ||
+              imagePath.includes("at_st") ||
+              imagePath.includes("tie_fighter") ||
+              imagePath.includes("tie_bomber") ||
+              tile.type === "PickupItem" ||
+              tile.type === "Enemy"
             ) {
               return;
             }
-            const fileName = imagePath.split(/[\\/]/).pop();
             textureMap[tileId] = imagePath;
           });
         }
@@ -927,67 +959,131 @@ export class RaycastScene extends BaseScene {
 
     const texturePromises = Object.entries(textureMap).map(
       ([tileId, fileName]) => {
-        const assetPath = `${fileName}`;
-        return Assets.load(assetPath)
-          .then((texture) => {
-            if (texture && texture.baseTexture) {
-              texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-              texture.baseTexture.mipmap = MIPMAP_MODES.OFF;
-              texture.baseTexture.update();
-            }
-            this.textures[parseInt(tileId)] = texture;
-          })
-          .catch((err) => {
-            console.error(`Failed to load ${fileName}:`, err);
-            if (fileName.includes("stairs_up")) {
-              return Assets.load("assets/raycast/textures/stairs_up.jpg")
-                .then((t) => {
-                  if (t && t.baseTexture) {
-                    t.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-                    t.baseTexture.mipmap = MIPMAP_MODES.OFF;
-                    t.baseTexture.update();
+        if (fileName.includes("sewer_waterfall")) {
+          return Assets.load("assets/raycast/textures/sewer_waterfall.json")
+            .then((sheet: any) => {
+              if (sheet && sheet.textures) {
+                const sortedKeys = Object.keys(sheet.textures).sort((a, b) => {
+                  const numA = parseInt(a.match(/_(\d+)\.png$/)?.[1] || "0");
+                  const numB = parseInt(b.match(/_(\d+)\.png$/)?.[1] || "0");
+                  return numA - numB;
+                });
+                const allFrameSlices: Texture[][] = [];
+                const allFrameTextures: Texture[] = [];
+                for (const fKey of sortedKeys) {
+                  const fTex: Texture = sheet.textures[fKey];
+                  if (fTex.baseTexture) {
+                    fTex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+                    fTex.baseTexture.mipmap = MIPMAP_MODES.OFF;
+                    fTex.baseTexture.update();
                   }
-                  this.textures[parseInt(tileId)] = t;
-                })
-                .catch(() => {});
-            }
-            if (fileName.includes("dirty_water")) {
-              return Assets.load("assets/raycast/textures/dirty_water.jpg")
-                .then((t) => {
-                  if (t && t.baseTexture) {
-                    t.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-                    t.baseTexture.mipmap = MIPMAP_MODES.OFF;
-                    t.baseTexture.update();
+                  allFrameTextures.push(fTex);
+                  const slices: Texture[] = [];
+                  const fRect = fTex.frame;
+                  const realW = fTex.baseTexture.realWidth || 2034;
+                  for (let x = 0; x < fRect.width; x++) {
+                    const slice = new Texture(
+                      fTex.baseTexture,
+                      new Rectangle(fRect.x + x, fRect.y, 1, fRect.height)
+                    );
+                    if (slice.baseTexture) {
+                      slice.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+                      slice.baseTexture.mipmap = MIPMAP_MODES.OFF;
+                    }
+                    slice.updateUvs();
+                    const u = (fRect.x + x + 0.5) / realW;
+                    slice._uvs.x0 = u;
+                    slice._uvs.x1 = u;
+                    slice._uvs.x2 = u;
+                    slice._uvs.x3 = u;
+                    slice._uvs.uvsFloat32[0] = u;
+                    slice._uvs.uvsFloat32[2] = u;
+                    slice._uvs.uvsFloat32[4] = u;
+                    slice._uvs.uvsFloat32[6] = u;
+                    slices.push(slice);
                   }
-                  this.textures[parseInt(tileId)] = t;
-                })
-                .catch(() => {});
+                  allFrameSlices.push(slices);
+                }
+                const tId = parseInt(tileId);
+                this.animatedWallFrames[tId] = allFrameSlices;
+                this.animatedWallTextures[tId] = allFrameTextures;
+                this.textures[tId] = allFrameTextures[0];
+                this.columnTextures[tId] = allFrameSlices[0];
+              }
+            })
+            .catch((e) => {
+              console.warn("Failed to load sewer_waterfall spritesheet:", e);
+            });
+        }
+
+        const cleanFileName = fileName.split(/[\\/]/).pop() || "";
+        const baseAlias = cleanFileName.replace(/\.[^/.]+$/, "");
+
+        const applyTexture = (tex: any) => {
+          if (!tex) return;
+          let actualTexture: Texture | null = null;
+          if (tex instanceof Texture) {
+            actualTexture = tex;
+          } else if (tex.textures && typeof tex.textures === "object") {
+            const firstKey = Object.keys(tex.textures)[0];
+            if (firstKey && tex.textures[firstKey] instanceof Texture) {
+              actualTexture = tex.textures[firstKey];
             }
-            if (fileName.includes("grilled_wall_destroyed")) {
-              return Assets.load("assets/raycast/textures/grilled_wall_destroyed.jpg")
-                .then((t) => {
-                  if (t && t.baseTexture) {
-                    t.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-                    t.baseTexture.mipmap = MIPMAP_MODES.OFF;
-                    t.baseTexture.update();
-                  }
-                  this.textures[parseInt(tileId)] = t;
-                })
-                .catch(() => {});
+          }
+          if (!actualTexture || !actualTexture.baseTexture) return;
+
+          actualTexture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+          actualTexture.baseTexture.mipmap = MIPMAP_MODES.OFF;
+          actualTexture.baseTexture.update();
+          this.textures[parseInt(tileId)] = actualTexture;
+        };
+
+        const tryCached = (key: string): boolean => {
+          if (Assets.cache.has(key)) {
+            const cached = Assets.get(key);
+            if (cached instanceof Texture) {
+              applyTexture(cached);
+              return true;
             }
-            if (fileName.includes("computer_panel_destroyed")) {
-              return Assets.load("assets/raycast/textures/computer_panel_destroyed.jpg")
-                .then((t) => {
-                  if (t && t.baseTexture) {
-                    t.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-                    t.baseTexture.mipmap = MIPMAP_MODES.OFF;
-                    t.baseTexture.update();
-                  }
-                  this.textures[parseInt(tileId)] = t;
-                })
-                .catch(() => {});
+          }
+          return false;
+        };
+
+        if (
+          tryCached(baseAlias) ||
+          tryCached(fileName) ||
+          tryCached(`./${fileName}`) ||
+          tryCached(`assets/raycast/textures/${cleanFileName}`) ||
+          tryCached(`./assets/raycast/textures/${cleanFileName}`)
+        ) {
+          return Promise.resolve();
+        }
+
+        const candidatePaths = [
+          fileName,
+          `./${fileName}`,
+          `assets/raycast/textures/${cleanFileName}`,
+          `./assets/raycast/textures/${cleanFileName}`,
+          `assets/${cleanFileName}`,
+          `./assets/${cleanFileName}`,
+        ];
+
+        const tryLoad = async () => {
+          for (const path of candidatePaths) {
+            try {
+              const tex = await Assets.load(path);
+              if (tex) {
+                applyTexture(tex);
+                return;
+              }
+            } catch {
+              // try next candidate
             }
-          });
+          }
+          console.error(`Failed to load texture for tile ${tileId} (${fileName})`);
+        };
+
+        return tryLoad();
       }
     );
     await Promise.all(texturePromises);
@@ -996,25 +1092,38 @@ export class RaycastScene extends BaseScene {
     // Extract raw pixel buffers and pre-slice 1px column textures with texel-centered UVs
     for (const [tileIdStr, texture] of Object.entries(this.textures)) {
       const tileId = parseInt(tileIdStr);
-      if (texture && texture.baseTexture) {
-        texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-        texture.baseTexture.mipmap = MIPMAP_MODES.OFF;
-        texture.baseTexture.update();
+      if (this.animatedWallFrames[tileId]) {
+        this.rawTextureData[tileId] = this.extractTexturePixels(texture);
+        continue;
       }
+      if (!texture || !(texture instanceof Texture) || !texture.baseTexture) {
+        continue;
+      }
+      texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      texture.baseTexture.mipmap = MIPMAP_MODES.OFF;
+      texture.baseTexture.update();
+
       this.rawTextureData[tileId] = this.extractTexturePixels(texture);
 
+      const baseW = texture.baseTexture.width || 64;
+      const baseH = texture.baseTexture.height || 64;
+      const frameX = texture.frame ? texture.frame.x : 0;
+      const frameY = texture.frame ? texture.frame.y : 0;
+      const texW = Math.min(texture.width || baseW, Math.max(0, baseW - frameX));
+      const texH = Math.min(texture.height || baseH, Math.max(0, baseH - frameY));
+      const realW = texture.baseTexture.realWidth || baseW;
+
+      if (texW <= 0 || texH <= 0) continue;
+
       const slices: Texture[] = [];
-      const texW = texture.width || 64;
-      const texH = texture.height || 64;
-      const realW = texture.baseTexture?.realWidth || texW;
       for (let x = 0; x < texW; x++) {
-        const slice = new Texture(texture.baseTexture, new Rectangle(x, 0, 1, texH));
+        const slice = new Texture(texture.baseTexture, new Rectangle(frameX + x, frameY, 1, texH));
         if (slice.baseTexture) {
           slice.baseTexture.scaleMode = SCALE_MODES.NEAREST;
           slice.baseTexture.mipmap = MIPMAP_MODES.OFF;
         }
         slice.updateUvs();
-        const u = (x + 0.5) / realW;
+        const u = (frameX + x + 0.5) / realW;
         slice._uvs.x0 = u;
         slice._uvs.x1 = u;
         slice._uvs.x2 = u;
@@ -1061,6 +1170,7 @@ export class RaycastScene extends BaseScene {
       } catch (e) {
         console.warn("Failed to play barrier deactivated sound:", e);
       }
+      this.updateLevelFinishZonesStatus();
     };
     await this.enemyManager.initSpritesheets();
     this.enemyManager.parseMapEnemies(mapData, firstgid, this.tileMeta, offsetX, offsetY);
@@ -1084,6 +1194,14 @@ export class RaycastScene extends BaseScene {
       }
     });
     await this.stationaryObjectManager.initSpritesheets();
+    this.stationaryObjectManager.onObjectSpawned = (gx, gy) => {
+      if (this.map && this.map[gy] && this.map[gy][gx] !== undefined) {
+        this.map[gy][gx] = 0;
+      }
+      if (this.mapFlat && gy >= 0 && gy < this.mapHeight && gx >= 0 && gx < this.mapWidth) {
+        this.mapFlat[gy * this.mapWidth + gx] = 0;
+      }
+    };
     this.stationaryObjectManager.parseMapObjects(mapData, this.tileMeta, firstgid, offsetX, offsetY);
 
     // Initialize thermal detonator manager textures & frames
@@ -1175,6 +1293,16 @@ export class RaycastScene extends BaseScene {
       return flat;
     };
     const allLayers = collectLayers(mapData.layers || []);
+
+    for (const l of allLayers) {
+      if (l.objects && Array.isArray(l.objects)) {
+        for (const obj of l.objects) {
+          if (obj.id !== undefined) {
+            this.mapObjectsById.set(obj.id, obj);
+          }
+        }
+      }
+    }
 
     const bounds = calculateMapBounds(mapData, allLayers);
     this.mapWidth = bounds.mapWidth;
@@ -1283,7 +1411,7 @@ export class RaycastScene extends BaseScene {
               imgPath.toLowerCase().includes("electronic_wall") ||
               imgPath.toLowerCase().includes("piped_wall") ||
               imgPath.toLowerCase().includes("lever") ||
-              imgPath.toLowerCase().includes("level_off")
+              imgPath.toLowerCase().includes("lever_off")
             ) {
               meta.type = TileType.THICK_WALL;
               meta.tileType = TileType.THICK_WALL;
@@ -1349,6 +1477,16 @@ export class RaycastScene extends BaseScene {
             const tileId = gid - firstgid;
             const meta = this.tileMeta[tileId];
             if (meta?.image?.toLowerCase().includes("player_spawn") || tileId === 27) return;
+            const imgLower = meta?.image?.toLowerCase() || "";
+            if (
+              imgLower.includes("at_st") ||
+              imgLower.includes("atst") ||
+              imgLower.includes("tie_fighter") ||
+              imgLower.includes("tie_bomber") ||
+              imgLower.includes("holotable")
+            ) {
+              return;
+            }
             // Any sprite in the walls layer is strictly a wall, never registered as a door
             this.map[y][x] = gid;
           }
@@ -1406,6 +1544,16 @@ export class RaycastScene extends BaseScene {
       (layer: any) => layer.name && layer.name.toLowerCase() === "thinwalls"
     );
     for (const thinWallsLayer of thinWallsLayers) {
+      let layerAlign = "";
+      if (thinWallsLayer.properties && Array.isArray(thinWallsLayer.properties)) {
+        for (const p of thinWallsLayer.properties) {
+          const pName = (p.name || "").toLowerCase();
+          if (pName === "align" || pName === "alignment" || pName === "valign" || pName === "halign") {
+            layerAlign = String(p.value || "").toLowerCase().trim();
+          }
+        }
+      }
+
       const thinWallTiles: Array<{ x: number; y: number; tileId: number }> = [];
       forEachTileInLayer(thinWallsLayer, (rawGid: number, lx: number, ly: number) => {
         const gid = rawGid & 0x1FFFFFFF;
@@ -1418,6 +1566,10 @@ export class RaycastScene extends BaseScene {
         const tileType = this.tileTypes[tileId];
         const adjustedTileId = tileId - firstgid;
         if (tileType === "thinWall" || tileType === TileType.THIN_WALL) {
+          const metaAlign = (this.tileMeta[adjustedTileId]?.anchor || "").toLowerCase().trim();
+          const rawAlign = layerAlign || metaAlign;
+          const alignStr = rawAlign === "-" || rawAlign === "" ? "center" : rawAlign;
+
           const hasTop = thinWallTiles.some(
             (t) =>
               t.x === x &&
@@ -1444,29 +1596,55 @@ export class RaycastScene extends BaseScene {
           );
 
           let orientation: "vertical" | "horizontal" = "vertical";
-          if ((hasLeft || hasRight) && !(hasTop || hasBottom)) {
+          if (alignStr === "top" || alignStr === "bottom" || alignStr === "north" || alignStr === "south") {
+            orientation = "horizontal";
+          } else if (alignStr === "left" || alignStr === "right" || alignStr === "west" || alignStr === "east") {
+            orientation = "vertical";
+          } else if ((hasLeft || hasRight) && !(hasTop || hasBottom)) {
             orientation = "horizontal";
           } else if ((hasTop || hasBottom) && !(hasLeft || hasRight)) {
             orientation = "vertical";
           } else if (hasLeft || hasRight) {
             orientation = "horizontal";
+          } else {
+            const wallLeft = x > 0 && (this.map[y]?.[x - 1] ?? 0) > 0;
+            const wallRight = x < this.mapWidth - 1 && (this.map[y]?.[x + 1] ?? 0) > 0;
+            const wallTop = y > 0 && (this.map[y - 1]?.[x] ?? 0) > 0;
+            const wallBottom = y < this.mapHeight - 1 && (this.map[y + 1]?.[x] ?? 0) > 0;
+            if ((wallLeft || wallRight) && !(wallTop || wallBottom)) {
+              orientation = "horizontal";
+            } else if ((wallTop || wallBottom) && !(wallLeft || wallRight)) {
+              orientation = "vertical";
+            }
           }
 
           if (orientation === "vertical") {
+            const alignX =
+              alignStr === "left" || alignStr === "west"
+                ? 0.0
+                : alignStr === "right" || alignStr === "east"
+                ? 1.0
+                : 0.5;
             this.thinWalls.push({
-              x1: x + 0.5,
+              x1: x + alignX,
               y1: y,
-              x2: x + 0.5,
+              x2: x + alignX,
               y2: y + 1,
               texture: adjustedTileId,
               orientation,
             });
           } else {
+            const alignY =
+              alignStr === "top" || alignStr === "north"
+                ? 0.0
+                : alignStr === "bottom" || alignStr === "south"
+                ? 1.0
+                : 0.5;
             this.thinWalls.push({
               x1: x,
-              y1: y + 0.5,
+              y1: y + alignY,
               x2: x + 1,
-              y2: y + 0.5,
+              y2: y + alignY,
               texture: adjustedTileId,
               orientation,
             });
@@ -1487,11 +1665,9 @@ export class RaycastScene extends BaseScene {
           const x = lx + offsetX;
           const y = ly + offsetY;
           if (x >= 0 && x < this.mapWidth && y >= 0 && y < this.mapHeight) {
-            const tileType = this.tileTypes[gid];
-            if (tileType === "door" || tileType === TileType.DOOR) {
-              this.map[y][x] = gid;
-              this.doorStates[`${x},${y}`] = 0;
-            }
+            this.tileTypes[gid] = TileType.DOOR;
+            this.map[y][x] = gid;
+            this.doorStates[`${x},${y}`] = 0;
           }
         }
       });
@@ -2380,6 +2556,9 @@ export class RaycastScene extends BaseScene {
     } catch {}
     this.thinWallColumnTextures = [];
     this.columnTextures = {};
+    this.animatedWallFrames = {};
+    this.animatedWallTextures = {};
+    this.mapObjectsById.clear();
     try {
       this.removeChildren();
       this.destroy({ children: true });
@@ -2888,6 +3067,21 @@ export class RaycastScene extends BaseScene {
 
     this.updatePlayer(delta);
     this.updateDoors(delta);
+    if (Object.keys(this.animatedWallFrames).length > 0) {
+      this.animatedWallTimer += delta / 60;
+      if (this.animatedWallTimer >= 0.1) {
+        this.animatedWallTimer = 0;
+        this.animatedWallFrameIndex++;
+        for (const [tIdStr, frames] of Object.entries(this.animatedWallFrames)) {
+          const tId = parseInt(tIdStr);
+          const fIdx = this.animatedWallFrameIndex % frames.length;
+          this.columnTextures[tId] = frames[fIdx];
+          if (this.animatedWallTextures[tId]) {
+            this.textures[tId] = this.animatedWallTextures[tId][fIdx];
+          }
+        }
+      }
+    }
     if (this.stairsManager) {
       this.stairsManager.update(delta);
     }
@@ -3128,17 +3322,39 @@ export class RaycastScene extends BaseScene {
       if (zone.id === undefined) continue;
       const zoneIdStr = String(zone.id);
 
-      const linkedBreakable = breakables.find(
+      const hasLinkedEnabler =
+        breakables.some(
+          (b) => b.isEnabling && b.linkIds && b.linkIds.some((lid) => String(lid).trim() === zoneIdStr)
+        ) ||
+        walls.some(
+          (w) => w.isEnabling && w.linkIds && w.linkIds.some((lid) => String(lid).trim() === zoneIdStr)
+        );
+
+      if (!hasLinkedEnabler) {
+        if (zone.enabled === undefined) {
+          zone.enabled = true;
+        }
+        continue;
+      }
+
+      const activeLinkedBreakable = breakables.find(
         (b) => b.isEnabling && !b.isBroken && b.linkIds && b.linkIds.some((lid) => String(lid).trim() === zoneIdStr)
       );
-      const linkedWall = walls.find(
+      const activeLinkedWall = walls.find(
         (w) => w.isEnabling && w.isActive() && w.linkIds && w.linkIds.some((lid) => String(lid).trim() === zoneIdStr)
       );
 
-      if (linkedBreakable || linkedWall) {
+      if (activeLinkedBreakable || activeLinkedWall) {
         zone.enabled = false;
-      } else if (zone.enabled === undefined) {
+      } else {
+        const wasDisabled = zone.enabled === false;
         zone.enabled = true;
+        if (wasDisabled) {
+          this.hud?.showToast("[★] Exit Sector Unlocked!", 0x00ffcc);
+          try {
+            sound.play("door_1", { volume: 0.5 });
+          } catch {}
+        }
       }
     }
   }
@@ -3458,6 +3674,132 @@ export class RaycastScene extends BaseScene {
       return true;
     }
     return false;
+  }
+
+  public openDoorAt(x: number, y: number): boolean {
+    if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) return false;
+    const flatIdx = y * this.mapWidth + x;
+    if (this.tileTypeFlags[flatIdx] !== RaycastScene.TILE_DOOR) return false;
+
+    const key = `${x},${y}`;
+    const currentState = this.doorStatesFlat[flatIdx];
+    if (currentState <= 0) {
+      const startOpen = currentState < 0 ? Math.max(0.05, Math.abs(currentState)) : 0.01;
+      this.doorStates[key] = startOpen;
+      this.doorStatesFlat[flatIdx] = startOpen;
+      try {
+        sound.play("door_1", { volume: 0.5 });
+      } catch (e) {}
+      return true;
+    }
+    return false;
+  }
+
+  public closeDoorAt(x: number, y: number): boolean {
+    if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) return false;
+    const flatIdx = y * this.mapWidth + x;
+    if (this.tileTypeFlags[flatIdx] !== RaycastScene.TILE_DOOR) return false;
+
+    const key = `${x},${y}`;
+    const currentState = this.doorStatesFlat[flatIdx];
+    if (currentState > 0) {
+      const startClose = -Math.max(0.05, currentState);
+      this.doorStates[key] = startClose;
+      this.doorStatesFlat[flatIdx] = startClose;
+      try {
+        sound.play("door_1", { volume: 0.4 });
+      } catch (e) {}
+      return true;
+    }
+    return false;
+  }
+
+  public applyLinkAction(linkIds: (string | number)[], action: string = "disable"): void {
+    if (!linkIds || linkIds.length === 0) return;
+    const normAction = (action || "disable").toLowerCase();
+
+    for (const rawId of linkIds) {
+      const numId = Number(rawId);
+      const strId = String(rawId).trim();
+
+      // 1. Check DestructableWallManager (door protectors / security barriers)
+      if (this.destructableWallManager) {
+        const wall = this.destructableWallManager.getWallById(strId);
+        if (wall) {
+          if (normAction === "enable") {
+            this.destructableWallManager.setWallActiveById(wall.id, true);
+          } else if (normAction === "disable") {
+            this.destructableWallManager.setWallActiveById(wall.id, false);
+          } else {
+            this.destructableWallManager.setWallActiveById(wall.id, !wall.isActive());
+          }
+        }
+      }
+
+      // 2. Check map objects (for doors, switches, elevator doors, etc.)
+      const obj = this.mapObjectsById.get(numId);
+      if (obj) {
+        const tileW = this.currentMapData?.tilewidth || 64;
+        const tileH = this.currentMapData?.tileheight || 64;
+        const centerX = obj.x + (obj.width || tileW) / 2;
+        const centerY = obj.gid ? (obj.y - (obj.height || tileH) / 2) : (obj.y + (obj.height || tileH) / 2);
+        const gx = Math.floor(centerX / tileW) + this.currentMapOffsetX;
+        const gy = Math.floor(centerY / tileH) + this.currentMapOffsetY;
+
+        if (gx >= 0 && gx < this.mapWidth && gy >= 0 && gy < this.mapHeight) {
+          const flatIdx = gy * this.mapWidth + gx;
+          if (this.tileTypeFlags && this.tileTypeFlags[flatIdx] === RaycastScene.TILE_DOOR) {
+            if (normAction === "disable") {
+              // Disabling a door barrier opens the door
+              this.openDoorAt(gx, gy);
+            } else if (normAction === "enable") {
+              // Enabling a door barrier closes the door
+              this.closeDoorAt(gx, gy);
+            } else {
+              // Toggle
+              const cur = this.doorStatesFlat[flatIdx];
+              if (cur <= 0) this.openDoorAt(gx, gy);
+              else this.closeDoorAt(gx, gy);
+            }
+          }
+        }
+      }
+
+      // 3. Check level finish zones
+      for (const zone of this.levelFinishZones) {
+        if ((zone.id !== undefined && String(zone.id) === strId) || zone.targetLevel === strId) {
+          if (normAction === "disable") {
+            zone.enabled = false;
+          } else {
+            const wasDisabled = zone.enabled === false;
+            zone.enabled = true;
+            if (wasDisabled) {
+              this.hud.showToast("[★] Exit Sector Unlocked!", 0x00ffcc);
+              try {
+                sound.play("door_1", { volume: 0.5 });
+              } catch {}
+            }
+          }
+        }
+      }
+    }
+    this.updateLevelFinishZonesStatus();
+  }
+
+  private handleTriggerFired(trigger: ITriggerZone): void {
+    if (trigger.linkIds && trigger.linkIds.length > 0) {
+      const action = trigger.linkAction || "disable";
+      this.applyLinkAction(trigger.linkIds, action);
+    }
+  }
+
+  private handleTriggerWaitComplete(trigger: ITriggerZone): void {
+    if (trigger.linkIds && trigger.linkIds.length > 0) {
+      // Revert action when wait timer finishes (e.g. elevator closes door after 4s)
+      const action = trigger.linkAction || "disable";
+      const revertAction = action === "disable" ? "enable" : "disable";
+      this.applyLinkAction(trigger.linkIds, revertAction);
+    }
   }
 
   private cullThinWalls(): void {

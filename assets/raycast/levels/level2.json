@@ -1034,8 +1034,8 @@
                                  "type":"list",
                                  "value":[
                                         {
-                                         "type":"string",
-                                         "value":"38"
+                                         "type":"object",
+                                         "value":38
                                         }]
                                 }],
                          "rotation":0,
@@ -1055,7 +1055,23 @@
                                 {
                                  "name":"linkIds",
                                  "type":"list",
-                                 "value":[]
+                                 "value":[
+                                        {
+                                         "type":"object",
+                                         "value":87
+                                        }, 
+                                        {
+                                         "type":"object",
+                                         "value":93
+                                        }, 
+                                        {
+                                         "type":"object",
+                                         "value":94
+                                        }, 
+                                        {
+                                         "type":"object",
+                                         "value":95
+                                        }]
                                 }, 
                                 {
                                  "name":"objective",
@@ -1470,18 +1486,9 @@
                                  "propertytype":"Align",
                                  "type":"string",
                                  "value":"right"
-                                }, 
-                                {
-                                 "name":"linkIds",
-                                 "type":"list",
-                                 "value":[
-                                        {
-                                         "type":"string",
-                                         "value":"96"
-                                        }]
                                 }],
                          "rotation":0,
-                         "type":"DestructableWall",
+                         "type":"Tile",
                          "visible":true,
                          "width":64,
                          "x":1282,
@@ -1499,24 +1506,9 @@
                                  "propertytype":"Align",
                                  "type":"string",
                                  "value":"top"
-                                }, 
-                                {
-                                 "name":"linkIds",
-                                 "type":"list",
-                                 "value":[
-                                        {
-                                         "type":"string",
-                                         "value":"96"
-                                        }]
-                                }, 
-                                {
-                                 "name":"rotation",
-                                 "propertytype":"FlatWallRotation",
-                                 "type":"string",
-                                 "value":"horizontal"
                                 }],
                          "rotation":0,
-                         "type":"DestructableWall",
+                         "type":"Tile",
                          "visible":true,
                          "width":64,
                          "x":768,
@@ -1534,24 +1526,9 @@
                                  "propertytype":"Align",
                                  "type":"string",
                                  "value":"bottom"
-                                }, 
-                                {
-                                 "name":"linkIds",
-                                 "type":"list",
-                                 "value":[
-                                        {
-                                         "type":"string",
-                                         "value":"96"
-                                        }]
-                                }, 
-                                {
-                                 "name":"rotation",
-                                 "propertytype":"FlatWallRotation",
-                                 "type":"string",
-                                 "value":"horizontal"
                                 }],
                          "rotation":0,
-                         "type":"DestructableWall",
+                         "type":"Tile",
                          "visible":true,
                          "width":64,
                          "x":962,
@@ -1569,18 +1546,9 @@
                                  "propertytype":"Align",
                                  "type":"string",
                                  "value":"left"
-                                }, 
-                                {
-                                 "name":"linkIds",
-                                 "type":"list",
-                                 "value":[
-                                        {
-                                         "type":"string",
-                                         "value":"96"
-                                        }]
                                 }],
                          "rotation":0,
-                         "type":"DestructableWall",
+                         "type":"Tile",
                          "visible":true,
                          "width":64,
                          "x":448,
@@ -1651,7 +1619,7 @@
                         {
                          "height":138,
                          "id":38,
-                         "name":"test_level",
+                         "name":"level3",
                          "opacity":1,
                          "rotation":0,
                          "type":"",

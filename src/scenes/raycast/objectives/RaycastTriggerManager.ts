@@ -2,6 +2,7 @@ import { utils } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { ITriggerZone, IMissionManagerCallbacks } from "./ObjectiveTypes";
 import { RaycastObjectiveManager } from "./RaycastObjectiveManager";
+import { extractLinkIds } from "../DestructableWall";
 
 export class RaycastTriggerManager extends utils.EventEmitter {
   private triggers: ITriggerZone[] = [];
@@ -73,6 +74,11 @@ export class RaycastTriggerManager extends utils.EventEmitter {
         let voicelines: string[] = [];
         let isObjective = false;
         let objectiveKey = "";
+        let displayMessage = "";
+        let linkAction = "disable";
+        let linkIds: string[] = [];
+        let wait: { shouldWait: boolean; waitTimeInSeconds: number } | undefined = undefined;
+        let soundOnTrigger: string[] = [];
 
         if (obj.properties && Array.isArray(obj.properties)) {
           for (const prop of obj.properties) {
@@ -100,6 +106,38 @@ export class RaycastTriggerManager extends utils.EventEmitter {
               } else if (typeof prop.value === "string" && prop.value.trim()) {
                 voicelines.push(prop.value.trim());
               }
+            } else if (pName === "soundontrigger") {
+              if (Array.isArray(prop.value)) {
+                for (const item of prop.value) {
+                  if (typeof item === "string" && item.trim()) {
+                    soundOnTrigger.push(item.trim());
+                  } else if (item && typeof item === "object" && item.value) {
+                    soundOnTrigger.push(String(item.value).trim());
+                  }
+                }
+              } else if (typeof prop.value === "string" && prop.value.trim()) {
+                soundOnTrigger.push(prop.value.trim());
+              }
+            } else if (pName === "link" && prop.value && typeof prop.value === "object") {
+              if (prop.value.action) {
+                linkAction = String(prop.value.action).toLowerCase();
+              }
+              if (prop.value.linkIds) {
+                linkIds.push(...extractLinkIds(prop.value.linkIds));
+              }
+            } else if (
+              pName === "linkids" ||
+              pName === "linkid" ||
+              pName === "linkedid" ||
+              pName === "linkedids" ||
+              pName === "targetid"
+            ) {
+              linkIds.push(...extractLinkIds(prop.value));
+            } else if (pName === "wait" && prop.value && typeof prop.value === "object") {
+              wait = {
+                shouldWait: Boolean(prop.value.shouldWait),
+                waitTimeInSeconds: parseFloat(prop.value.waitTimeInSeconds) || 0,
+              };
             } else if (
               pName === "objective" &&
               prop.value &&
@@ -111,10 +149,15 @@ export class RaycastTriggerManager extends utils.EventEmitter {
               if (prop.value.objectiveKey !== undefined) {
                 objectiveKey = String(prop.value.objectiveKey).trim();
               }
+              if (prop.value.displayMessage !== undefined) {
+                displayMessage = String(prop.value.displayMessage).trim();
+              }
             } else if (pName === "isobjective") {
               isObjective = Boolean(prop.value);
             } else if (pName === "objectivekey") {
               objectiveKey = String(prop.value).trim();
+            } else if (pName === "displaymessage") {
+              displayMessage = String(prop.value).trim();
             }
           }
         }
@@ -146,13 +189,18 @@ export class RaycastTriggerManager extends utils.EventEmitter {
           isObjective,
           hasTriggered: false,
           isPlayerInside: false,
+          linkAction,
+          linkIds,
+          wait,
+          displayMessage,
+          soundOnTrigger,
         };
 
         this.triggers.push(triggerZone);
       }
     }
 
-    // Preload voice lines for all triggers in this level
+    // Preload voice lines and sounds for all triggers in this level
     for (const trigger of this.triggers) {
       if (trigger.voicelines && trigger.voicelines.length > 0) {
         for (const line of trigger.voicelines) {
@@ -163,6 +211,25 @@ export class RaycastTriggerManager extends utils.EventEmitter {
             try {
               sound.add(alias, { url: soundUrl, preload: true });
             } catch {}
+          }
+        }
+      }
+      if (trigger.soundOnTrigger && trigger.soundOnTrigger.length > 0) {
+        for (const sName of trigger.soundOnTrigger) {
+          const clean = sName.replace(/\.(wav|mp3|ogg)$/i, "").trim();
+          if (!sound.exists(clean)) {
+            const candidateUrls = [
+              `./assets/raycast/sfx/${clean}.wav`,
+              `./assets/raycast/sfx/${clean}.mp3`,
+              `./assets/sounds/${clean}.wav`,
+              `./assets/sounds/${clean}.mp3`,
+            ];
+            for (const url of candidateUrls) {
+              try {
+                sound.add(clean, { url, preload: true });
+                break;
+              } catch {}
+            }
           }
         }
       }
@@ -207,9 +274,7 @@ export class RaycastTriggerManager extends utils.EventEmitter {
     if (activeInteractiveInside !== this.currentInsideInteractiveTrigger) {
       this.currentInsideInteractiveTrigger = activeInteractiveInside;
       if (this.currentInsideInteractiveTrigger) {
-        const promptText = this.currentInsideInteractiveTrigger.isObjective
-          ? "[E] PRESS [E] TO FINISH OBJECTIVE"
-          : "[E] PRESS [E] TO INTERACT";
+        const promptText = this.getActivePromptText() || "[E] PRESS [E] TO INTERACT";
         this.callbacks.showPrompt?.(promptText);
       } else {
         this.callbacks.hidePrompt?.();
@@ -222,6 +287,12 @@ export class RaycastTriggerManager extends utils.EventEmitter {
       this.currentInsideInteractiveTrigger &&
       !this.currentInsideInteractiveTrigger.hasTriggered
     ) {
+      if (this.currentInsideInteractiveTrigger.displayMessage) {
+        const cleanMsg = this.currentInsideInteractiveTrigger.displayMessage
+          .replace(/_/g, " ")
+          .toUpperCase();
+        return `[E] PRESS [E] TO ${cleanMsg}`;
+      }
       if (this.currentInsideInteractiveTrigger.isObjective) {
         return "[E] PRESS [E] TO FINISH OBJECTIVE";
       }
@@ -255,17 +326,70 @@ export class RaycastTriggerManager extends utils.EventEmitter {
       }
     }
 
-    // 2. Trigger Alarm if requested
+    // 2. Play trigger SFX sound effects
+    if (trigger.soundOnTrigger && trigger.soundOnTrigger.length > 0) {
+      for (const sName of trigger.soundOnTrigger) {
+        this.playTriggerSound(sName);
+      }
+    }
+
+    // 3. Trigger Alarm if requested
     if (trigger.triggerAlarm) {
       this.callbacks.onTriggerAlarm?.();
     }
 
-    // 3. Mark linked objective complete
+    // 4. Mark linked objective complete
     if (trigger.isObjective && trigger.objectiveKey) {
       this.objectiveManager.completeObjective(trigger.objectiveKey);
     }
 
+    // 5. Notify callbacks and listeners
+    this.callbacks.onTriggerFired?.(trigger);
     this.emit("triggerFired", trigger);
+
+    // 6. Handle Wait timer
+    if (trigger.wait && trigger.wait.shouldWait && trigger.wait.waitTimeInSeconds > 0) {
+      trigger.isWaitRunning = true;
+      setTimeout(() => {
+        trigger.isWaitRunning = false;
+        trigger.hasTriggered = false; // Allow re-interaction after wait period
+        this.callbacks.onTriggerWaitComplete?.(trigger);
+        this.emit("triggerWaitComplete", trigger);
+      }, trigger.wait.waitTimeInSeconds * 1000);
+    }
+  }
+
+  private playTriggerSound(name: string): void {
+    if (!name) return;
+    const cleanName = name.replace(/\.(wav|mp3|ogg)$/i, "").trim();
+    if (sound.exists(cleanName)) {
+      try {
+        sound.play(cleanName, { volume: 0.6 });
+        return;
+      } catch {}
+    }
+    const candidateUrls = [
+      `./assets/raycast/sfx/${cleanName}.wav`,
+      `./assets/raycast/sfx/${cleanName}.mp3`,
+      `./assets/sounds/${cleanName}.wav`,
+      `./assets/sounds/${cleanName}.mp3`,
+    ];
+    let loaded = false;
+    for (const url of candidateUrls) {
+      try {
+        sound.add(cleanName, { url, preload: true });
+        sound.play(cleanName, { volume: 0.6 });
+        loaded = true;
+        break;
+      } catch {}
+    }
+    if (!loaded) {
+      try {
+        const audio = new Audio(`./assets/raycast/sfx/${cleanName}.wav`);
+        audio.volume = 0.6;
+        audio.play().catch(() => {});
+      } catch {}
+    }
   }
 
   private stopCurrentVoiceline(): void {

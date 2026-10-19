@@ -145,16 +145,28 @@ export interface ITile {
   tileType: TileType;
 }
 
+export interface ILinkable {
+  action?: string;
+  linkIds?: (string | number)[] | any;
+}
+
+export interface IWait {
+  shouldWait: boolean;
+  waitTimeInSeconds: number;
+}
+
 export interface IDestructableWall {
   align: Align | string;
   isEnabling?: boolean;
-  linkIds: (string | number)[];
+  linkIds?: (string | number)[];
+  link?: ILinkable;
   offset: number;
   rotation: FlatWallRotation | string;
   wall?: ITile;
   objective?: {
     isObjective: boolean;
     objectiveKey: string;
+    displayMessage?: string;
   };
 }
 
@@ -202,6 +214,7 @@ export interface RaycastBreakable {
   tileId?: number;
   linkId?: string;
   linkIds?: string[];
+  linkAction?: string;
   isEnabling?: boolean;
   x: number;
   y: number;
@@ -225,6 +238,7 @@ export interface RaycastBreakable {
   destroyedTextureId?: number;
   isObjective?: boolean;
   objectiveKey?: string;
+  wait?: IWait;
 }
 
 export interface ThinWallDescriptor {
@@ -248,6 +262,7 @@ export interface DestructableWallConfig {
   align?: "center" | "left" | "right" | "top" | "bottom" | string;
   offset?: number;
   linkIds?: (string | number)[] | string | number;
+  link?: ILinkable;
   isEnabling?: boolean;
   isObjective?: boolean;
   objectiveKey?: string;

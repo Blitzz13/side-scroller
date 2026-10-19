@@ -81,7 +81,7 @@ export class DestructableWallManager {
       const gridY = Math.floor(objCenterY / tileH) + offsetY;
 
       let align = "center";
-      let rotation = "vertical";
+      let rotation = "";
       let offset = 0;
       let linkIds: any = [];
       let isEnabling = false;
@@ -115,6 +115,18 @@ export class DestructableWallManager {
         ) {
           offset = typeof pVal === "number" ? pVal : parseFloat(pVal) || 0;
         } else if (
+          pName === "link" &&
+          typeof pVal === "object" &&
+          pVal !== null
+        ) {
+          if (pVal.action !== undefined) {
+            if (String(pVal.action).toLowerCase() === "enable") isEnabling = true;
+            else if (String(pVal.action).toLowerCase() === "disable") isEnabling = false;
+          }
+          if (pVal.linkIds !== undefined) {
+            linkIds = pVal.linkIds;
+          }
+        } else if (
           pName === "linkid" ||
           pName === "linkids" ||
           pName === "linkedid" ||
@@ -134,6 +146,46 @@ export class DestructableWallManager {
           isObjective = Boolean(pVal);
         } else if (pName === "objectivekey") {
           objectiveKey = String(pVal).trim();
+        }
+      }
+
+      // If rotation is not explicitly set and align is center/-, infer orientation from neighboring Walls tiles
+      const normAlign = align.toLowerCase().trim();
+      const normRot = rotation.toLowerCase().trim();
+      if (
+        (!normRot || normRot === "-") &&
+        (normAlign === "center" || normAlign === "middle" || normAlign === "-" || normAlign === "")
+      ) {
+        const rawTileX = Math.floor(objCenterX / tileW);
+        const rawTileY = Math.floor(objCenterY / tileH);
+        const hasWallAt = (tx: number, ty: number): boolean => {
+          for (const l of allLayers) {
+            const lName = (l.name || "").toLowerCase();
+            if (lName !== "walls" && lName !== "wall") continue;
+            if (l.chunks && Array.isArray(l.chunks)) {
+              for (const c of l.chunks) {
+                if (tx >= c.x && tx < c.x + c.width && ty >= c.y && ty < c.y + c.height) {
+                  if ((c.data[(ty - c.y) * c.width + (tx - c.x)] & 0x1fffffff) !== 0) return true;
+                }
+              }
+            } else if (l.data && Array.isArray(l.data)) {
+              const w = l.width || mapData.width || 0;
+              const h = l.height || mapData.height || 0;
+              if (tx >= 0 && tx < w && ty >= 0 && ty < h) {
+                if ((l.data[ty * w + tx] & 0x1fffffff) !== 0) return true;
+              }
+            }
+          }
+          return false;
+        };
+        const leftWall = hasWallAt(rawTileX - 1, rawTileY);
+        const rightWall = hasWallAt(rawTileX + 1, rawTileY);
+        const topWall = hasWallAt(rawTileX, rawTileY - 1);
+        const bottomWall = hasWallAt(rawTileX, rawTileY + 1);
+        if ((leftWall || rightWall) && !(topWall || bottomWall)) {
+          rotation = "horizontal";
+        } else if ((topWall || bottomWall) && !(leftWall || rightWall)) {
+          rotation = "vertical";
         }
       }
 
@@ -227,6 +279,23 @@ export class DestructableWallManager {
 
   public getWalls(): DestructableWall[] {
     return this.walls;
+  }
+
+  public getWallById(wallId: number | string): DestructableWall | undefined {
+    const sId = String(wallId).trim();
+    return this.walls.find((w) => String(w.id) === sId || (w.name && w.name === sId));
+  }
+
+  public setWallActiveById(wallId: number | string, active: boolean): DestructableWall | undefined {
+    const wall = this.getWallById(wallId);
+    if (wall) {
+      const wasActive = wall.isActive();
+      wall.setActive(active);
+      if (wasActive && !active) {
+        this.onWallDeactivated?.(wall);
+      }
+    }
+    return wall;
   }
 
   public dispose(): void {

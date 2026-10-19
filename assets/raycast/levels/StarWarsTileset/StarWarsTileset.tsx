@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="42" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="55" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -163,7 +163,7 @@
   <image source="assets/raycast/enemies/diagona.png" width="78" height="47"/>
  </tile>
  <tile id="31">
-  <image source="assets/raycast/textures/dirty_water.jpg" width="1024" height="1024"/>
+  <image source="assets/raycast/textures/dirty_water.jpg" width="2048" height="2048"/>
  </tile>
  <tile id="32" type="Object">
   <properties>
@@ -188,7 +188,7 @@
   <image source="assets/raycast/textures/grilled_wall_destroyed.jpg" width="64" height="64"/>
  </tile>
  <tile id="40">
-  <image source="assets/raycast/textures/level_off.png" width="512" height="512"/>
+  <image source="assets/raycast/textures/lever_off.png" width="512" height="512"/>
  </tile>
  <tile id="41">
   <image source="assets/raycast/textures/lever_on.jpg" width="512" height="512"/>
@@ -201,5 +201,52 @@
  </tile>
  <tile id="44">
   <image source="assets/raycast/textures/electronic_wall.png" width="512" height="512"/>
+ </tile>
+ <tile id="45">
+  <image source="assets/raycast/textures/worn_piped_wall.jpg" width="2048" height="2048"/>
+ </tile>
+ <tile id="46">
+  <image source="assets/raycast/textures/worn_sewer_wall.jpg" width="2048" height="2048"/>
+ </tile>
+ <tile id="47">
+  <image source="assets/raycast/textures/worn_grilled_wall.jpg" width="2048" height="2048"/>
+ </tile>
+ <tile id="48">
+  <image source="assets/raycast/textures/sewer_wall.jpg" width="2048" height="2048"/>
+ </tile>
+ <tile id="49">
+  <image source="assets/raycast/textures/sewer_ceiling.jpg" width="2048" height="2048"/>
+ </tile>
+  <tile id="50" type="Tile">
+  <properties>
+   <property name="open" propertytype="DoorOpen" value="Up"/>
+   <property name="tileType" propertytype="TileType" value="door"/>
+  </properties>
+  <image source="assets/raycast/textures/sewer_door.jpg" width="2048" height="2048"/>
+ </tile>
+ <tile id="51" type="Tile">
+  <properties>
+   <property name="align" propertytype="Align" value="-"/>
+   <property name="tileType" propertytype="TileType" value="thinWall"/>
+  </properties>
+  <image source="assets/raycast/textures/sewer_waterfall.png" width="678" height="678"/>
+ </tile>
+ <tile id="52">
+  <image source="assets/raycast/textures/worn_stairs_up.jpg" width="2048" height="2048"/>
+ </tile>
+ <tile id="53">
+  <image source="assets/raycast/textures/worn_stairs_down.jpg" width="2048" height="2048"/>
+ </tile>
+ <tile id="54">
+  <image source="assets/raycast/enemies/prisoner.png" width="35" height="69"/>
+ </tile>
+ <tile id="55">
+  <image source="assets/raycast/enemies/at_st.png" width="54" height="102"/>
+ </tile>
+ <tile id="56">
+  <image source="assets/raycast/enemies/tie_fighter.png" width="46" height="66"/>
+ </tile>
+ <tile id="57">
+  <image source="assets/raycast/enemies/tie_bomber.png" width="67" height="61"/>
  </tile>
 </tileset>

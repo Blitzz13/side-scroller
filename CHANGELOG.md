@@ -2,6 +2,46 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-10-19] - Level 3 Assets, Thin Wall Alignment Auto-Orientation & Object Link Infrastructure
+
+### 1. Thin Wall & Door Protector Alignment & Rotation Fixes ([`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/raycast/DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Rotation Auto-Determination from Alignment**:
+  - **Problem**: When map objects on `DoorProtectors` layers were updated in Tiled from class `DestructableWall` to `Tile`, Tiled stripped explicit `"rotation": "horizontal"` properties because `Tile` types only defined `align`. Because `DestructableWallManager.parseMapDoorProtectors` previously initialized `let rotation = "vertical"`, all barriers defaulted to vertical rotation regardless of their alignment. This caused barriers with `align="top"` or `align="bottom"` (e.g. command center shields in `level2.json` and prison cell fences in `level3.json`) to fail alignment checks and fall back to vertical center (`x + 0.5`).
+  - **Fix**: Initialized `rotation = ""` in `DestructableWallManager.ts`. When `rotation` is unset, `DestructableWall` automatically detects `"horizontal"` orientation when `align` is `"top"`, `"bottom"`, `"north"`, `"south"`, `"up"`, or `"down"`, and `"vertical"` when `align` is `"left"`, `"right"`, `"west"`, or `"east"`.
+- **Neighbor-Based Orientation Inference for Centered Barriers**:
+  - If a barrier's rotation is unset and its alignment is `"center"` or `"-"`, `DestructableWallManager` now inspects neighboring solid wall tiles in the `Walls` layer (`(gridX ± 1, gridY)` vs `(gridX, gridY ± 1)`). If flanked by walls horizontally, it orients horizontally; if flanked vertically, it orients vertically.
+- **Alignment Normalization**:
+  - Normalized `"-"` and empty string values to `"center"` in [`DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts).
+- **`ThinWalls` Tile Layer Alignment Support**:
+  - Updated `thinWallsLayers` processing in [`RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) to read layer-level and tile metadata `align` properties (`left`, `right`, `top`, `bottom`, `center`), adjusting boundary coordinates (`x1`, `y1`, `x2`, `y2`) accordingly.
+  - Added adjacent solid wall checks when a single thin wall tile has no neighboring thin wall tiles to automatically infer `"horizontal"` vs `"vertical"` orientation.
+
+### 2. Level 3 Asset Pipeline & Configuration ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx))
+- **Asset Registration in `GameConfig.ts`**:
+  - Imported and preloaded all required Level 3 environment textures and audio assets:
+    - Textures: `sewer_waterfall` (spritesheet JSON & PNG), `sewer_door.jpg`, `sewer_wall.jpg`, `sewer_ceiling.jpg`, `worn_sewer_wall.jpg`, `worn_sewer_ceiling.jpg`, `worn_piped_wall.jpg`, `worn_grilled_wall.jpg`, `worn_stairs_up.jpg`, `worn_stairs_down.jpg`, and `lever_off.png`.
+    - SFX: `elevator.wav`.
+    - Characters & Vehicles: `prisoner` (JSON & PNG), `at_st` (JSON & PNG), `tie_fighter` (JSON & PNG), and `tie_bomber` (JSON & PNG).
+- **Tileset Configuration for Sewer Door**:
+  - Updated tile `id="50"` (`sewer_door.jpg`) in `StarWarsTileset.tsx` with `tileType="door"` and `open="Up"` properties, ensuring it is properly parsed into `doorStates` and animated as a vertical sliding door.
+
+### 3. Pre-Sliced Column Texture Bounds & Dimension Clamping ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Texture Error Frame Bounds Fix**:
+  - **Problem**: Encountered `Uncaught (in promise) Error: Texture Error: frame does not fit inside the base Texture dimensions: X: 0 + 1 = 1 > 76 or Y: 0 + 64 = 64 > 17` during level load when non-wall tiles (such as pickups or stationary spritesheets) were included in wall column pre-slicing.
+  - **Fixes**:
+    - Filtered non-wall tiles (`PickupItem`, `Enemy`, and stationary object spritesheets) out of the level `textureMap`.
+    - Added strict type guard `cached instanceof Texture` in `tryCached` to avoid treating spritesheets as single wall textures.
+    - Clamped column slice widths and heights to `Math.min(texture.width, baseW - frameX)` and `Math.min(texture.height, baseH - frameY)` to guarantee every 1px column slice strictly fits within the base texture bounds.
+
+### 4. Tiled Object Linking & Waitable Barrier State Control ([`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/raycast/DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Tiled Object Link Parsing**:
+  - Extended `extractLinkIds` and property parsing to support Tiled's native object linking feature (link lists of object references `{ type: "object", value: id }` and link property objects `{ action, linkIds }`).
+- **Dynamic Wall Activation API**:
+  - Implemented `getWallById(id)` and `setWallActiveById(id, active)` on `DestructableWallManager` to dynamically activate/deactivate door protectors and security barriers via external triggers, levers, or waitable elevator timers.
+- **Dual-Link Barrier & Finish Zone Status**:
+  - Enhanced `DestructableWall.bindBreakables` to resolve link connections bidirectionally (breakables linking to walls, and walls linking to breakables).
+  - Updated `RaycastScene.updateLevelFinishZonesStatus` to evaluate both remaining breakable targets and linked destructible walls before unlocking the level exit.
+
 ## [2026-10-16] - Tactical Minimap / Automap Plugin & Mobile HUD Map Button
 
 ### 1. Reusable Tactical Minimap & Automap Plugin ([`src/plugins/minimap/RaycastMinimap.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/RaycastMinimap.ts), [`src/plugins/minimap/index.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/index.ts))

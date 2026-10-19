@@ -62,14 +62,30 @@ export class RaycastStationaryObject extends RaycastDirectionalObject {
 
     const texs = spritesheet.textures;
 
-    const getSingle = (candidateNames: string[]): Texture[] => {
-      for (const name of candidateNames) {
-        const t =
-          texs[`${name}.png`] ||
-          texs[name] ||
-          texs[`${name}_1.png`] ||
-          texs[`${name}_1`];
-        if (t) return [t];
+    const getSequence = (candidatePrefixes: string[]): Texture[] => {
+      for (const prefix of candidatePrefixes) {
+        // 1. Check numbered sequence: _1.png, _2.png, ...
+        const frames: Texture[] = [];
+        let i = 1;
+        while (true) {
+          const t =
+            texs[`${prefix}_${i}.png`] ||
+            texs[`${prefix}_${i}`] ||
+            texs[`${prefix}${i}.png`] ||
+            texs[`${prefix}${i}`];
+          if (!t) break;
+          frames.push(t);
+          i++;
+        }
+        if (frames.length > 0) return frames;
+
+        // 2. Check single frame
+        const single =
+          texs[`${prefix}.png`] ||
+          texs[prefix] ||
+          texs[`${prefix}_1.png`] ||
+          texs[`${prefix}_1`];
+        if (single) return [single];
       }
       return [Texture.WHITE];
     };
@@ -77,21 +93,56 @@ export class RaycastStationaryObject extends RaycastDirectionalObject {
     const p = this.prefix;
 
     this.animations = {
-      towards: getSingle([`${p}_towards`, "towards"]),
-      towards_left_diagonal: getSingle([
-        `${p}_towards_left`,
+      towards: getSequence([
+        `${p}_standing_down`,
+        "standing_down",
+        `${p}_towards`,
+        "towards",
+        `${p}_standing_towards`,
+        "standing_towards",
+        `${p}_walking_towards`,
+        "walking_towards",
+      ]),
+      towards_left_diagonal: getSequence([
+        `${p}_standing_towards_left_diagonal`,
+        "standing_towards_left_diagonal",
         `${p}_towards_left_diagonal`,
-        "towards_left",
+        `${p}_towards_left`,
         "towards_left_diagonal",
+        "towards_left",
+        `${p}_standing_towards_left`,
+        "standing_towards_left",
+        `${p}_walking_towards_left_diagonal`,
+        "walking_towards_left_diagonal",
       ]),
-      left: getSingle([`${p}_left`, "left"]),
-      away_left_diagonal: getSingle([
-        `${p}_away_left`,
+      left: getSequence([
+        `${p}_standing_left`,
+        "standing_left",
+        `${p}_left`,
+        "left",
+        `${p}_walking_left`,
+        "walking_left",
+      ]),
+      away_left_diagonal: getSequence([
+        `${p}_standing_away_left_diagonal`,
+        "standing_away_left_diagonal",
         `${p}_away_left_diagonal`,
-        "away_left",
+        `${p}_away_left`,
         "away_left_diagonal",
+        "away_left",
+        `${p}_standing_away_left`,
+        "standing_away_left",
+        `${p}_walking_away_left_diagonal`,
+        "walking_away_left_diagonal",
       ]),
-      away: getSingle([`${p}_away`, "away"]),
+      away: getSequence([
+        `${p}_standing_away`,
+        "standing_away",
+        `${p}_away`,
+        "away",
+        `${p}_walking_away`,
+        "walking_away",
+      ]),
     };
 
     const initialTextures = this.animations.towards || [Texture.WHITE];
@@ -101,5 +152,8 @@ export class RaycastStationaryObject extends RaycastDirectionalObject {
     this.animatedSprite.roundPixels = true;
     this.animatedSprite.visible = false;
     this.currentAnimKey = "towards";
+    if (initialTextures.length > 1) {
+      this.animatedSprite.play();
+    }
   }
 }

@@ -1,0 +1,135 @@
+{
+  "frames": {
+    "towards.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 46,
+        "h": 66
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 46,
+        "h": 66
+      },
+      "sourceSize": {
+        "w": 46,
+        "h": 66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "away.png": {
+      "frame": {
+        "x": 46,
+        "y": 0,
+        "w": 46,
+        "h": 67
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 46,
+        "h": 67
+      },
+      "sourceSize": {
+        "w": 46,
+        "h": 67
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "left.png": {
+      "frame": {
+        "x": 92,
+        "y": 0,
+        "w": 48,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 48,
+        "h": 72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "away_left_diagonal.png": {
+      "frame": {
+        "x": 140,
+        "y": 0,
+        "w": 63,
+        "h": 76
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 63,
+        "h": 76
+      },
+      "sourceSize": {
+        "w": 63,
+        "h": 76
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "towards_left_diagonal.png": {
+      "frame": {
+        "x": 203,
+        "y": 0,
+        "w": 63,
+        "h": 76
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 63,
+        "h": 76
+      },
+      "sourceSize": {
+        "w": 63,
+        "h": 76
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "tie_fighter.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 266,
+      "h": 76
+    },
+    "scale": 1
+  }
+}

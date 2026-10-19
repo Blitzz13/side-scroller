@@ -78,6 +78,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/raycast/sfx/pickup_shield.mp3"
           },
           {
+            alias: "elevator",
+            src: "./assets/raycast/sfx/elevator.wav"
+          },
+          {
             alias: "button_click",
             src: "./assets/sounds/button_click.mp3"
           },
@@ -415,8 +419,8 @@ export const manifest: AssetsManifest = {
             src: "./assets/raycast/textures/electronic_wall.png",
           },
           {
-            name: "level_off",
-            src: "./assets/raycast/textures/level_off.png",
+            name: "lever_off",
+            src: "./assets/raycast/textures/lever_off.png",
           },
           {
             name: "lever_on",
@@ -439,6 +443,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/raycast/levels/level2.json",
           },
           {
+            name: "level3",
+            src: "./assets/raycast/levels/level3.json",
+          },
+          {
             name: "level1_objectives",
             src: "./assets/raycast/levels/objectives/level1.json",
           },
@@ -449,6 +457,54 @@ export const manifest: AssetsManifest = {
           {
             name: "test_level",
             src: "./assets/raycast/levels/test_level.json",
+          },
+          {
+            name: "sewer_door",
+            src: "./assets/raycast/textures/sewer_door.jpg",
+          },
+          {
+            name: "sewer_wall",
+            src: "./assets/raycast/textures/sewer_wall.jpg",
+          },
+          {
+            name: "sewer_ceiling",
+            src: "./assets/raycast/textures/sewer_ceiling.jpg",
+          },
+          {
+            name: "worn_piped_wall",
+            src: "./assets/raycast/textures/worn_piped_wall.jpg",
+          },
+          {
+            name: "worn_sewer_wall",
+            src: "./assets/raycast/textures/worn_sewer_wall.jpg",
+          },
+          {
+            name: "worn_grilled_wall",
+            src: "./assets/raycast/textures/worn_grilled_wall.jpg",
+          },
+          {
+            name: "worn_sewer_ceiling",
+            src: "./assets/raycast/textures/worn_sewer_ceiling.jpg",
+          },
+          {
+            name: "worn_stairs_up",
+            src: "./assets/raycast/textures/worn_stairs_up.jpg",
+          },
+          {
+            name: "worn_stairs_down",
+            src: "./assets/raycast/textures/worn_stairs_down.jpg",
+          },
+          {
+            name: "stairs_up",
+            src: "./assets/raycast/textures/stairs_up.jpg",
+          },
+          {
+            name: "stairs_down",
+            src: "./assets/raycast/textures/stairs_down.png",
+          },
+          {
+            name: "sewer_waterfall",
+            src: "./assets/raycast/textures/sewer_waterfall.json",
           },
           {
             name: "imperial_base_background",
@@ -510,6 +566,10 @@ export const manifest: AssetsManifest = {
           {
             name: "diagona",
             src: "./assets/raycast/enemies/diagona.json",
+          },
+          {
+            name: "prisoner",
+            src: "./assets/raycast/enemies/prisoner.json",
           }
         ],
       },
@@ -559,6 +619,30 @@ export const manifest: AssetsManifest = {
           {
             name: "table_broken",
             src: "./assets/raycast/decorations/table_broken.png",
+          },
+          {
+            name: "power_cell",
+            src: "./assets/raycast/decorations/power_cell.png",
+          },
+          {
+            name: "power_cell_broken",
+            src: "./assets/raycast/decorations/power_cell_broken.png",
+          },
+          {
+            name: "isb_holotable",
+            src: "./assets/raycast/decorations/isb_holotable.json",
+          },
+          {
+            name: "at_st_decoration",
+            src: "./assets/raycast/decorations/at_st.json",
+          },
+          {
+            name: "tie_fighter",
+            src: "./assets/raycast/decorations/tie_fighter.json",
+          },
+          {
+            name: "tie_bomber",
+            src: "./assets/raycast/decorations/tie_bomber.json",
           },
           {
             name: "keycards",

@@ -381,9 +381,11 @@ export class RaycastBreakableManager {
             const worldY = gridY + 0.5;
 
             let health = defaultDestructibleWallConfig.health;
-            let linkId = String(obj.id);
+            let linkId: string | undefined = undefined;
             let isEnabling = false;
             let linkIds: string[] = [];
+            let linkAction: string | undefined = undefined;
+            let wait: any = undefined;
             let isObjective = false;
             let objectiveKey = "";
 
@@ -401,14 +403,26 @@ export class RaycastBreakableManager {
                   isObjective = Boolean(prop.value);
                 } else if (pName === "objectivekey") {
                   objectiveKey = String(prop.value);
+                } else if (pName === "wait" && prop.value && typeof prop.value === "object") {
+                  wait = {
+                    shouldWait: Boolean(prop.value.shouldWait),
+                    waitTimeInSeconds: parseFloat(prop.value.waitTimeInSeconds) || 0,
+                  };
+                } else if (pName === "link" && prop.value && typeof prop.value === "object") {
+                  if (prop.value.action) {
+                    linkAction = String(prop.value.action).toLowerCase();
+                    if (linkAction === "enable") isEnabling = true;
+                    else if (linkAction === "disable") isEnabling = false;
+                  }
+                  if (prop.value.linkIds) {
+                    linkIds.push(...extractLinkIds(prop.value.linkIds));
+                  }
                 } else if (
                   pName === "linkids" ||
                   pName === "linkid" ||
                   pName === "linkedid" ||
                   pName === "linkedids" ||
-                  pName === "link" ||
-                  pName === "targetid" ||
-                  pName === "id"
+                  pName === "targetid"
                 ) {
                   linkIds.push(...extractLinkIds(prop.value));
                   if (pName !== "linkids" && pName !== "linkedids") {
@@ -420,6 +434,10 @@ export class RaycastBreakableManager {
 
             if (linkIds.length === 0 && linkId) {
               linkIds.push(linkId);
+            }
+
+            if (!linkAction) {
+              linkAction = isEnabling ? "enable" : "disable";
             }
 
             // Determine image and destroyed texture pair for this specific wall
@@ -484,6 +502,7 @@ export class RaycastBreakableManager {
               tileId: adjustedTileId,
               linkId: linkId,
               linkIds: linkIds,
+              linkAction: linkAction,
               isEnabling: isEnabling,
               x: worldX,
               y: worldY,
@@ -502,6 +521,7 @@ export class RaycastBreakableManager {
               blocksMovement: false,
               isObjective: isObjective,
               objectiveKey: objectiveKey,
+              wait: wait,
             };
             this.breakables.push(breakable);
           }

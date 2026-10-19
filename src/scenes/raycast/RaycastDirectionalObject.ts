@@ -181,7 +181,8 @@ export class RaycastDirectionalObject {
 
     for (const key of candidates) {
       if (this.animations[key]) {
-        this.playAnimation(key, false);
+        const hasMultipleFrames = this.animations[key].length > 1;
+        this.playAnimation(key, hasMultipleFrames);
         return;
       }
     }

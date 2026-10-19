@@ -22,10 +22,21 @@ export interface ITriggerZone {
   isObjective?: boolean;
   hasTriggered: boolean;
   isPlayerInside: boolean;
+  linkAction?: string;
+  linkIds?: string[];
+  wait?: {
+    shouldWait: boolean;
+    waitTimeInSeconds: number;
+  };
+  displayMessage?: string;
+  soundOnTrigger?: string[];
+  isWaitRunning?: boolean;
 }
 
 export interface IMissionManagerCallbacks {
   onTriggerAlarm?: () => void;
+  onTriggerFired?: (trigger: ITriggerZone) => void;
+  onTriggerWaitComplete?: (trigger: ITriggerZone) => void;
   showToast?: (text: string, color?: number, durationSec?: number) => void;
   showPrompt?: (text: string) => void;
   hidePrompt?: () => void;
