@@ -1,0 +1,17 @@
+{
+  "terminal": {
+    "autoApprove": [
+      "Select-String",
+      "Get-Content",
+      "Get-ChildItem",
+      "git status",
+      "git diff",
+      "git log",
+      "node -e",
+      "npm run dev",
+      "npm run webpack",
+      "npx cloudflared",
+      "Invoke-WebRequest"
+    ]
+  }
+}

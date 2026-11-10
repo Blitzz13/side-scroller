@@ -31,6 +31,7 @@ export interface ITriggerZone {
   displayMessage?: string;
   soundOnTrigger?: string[];
   isWaitRunning?: boolean;
+  waitEndTime?: number;
 }
 
 export interface IMissionManagerCallbacks {
@@ -38,7 +39,7 @@ export interface IMissionManagerCallbacks {
   onTriggerFired?: (trigger: ITriggerZone) => void;
   onTriggerWaitComplete?: (trigger: ITriggerZone) => void;
   showToast?: (text: string, color?: number, durationSec?: number) => void;
-  showPrompt?: (text: string) => void;
+  showPrompt?: (text: string, color?: number) => void;
   hidePrompt?: () => void;
   getScreenSize?: () => { width: number; height: number };
 }

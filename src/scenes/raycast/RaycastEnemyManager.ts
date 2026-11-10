@@ -657,16 +657,24 @@ export class RaycastEnemyManager {
               mapData
             );
           } else {
-            const typeName = obj.type || obj.name || "stormtrooper";
+            const typeName = (obj.type || obj.name || "").trim();
+            if (!typeName) {
+              // Plain shape/rectangle object without explicit type or name; not an enemy
+              continue;
+            }
             config =
               getRaycastEnemyConfig(typeName) ||
-              raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER];
+              (typeName.toLowerCase() === "enemy" ? raycastEnemyConfigs[RaycastEnemyType.STORMTROOPER] : undefined);
+            if (!config) {
+              continue;
+            }
             if (obj.rotation !== undefined) {
               const rad = (obj.rotation * Math.PI) / 180;
               dirX = Math.round(-Math.sin(rad));
               dirY = Math.round(Math.cos(rad));
             }
           }
+          if (!config) continue;
           let customVisionCone: number | undefined;
           let customItemDrop: IEnemyItemDrop | undefined;
           let customTriggerAlert: boolean = false;
@@ -1955,6 +1963,56 @@ export class RaycastEnemyManager {
     }
 
     for (const enemy of this.enemies) {
+      // Handle drop on death and dead state animation before skipping AI
+      if (enemy.isDead) {
+        if (!enemy.hasDroppedLoot) {
+          if (enemy.itemDrop && enemy.itemDrop.type && enemy.itemDrop.type !== "-") {
+            enemy.hasDroppedLoot = true;
+            this.spawnCustomItemDrop(enemy, pickupManager);
+          } else if (enemy.config.dropWeapon !== undefined) {
+            const shouldDrop =
+              enemy.config.dropChance === undefined ||
+              Math.random() <= enemy.config.dropChance;
+
+            if (shouldDrop) {
+              enemy.hasDroppedLoot = true;
+              const dropAmmo = enemy.config.dropAmmo ?? 20;
+              const dropWeapon = enemy.config.dropWeapon ?? RaycastWeaponType.E11;
+              pickupManager.spawnPickup(
+                RaycastPickupType.WEAPON,
+                enemy.x,
+                enemy.y,
+                dropAmmo,
+                dropWeapon
+              );
+            }
+          }
+        }
+        enemy.update(
+          delta,
+          playerX,
+          playerY,
+          losChecker,
+          moveChecker,
+          onShootPlayer,
+          lofChecker,
+          playerDirX,
+          playerDirY,
+          activeGrenades,
+          null
+        );
+        continue;
+      }
+
+      const dx = playerX - enemy.x;
+      const dy = playerY - enemy.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Distance culling: distant idle enemies when no alert is active do not need expensive LOS/doorway scans
+      if (dist > 28.0 && !this.isAlertActive && enemy.state === "idle") {
+        continue;
+      }
+
       // Check if enemy is currently near a doorway (within 2.2 tiles of any door tile)
       let minDoorDist = Infinity;
       let nearestDoorX = -1;
@@ -1992,11 +2050,8 @@ export class RaycastEnemyManager {
         doorStatesFlat
       );
 
-      const dx = playerX - enemy.x;
-      const dy = playerY - enemy.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
       const los = losChecker(enemy.x, enemy.y, playerX, playerY);
-      const lof = lofChecker(enemy.x, enemy.y, playerX, playerY);
+      const lof = los && !this.isBlockedByDoorProtector(enemy.x, enemy.y, playerX, playerY, thinWalls);
       const isBehindWall = !lof;
       const canSee = los && enemy.isPointInVisionCone(playerX, playerY);
 
@@ -2577,6 +2632,28 @@ export class RaycastEnemyManager {
       }
     }
     return hitEnemies;
+  }
+
+  /**
+   * Instantly eliminates all alive enemies within a given radius of the player.
+   * Triggers death animations, sound effects, mission kill callbacks, and drops loot normally.
+   */
+  public killNearbyEnemies(
+    playerX: number,
+    playerY: number,
+    radius: number = 35.0,
+    onEnemyKilled?: (enemy: RaycastEnemy) => void
+  ): number {
+    let killedCount = 0;
+    for (const enemy of this.enemies) {
+      if (enemy.isDead) continue;
+      const dist = Math.hypot(enemy.x - playerX, enemy.y - playerY);
+      if (dist <= radius) {
+        enemy.takeDamage(99999, onEnemyKilled || enemy.onDeathCallback, playerX, playerY);
+        killedCount++;
+      }
+    }
+    return killedCount;
   }
 
   private disposeEnemies(): void {

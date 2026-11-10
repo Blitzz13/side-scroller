@@ -1,0 +1,32 @@
+[
+  {
+    "id": "find_way_out",
+    "key": "find_way_out",
+    "title": "Find a Way Out",
+    "description": "Navigate through the sewer tunnels to locate an exit path."
+  },
+  {
+    "id": "fix_the_water",
+    "key": "fix_the_water",
+    "title": "Fix the Water Pumps",
+    "description": "Deactivate the sewer waterfall barriers blocking passage."
+  },
+  {
+    "id": "turnOnTheWalker",
+    "key": "turnOnTheWalker",
+    "title": "Activate the AT-ST Walker",
+    "description": "Power up the walker to blast open reinforced blast doors."
+  },
+  {
+    "id": "disable_hanger_shield",
+    "key": "disable_hanger_shield",
+    "title": "Disable Hangar Shield",
+    "description": "Deactivate the force fields blocking access to the extraction hangar."
+  },
+  {
+    "id": "escape",
+    "key": "escape",
+    "title": "Reach Extraction",
+    "description": "Take the elevator to reach the surface extraction zone."
+  }
+]

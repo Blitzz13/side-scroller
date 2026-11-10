@@ -12,6 +12,10 @@ import {
   Ticker,
   Assets,
   TilingSprite,
+  WRAP_MODES,
+  BaseTexture,
+  CubeResource,
+  BufferResource,
 } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
@@ -33,11 +37,19 @@ import { ThermalDetonatorManager } from "./raycast/ThermalDetonatorManager";
 import { RaycastLaserManager } from "./raycast/RaycastLaserManager";
 import { RaycastStairsManager } from "./raycast/RaycastStairsManager";
 import { RaycastStationaryObjectManager } from "./raycast/RaycastStationaryObjectManager";
+import { RaycastAllyManager } from "./raycast/RaycastAllyManager";
+import { RaycastDebugMenu } from "./raycast/RaycastDebugMenu";
 import { RaycastWeaponType } from "../enums/RaycastWeaponType";
 import { RaycastPickupType } from "../enums/RaycastPickupType";
+import {
+  getSkyboxConfig,
+  RaycastSkyboxConfig,
+} from "../configs/SkyboxConfig";
 import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
 import floorCeilingVert from "./raycast/shaders/floorCeiling.vert";
 import floorCeilingFrag from "./raycast/shaders/floorCeiling.frag";
+import skyboxVert from "./raycast/shaders/skybox.vert";
+import skyboxFrag from "./raycast/shaders/skybox.frag";
 import { RaycastMinimap } from "../plugins/minimap";
 import { RaycastMissionManager, ITriggerZone } from "./raycast/objectives";
 import {
@@ -71,13 +83,15 @@ interface RayHit {
   doorOpen?: number;
 }
 
-interface RawTextureData {
-  width: number;
-  height: number;
-  pixels: Uint32Array;
-  isPow2: boolean;
-  maskX: number;
-  maskY: number;
+interface ThinWallEntry {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  texture: number;
+  orientation: "vertical" | "horizontal";
+  minCol?: number;
+  maxCol?: number;
 }
 
 export class RaycastScene extends BaseScene {
@@ -110,22 +124,8 @@ export class RaycastScene extends BaseScene {
   private mapWidth: number;
   private mapHeight: number;
   private doorStates: Record<string, number> = {};
-  private thinWalls: Array<{
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-    texture: number;
-    orientation: "vertical" | "horizontal";
-  }> = [];
-  private activeThinWalls: Array<{
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-    texture: number;
-    orientation: "vertical" | "horizontal";
-  }> = [];
+  private thinWalls: ThinWallEntry[] = [];
+  private activeThinWalls: ThinWallEntry[] = [];
   private spritePool: Sprite[][] = [];
   private thinWallContainer!: Container;
   private thinWallSpritePool: Sprite[][] = [];
@@ -135,7 +135,6 @@ export class RaycastScene extends BaseScene {
   private readonly MAX_RENDER_DISTANCE: number = 30;
   private tileTypes: Record<number, string> = {};
   private tileMeta: Record<number, TileMeta> = {};
-  private rawTextureData: Record<number, RawTextureData> = {};
 
   // --- Performance: Flat typed arrays for cache-local map access ---
   private mapFlat!: Int32Array;
@@ -156,8 +155,6 @@ export class RaycastScene extends BaseScene {
   private static readonly TILE_DOOR = 2;
   private static readonly TILE_THIN = 3;
   private tileTypeFlags!: Uint8Array;
-  // Flat texture data array indexed by tileId for O(1) lookup
-  private rawTexArray: (RawTextureData | undefined)[] = [];
   // Global row-skip bounds
   private globalMinWallTop: number = 0;
   private globalMaxWallTop: number = 0;
@@ -188,11 +185,22 @@ export class RaycastScene extends BaseScene {
   // GPU Floor & Ceiling rendering
   private floorCeilingMesh!: Mesh<Shader>;
   private floorCeilingShader!: Shader;
+  private skyboxMesh!: Mesh<Shader>;
+  private skyboxShader!: Shader;
+  private isSkyboxOnlyActive: boolean = false;
   private floorCeilingAtlasTexture: Texture = Texture.WHITE;
   private floorCeilingMapTexture: Texture = Texture.WHITE;
+  private currentSkyboxTexture: Texture | null = null;
+  private currentSkyboxCubeTexture: Texture | null = null;
+  private emptyCubeMapTexture!: Texture;
   private uPlayerPosUniform = new Float32Array(2);
   private uDirUniform = new Float32Array(2);
   private uPlaneUniform = new Float32Array(2);
+  private uSkyboxYawCS = new Float32Array([1.0, 0.0]);
+  private currentSkyboxZoom: number = 2.2;
+  private currentSkyboxYaw: number = 0.0;
+  private uWallBandUniform = new Float32Array([0.0, 0.0]);
+  private uCeilingBoundsUniform = new Float32Array([-1.0, -1.0, -1.0, -1.0]);
   private graphicsUsed: boolean = false;
 
   // Reusable zero-allocation arrays and constants (High Priority Fixes)
@@ -204,14 +212,7 @@ export class RaycastScene extends BaseScene {
     [0, 1],
     [0, -1],
   ];
-  private allThinWalls: Array<{
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-    texture: number;
-    orientation: "vertical" | "horizontal";
-  }> = [];
+  private allThinWalls: ThinWallEntry[] = [];
   private doorEntries: Array<{ key: string; flatIdx: number; x: number; y: number }> = [];
 
   private mobileControls!: MobileControls;
@@ -219,6 +220,7 @@ export class RaycastScene extends BaseScene {
   private hud!: RaycastHUD;
   private minimap!: RaycastMinimap;
   private missionManager!: RaycastMissionManager;
+  private debugMenu!: RaycastDebugMenu;
   private playerController!: RaycastPlayerController;
   private pickupManager!: RaycastPickupManager;
   private breakableManager!: RaycastBreakableManager;
@@ -226,6 +228,7 @@ export class RaycastScene extends BaseScene {
   private enemyContainer!: Container;
   private enemyManager!: RaycastEnemyManager;
   private stationaryObjectManager!: RaycastStationaryObjectManager;
+  private allyManager!: RaycastAllyManager;
   private destructableWallManager!: DestructableWallManager;
   private detonatorContainer!: Container;
   private detonatorManager!: ThermalDetonatorManager;
@@ -236,6 +239,8 @@ export class RaycastScene extends BaseScene {
   private shakeDuration: number = 0;
   private lockedDoors: Record<string, string> = {};
   private unlockedKeycardDoors: Set<string> = new Set();
+  private disabledDoors: Set<string> = new Set();
+  private activePropSounds: Map<string, any> = new Map();
   private isLeftMouseDown: boolean = false;
   private isRightMouseDown: boolean = false;
   private bgMusicInstance: any = null;
@@ -307,6 +312,48 @@ export class RaycastScene extends BaseScene {
     this.uPlaneUniform[0] = this.player.planeX;
     this.uPlaneUniform[1] = this.player.planeY;
 
+    this.emptyCubeMapTexture = this.createEmptyCubeMapTexture();
+
+    // 1. Dedicated Skybox mesh (rendered behind floor & ceiling at zIndex = 0)
+    const skyboxGeom = new MeshGeometry(
+      new Float32Array([
+        0, 0,
+        gameConfig.width, 0,
+        gameConfig.width, gameConfig.height,
+        0, gameConfig.height,
+      ]) as any,
+      new Float32Array([
+        0, 0,
+        1, 0,
+        1, 1,
+        0, 1,
+      ]) as any,
+      new Uint16Array([0, 1, 2, 0, 2, 3]) as any
+    );
+
+    this.skyboxShader = Shader.from(
+      skyboxVert,
+      skyboxFrag,
+      {
+        uDir: this.uDirUniform,
+        uPlane: this.uPlaneUniform,
+        uSkyboxTexture: Texture.WHITE,
+        uSkyboxCube: this.emptyCubeMapTexture,
+        uHasSkybox: 0.0,
+        uHasCubeMap: 0.0,
+        uSkyboxZoom: this.currentSkyboxZoom,
+        uSkyboxVFactor: (0.8 * 2.0) / (gameConfig.width / gameConfig.height),
+        uSkyboxYawCS: this.uSkyboxYawCS,
+        uSkyboxRepeat: [1.0, 1.0],
+        uSkyboxOffset: [0.0, 0.0],
+        uWallBand: this.uWallBandUniform,
+      }
+    );
+    this.skyboxMesh = new Mesh(skyboxGeom, this.skyboxShader);
+    this.skyboxMesh.zIndex = 0;
+    this.skyboxMesh.visible = false;
+
+    // 2. Dedicated Floor/Ceiling mesh (rendered at zIndex = 1, discards open ceiling regions)
     this.floorCeilingShader = Shader.from(
       floorCeilingVert,
       floorCeilingFrag,
@@ -320,16 +367,20 @@ export class RaycastScene extends BaseScene {
         uAtlas: Texture.WHITE,
         uAtlasGrid: [4.0, 4.0],
         uTileSize: 256.0,
+        uCeilingBounds: this.uCeilingBoundsUniform,
       }
     );
 
     this.floorCeilingMesh = new Mesh(floorCeilingGeom, this.floorCeilingShader);
+    this.floorCeilingMesh.zIndex = 1;
 
     this.graphics = new Graphics();
 
-    // Background layer container (floor, ceiling, sky, graphics fallback)
+    // Background layer container (skybox, floor, ceiling, graphics fallback)
     this.backgroundContainer = new Container();
     this.backgroundContainer.zIndex = 0;
+    this.backgroundContainer.sortableChildren = true;
+    this.backgroundContainer.addChild(this.skyboxMesh);
     this.backgroundContainer.addChild(this.floorCeilingMesh);
     this.backgroundContainer.addChild(this.graphics);
     this.worldContainer.addChild(this.backgroundContainer);
@@ -364,7 +415,7 @@ export class RaycastScene extends BaseScene {
       this.spritePool.push(columnSprites);
 
       const thinSprites: Sprite[] = [];
-      for (let j = 0; j < 4; j++) {
+      for (let j = 0; j < 2; j++) {
         const sprite = new Sprite();
         sprite.width = 1;
         sprite.x = i;
@@ -407,7 +458,7 @@ export class RaycastScene extends BaseScene {
       this.hitPool.push(colHits);
     }
 
-    for (let i = 0; i < 2000; i++) {
+    for (let i = 0; i < 400; i++) {
       const sprite = new Sprite();
       sprite.width = 1;
       sprite.roundPixels = true;
@@ -418,6 +469,13 @@ export class RaycastScene extends BaseScene {
 
     this.enemyManager = new RaycastEnemyManager(this.enemyContainer);
     this.stationaryObjectManager = new RaycastStationaryObjectManager(this.entityContainer);
+    this.allyManager = new RaycastAllyManager(this.entityContainer);
+    this.allyManager.onAllyOpenDoor = (cellX, cellY, allyX, allyY) => {
+      return this.checkAndInteractEnemyDoor(cellX, cellY, allyX, allyY);
+    };
+    this.allyManager.onToast = (msg, color, dur) => {
+      this.hud?.showToast(msg, color, dur);
+    };
 
     // 3D Detonator projectile & explosion container
     this.detonatorContainer = new Container();
@@ -472,6 +530,7 @@ export class RaycastScene extends BaseScene {
       });
       this.mobileControls.on("toggleMinimap", () => this.minimap.toggle());
       this.mobileControls.on("toggleObjectives", () => this.missionManager.toggleObjectives());
+      this.mobileControls.on("toggleDebug", () => this.debugMenu.toggle());
       this.addChild(this.mobileControls);
     }
 
@@ -479,7 +538,7 @@ export class RaycastScene extends BaseScene {
     this.missionManager = new RaycastMissionManager({
       onTriggerAlarm: () => this.triggerAlert(),
       showToast: (text, color, duration) => this.hud?.showToast(text, color, duration),
-      showPrompt: (text) => this.hud?.setPrompt(text),
+      showPrompt: (text, color) => this.hud?.setPrompt(text, color),
       hidePrompt: () => this.hud?.clearPrompt(),
       onTriggerFired: (trigger) => this.handleTriggerFired(trigger),
       onTriggerWaitComplete: (trigger) => this.handleTriggerWaitComplete(trigger),
@@ -502,6 +561,7 @@ export class RaycastScene extends BaseScene {
       getLevelFinishZones: () => this.levelFinishZones,
       getPlayer: () => this.player,
       getActiveEnemies: () => this.enemyManager?.activeEnemies || [],
+      getAllies: () => this.allyManager?.allies || [],
       getPickups: () => this.pickupManager?.getPickups() || [],
       getStationaryObjects: () => this.stationaryObjectManager?.objects || [],
       getStairs: () => this.stairsManager?.getStairList() || [],
@@ -511,7 +571,44 @@ export class RaycastScene extends BaseScene {
     this.hud.on("toggleMinimap", () => this.minimap.toggle());
     this.addChild(this.minimap);
 
+    // In-game mobile & desktop Debug / Tuning Datapad
+    this.debugMenu = new RaycastDebugMenu({
+      getSkyboxZoom: () => this.currentSkyboxZoom,
+      setSkyboxZoom: (zoom) => this.setSkyboxZoom(zoom),
+      getSkyboxYaw: () => this.currentSkyboxYaw,
+      setSkyboxYaw: (yaw) => this.setSkyboxYaw(yaw),
+      getSkyboxWallName: (yaw) => this.getCubeMapWallNameForYaw(yaw),
+      isSkyboxOnly: () => this.isSkyboxOnlyActive,
+      toggleSkyboxOnly: () => this.toggleSkyboxOnly(),
+      isCubemapActive: () => (this.skyboxShader?.uniforms?.uHasCubeMap || 0) > 0.5,
+      getCurrentLevel: () => this.currentLevel || "level3",
+      isGodMode: () => this.playerController?.isGodMode || false,
+      toggleGodMode: () => this.playerController?.toggleGodMode() || false,
+      healPlayer: () => this.playerController?.refillHealthAndShield(),
+      refillAmmo: () => this.playerController?.refillAllAmmo(),
+      giveAllWeapons: () => this.playerController?.unlockAllWeapons(),
+      giveAllKeycards: () => this.playerController?.grantAllKeycards(),
+      cycleDoorMode: () => this.cycleDoorSlideMode(),
+      killNearbyEnemies: () => this.killNearbyEnemies(),
+      warpToLevel: (levelName) => this.loadLevel(levelName),
+      showToast: (text, color, duration) => this.hud?.showToast(text, color, duration),
+    });
+    this.addChild(this.debugMenu);
+    if (!this.isMobileDevice()) {
+      this.addChild(this.debugMenu.getTriggerButton());
+    }
+
     this.setupControls();
+
+    // Skybox controls and inspection helpers on window
+    (window as any).setSkyboxZoom = (zoom: number) => this.setSkyboxZoom(zoom);
+    (window as any).setSkyboxYaw = (yaw: number) => this.setSkyboxYaw(yaw);
+    (window as any).setSkybox = (opts: { zoom?: number; yaw?: number }) => {
+      if (opts.zoom !== undefined) this.setSkyboxZoom(opts.zoom);
+      if (opts.yaw !== undefined) this.setSkyboxYaw(opts.yaw);
+      return this.getSkyboxSettings();
+    };
+    (window as any).getSkybox = () => this.getSkyboxSettings();
     this.loadLevel(startLevel).then(() => {
       Ticker.shared.add(this.tick, this);
       this.playBackgroundMusic();
@@ -686,53 +783,11 @@ export class RaycastScene extends BaseScene {
         { id: 52, image: "assets/raycast/textures/worn_stairs_up.jpg", type: "Tile", properties: [{ name: "tileType", value: "stairs" }, { name: "stairType", value: "up" }] },
         { id: 53, image: "assets/raycast/textures/worn_stairs_down.jpg", type: "Tile", properties: [{ name: "tileType", value: "stairs" }, { name: "stairType", value: "down" }] },
         { id: 54, image: "assets/raycast/enemies/prisoner.png", type: "Tile" },
-        { id: 55, image: "assets/raycast/enemies/at_st.png", type: "Tile" },
-        { id: 56, image: "assets/raycast/enemies/tie_fighter.png", type: "Tile" },
-        { id: 57, image: "assets/raycast/enemies/tie_bomber.png", type: "Tile" },
+        { id: 55, image: "assets/raycast/decorations/at_st.png", type: "Tile" },
+        { id: 56, image: "assets/raycast/decorations/tie_fighter.png", type: "Tile" },
+        { id: 57, image: "assets/raycast/decorations/tie_bomber.png", type: "Tile" },
       ];
     }
-  }
-
-  private extractTexturePixels(texture: Texture): RawTextureData {
-    const width = texture.width || 64;
-    const height = texture.height || 64;
-    const isPow2 =
-      (width & (width - 1)) === 0 && (height & (height - 1)) === 0;
-    const maskX = width - 1;
-    const maskY = height - 1;
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (ctx) {
-      ctx.imageSmoothingEnabled = false;
-      const resource = texture.baseTexture.resource as any;
-      const source = resource?.source || resource;
-      if (source) {
-        try {
-          ctx.drawImage(source, 0, 0, width, height);
-        } catch (e) {
-          console.warn("Could not draw source directly:", e);
-        }
-      }
-      const imgData = ctx.getImageData(0, 0, width, height);
-      return {
-        width,
-        height,
-        pixels: new Uint32Array(imgData.data.buffer),
-        isPow2,
-        maskX,
-        maskY,
-      };
-    }
-    return {
-      width: 64,
-      height: 64,
-      pixels: new Uint32Array(64 * 64).fill(0xff666666),
-      isPow2: true,
-      maskX: 63,
-      maskY: 63,
-    };
   }
 
   private handleExplosionDetonation(
@@ -885,10 +940,16 @@ export class RaycastScene extends BaseScene {
     this.doorSlideModes = {};
     this.lockedDoors = {};
     this.unlockedKeycardDoors.clear();
+    this.disabledDoors.clear();
+    for (const [_, inst] of this.activePropSounds) {
+      try { inst?.stop?.(); } catch {}
+    }
+    this.activePropSounds.clear();
     this.levelFinishZones = [];
     if (this.laserManager) this.laserManager.clear();
     if (this.detonatorManager) this.detonatorManager.clear();
     if (this.stationaryObjectManager) this.stationaryObjectManager.clear();
+    if (this.allyManager) this.allyManager.clear();
     if (this.playerController) this.playerController.resetKeycards();
     if (this.minimap) this.minimap.resetDiscovery();
     this.stopAlertAudio();
@@ -944,6 +1005,7 @@ export class RaycastScene extends BaseScene {
               imagePath.includes("enemies/") ||
               imagePath.includes("isb_holotable") ||
               imagePath.includes("at_st") ||
+              imagePath.includes("at_at") ||
               imagePath.includes("tie_fighter") ||
               imagePath.includes("tie_bomber") ||
               tile.type === "PickupItem" ||
@@ -1089,11 +1151,10 @@ export class RaycastScene extends BaseScene {
     await Promise.all(texturePromises);
     this.enforceNearestScaleMode();
 
-    // Extract raw pixel buffers and pre-slice 1px column textures with texel-centered UVs
+    // Pre-slice 1px column textures with texel-centered UVs
     for (const [tileIdStr, texture] of Object.entries(this.textures)) {
       const tileId = parseInt(tileIdStr);
       if (this.animatedWallFrames[tileId]) {
-        this.rawTextureData[tileId] = this.extractTexturePixels(texture);
         continue;
       }
       if (!texture || !(texture instanceof Texture) || !texture.baseTexture) {
@@ -1103,7 +1164,12 @@ export class RaycastScene extends BaseScene {
       texture.baseTexture.mipmap = MIPMAP_MODES.OFF;
       texture.baseTexture.update();
 
-      this.rawTextureData[tileId] = this.extractTexturePixels(texture);
+      const imgPath = (textureMap[tileId] || "").toLowerCase();
+      if (imgPath.includes("ceiling") || imgPath.includes("dirty_water")) {
+        // Floor and ceiling textures are rendered exclusively by the GPU GLSL shader atlas.
+        // Slicing them into 6,000+ 1px textures wastes CPU & RAM.
+        continue;
+      }
 
       const baseW = texture.baseTexture.width || 64;
       const baseH = texture.baseTexture.height || 64;
@@ -1204,6 +1270,18 @@ export class RaycastScene extends BaseScene {
     };
     this.stationaryObjectManager.parseMapObjects(mapData, this.tileMeta, firstgid, offsetX, offsetY);
 
+    // Initialize friendly allies (e.g. rescued prisoner)
+    await this.allyManager.initSpritesheet();
+    this.allyManager.onAllySpawned = (gx, gy) => {
+      if (this.map && this.map[gy] && this.map[gy][gx] !== undefined) {
+        this.map[gy][gx] = 0;
+      }
+      if (this.mapFlat && gy >= 0 && gy < this.mapHeight && gx >= 0 && gx < this.mapWidth) {
+        this.mapFlat[gy * this.mapWidth + gx] = 0;
+      }
+    };
+    this.allyManager.parseMapAllies(mapData, this.tileMeta, firstgid, offsetX, offsetY);
+
     // Initialize thermal detonator manager textures & frames
     await this.detonatorManager.initTextures();
     await this.laserManager.initTextures();
@@ -1212,6 +1290,7 @@ export class RaycastScene extends BaseScene {
     if (this.missionManager) {
       await this.missionManager.init(mapData, levelName, offsetX, offsetY);
     }
+    this.initControlledDoors();
 
     // Spawn initial thermal detonator pickups for quick player testing only on test_level
     if (levelName === "test_level") {
@@ -1278,6 +1357,9 @@ export class RaycastScene extends BaseScene {
       this.minimap.updateDiscovery(this.player.x, this.player.y, this.player.dirX, this.player.dirY, true);
       this.minimap.refreshStaticMap();
     }
+
+    // Apply 360 panoramic skybox if configured for this level
+    await this.applyLevelSkybox(levelName, mapData);
   }
 
   private parseTiledMap(mapData: any) {
@@ -1298,6 +1380,7 @@ export class RaycastScene extends BaseScene {
       if (l.objects && Array.isArray(l.objects)) {
         for (const obj of l.objects) {
           if (obj.id !== undefined) {
+            obj._layerName = l.name;
             this.mapObjectsById.set(obj.id, obj);
           }
         }
@@ -1481,8 +1564,11 @@ export class RaycastScene extends BaseScene {
             if (
               imgLower.includes("at_st") ||
               imgLower.includes("atst") ||
+              imgLower.includes("at_at") ||
+              imgLower.includes("atat") ||
               imgLower.includes("tie_fighter") ||
               imgLower.includes("tie_bomber") ||
+              imgLower.includes("prisoner") ||
               imgLower.includes("holotable")
             ) {
               return;
@@ -1974,12 +2060,6 @@ export class RaycastScene extends BaseScene {
       if (obj.texture > maxTileId) maxTileId = obj.texture;
     }
 
-    // Build flat texture data array for O(1) indexed access
-    this.rawTexArray = new Array(maxTileId + 1);
-    for (let i = 0; i <= maxTileId; i++) {
-      this.rawTexArray[i] = this.rawTextureData[i];
-    }
-
     // Build GPU texture atlas and map texture for floor & ceiling GLSL shader
     this.buildFloorCeilingTextures();
   }
@@ -2020,7 +2100,6 @@ export class RaycastScene extends BaseScene {
       const col = slot % cols;
       const row = Math.floor(slot / cols);
       const tex = this.textures[tileId];
-      let drawn = false;
 
       if (tex) {
         const resource = (tex.baseTexture.resource as any);
@@ -2034,33 +2113,8 @@ export class RaycastScene extends BaseScene {
               tileSize,
               tileSize
             );
-            drawn = true;
           } catch (e) {
-            // fallback below
-          }
-        }
-      }
-
-      if (!drawn) {
-        const raw = this.rawTextureData[tileId];
-        if (raw) {
-          const tempCanvas = document.createElement("canvas");
-          tempCanvas.width = raw.width;
-          tempCanvas.height = raw.height;
-          const tempCtx = tempCanvas.getContext("2d");
-          if (tempCtx) {
-            tempCtx.imageSmoothingEnabled = false;
-            const imgData = tempCtx.createImageData(raw.width, raw.height);
-            imgData.data.set(new Uint8ClampedArray(raw.pixels.buffer));
-            tempCtx.putImageData(imgData, 0, 0);
-            atlasCtx.drawImage(
-              tempCanvas,
-              col * tileSize,
-              row * tileSize,
-              tileSize,
-              tileSize
-            );
-            drawn = true;
+            // ignore
           }
         }
       }
@@ -2082,6 +2136,11 @@ export class RaycastScene extends BaseScene {
     const mapImg = mapCtx.createImageData(this.mapWidth, this.mapHeight);
     const data = mapImg.data;
 
+    let minCeilX = this.mapWidth;
+    let minCeilY = this.mapHeight;
+    let maxCeilX = -1;
+    let maxCeilY = -1;
+
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
         const idx = y * this.mapWidth + x;
@@ -2097,6 +2156,10 @@ export class RaycastScene extends BaseScene {
 
         if (ceilTile >= 0 && tileToSlot.has(ceilTile)) {
           data[pxIdx + 1] = tileToSlot.get(ceilTile)! + 1;
+          if (x < minCeilX) minCeilX = x;
+          if (y < minCeilY) minCeilY = y;
+          if (x > maxCeilX) maxCeilX = x;
+          if (y > maxCeilY) maxCeilY = y;
         } else {
           data[pxIdx + 1] = 0;
         }
@@ -2104,6 +2167,18 @@ export class RaycastScene extends BaseScene {
         data[pxIdx + 2] = 0;
         data[pxIdx + 3] = 255;
       }
+    }
+
+    if (maxCeilX >= minCeilX) {
+      this.uCeilingBoundsUniform[0] = minCeilX;
+      this.uCeilingBoundsUniform[1] = minCeilY;
+      this.uCeilingBoundsUniform[2] = maxCeilX + 1;
+      this.uCeilingBoundsUniform[3] = maxCeilY + 1;
+    } else {
+      this.uCeilingBoundsUniform[0] = -1.0;
+      this.uCeilingBoundsUniform[1] = -1.0;
+      this.uCeilingBoundsUniform[2] = -1.0;
+      this.uCeilingBoundsUniform[3] = -1.0;
     }
 
     mapCtx.putImageData(mapImg, 0, 0);
@@ -2123,6 +2198,392 @@ export class RaycastScene extends BaseScene {
     uniforms.uAtlas = this.floorCeilingAtlasTexture;
     uniforms.uAtlasGrid = [cols, rows];
     uniforms.uTileSize = tileSize;
+    uniforms.uCeilingBounds = this.uCeilingBoundsUniform;
+  }
+
+  /**
+   * Applies the skybox configuration for the current level.
+   * Checks Tiled map properties first, then falls back to RAYCAST_LEVEL_CONFIGS.
+   */
+  private async applyLevelSkybox(levelName: string, mapData: any): Promise<void> {
+    const skyConfig = getSkyboxConfig(levelName, mapData?.properties);
+    if (skyConfig) {
+      await this.setSkybox(skyConfig);
+    } else {
+      this.clearSkybox();
+    }
+  }
+
+  /**
+   * Stitches front and back panoramic images into a single 360-degree cylinder texture.
+   */
+  private async createStitchedSkyboxTexture(frontKey: string, backKey: string): Promise<Texture> {
+    const [frontAsset, backAsset] = await Promise.all([
+      Assets.load(frontKey),
+      Assets.load(backKey),
+    ]);
+
+    const frontTex: Texture =
+      frontAsset instanceof Texture
+        ? frontAsset
+        : frontAsset?.texture || frontAsset;
+    const backTex: Texture =
+      backAsset instanceof Texture ? backAsset : backAsset?.texture || backAsset;
+
+    const fw = frontTex.baseTexture?.realWidth || frontTex.width || 2752;
+    const fh = frontTex.baseTexture?.realHeight || frontTex.height || 1536;
+    const bw = backTex.baseTexture?.realWidth || backTex.width || 2752;
+    const bh = backTex.baseTexture?.realHeight || backTex.height || 1536;
+
+    const totalW = fw + bw;
+    const maxH = Math.max(fh, bh);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = totalW;
+    canvas.height = maxH;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const frontSrc =
+        (frontTex.baseTexture?.resource as any)?.source ||
+        frontTex.baseTexture?.resource;
+      const backSrc =
+        (backTex.baseTexture?.resource as any)?.source ||
+        backTex.baseTexture?.resource;
+
+      if (frontSrc) {
+        ctx.drawImage(frontSrc, 0, 0, fw, fh);
+      }
+      if (backSrc) {
+        ctx.drawImage(backSrc, fw, 0, bw, bh);
+      }
+    }
+
+    const stitchedTexture = Texture.from(canvas);
+    stitchedTexture.baseTexture.wrapMode = WRAP_MODES.REPEAT;
+    stitchedTexture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+    stitchedTexture.baseTexture.mipmap = MIPMAP_MODES.OFF;
+    stitchedTexture.baseTexture.update();
+    return stitchedTexture;
+  }
+
+  /**
+   * Creates an empty 1x1 WebGL CubeMap texture for default shader uniform binding.
+   */
+  private createEmptyCubeMapTexture(): Texture {
+    const cubeResource = new CubeResource(undefined, { width: 1, height: 1, autoLoad: false });
+    for (let i = 0; i < 6; i++) {
+      const buf = new BufferResource(new Uint8Array([255, 255, 255, 255]), { width: 1, height: 1 });
+      cubeResource.addResourceAt(buf, i);
+    }
+    const baseTexture = new BaseTexture(cubeResource, {
+      wrapMode: WRAP_MODES.CLAMP,
+      scaleMode: SCALE_MODES.LINEAR,
+      mipmap: MIPMAP_MODES.OFF,
+    });
+    return new Texture(baseTexture);
+  }
+
+  /**
+   * Creates a WebGL CubeMap texture using Pixi's CubeResource from 6 face URLs/resources.
+   * Expected OpenGL face order: [px, nx, py, ny, pz, nz]
+   */
+  public async createCubeMapTexture(facesOrDir: string | string[]): Promise<Texture> {
+    let faceUrls: string[];
+    if (Array.isArray(facesOrDir)) {
+      if (facesOrDir.length !== 6) {
+        throw new Error(`[RaycastScene] CubeMap requires 6 faces, got ${facesOrDir.length}`);
+      }
+      faceUrls = facesOrDir;
+    } else {
+      const dir = facesOrDir.replace(/[\\\/]$/, "");
+      faceUrls = [
+        `${dir}/px.png`,
+        `${dir}/nx.png`,
+        `${dir}/py.png`,
+        `${dir}/ny.png`,
+        `${dir}/pz.png`,
+        `${dir}/nz.png`,
+      ];
+    }
+
+    // Map face URLs to either pre-loaded HTMLImageElement from Assets.cache or the URL string
+    const sources: any[] = faceUrls.map((url) => {
+      const baseName = url.split("/").pop()?.replace(/\.\w+$/, "");
+      const cacheKeys = [url, `./${url}`, `hanger_cube_${baseName}`, baseName];
+      for (const k of cacheKeys) {
+        if (k && Assets.cache.has(k)) {
+          const cached = Assets.get(k);
+          const img = (cached?.baseTexture?.resource as any)?.source;
+          if (img) return img;
+        }
+      }
+      return url;
+    });
+
+    const cubeResource = new CubeResource(sources as any, {
+      width: 512,
+      height: 512,
+      autoLoad: true,
+    } as any);
+    await cubeResource.load();
+
+    const baseTexture = new BaseTexture(cubeResource, {
+      wrapMode: WRAP_MODES.CLAMP,
+      scaleMode: SCALE_MODES.LINEAR,
+      mipmap: MIPMAP_MODES.POW2,
+    });
+
+    const cubeTexture = new Texture(baseTexture);
+    return cubeTexture;
+  }
+
+  /**
+   * Sets or updates the skybox (CubeMap or panoramic) in the floor/ceiling shader.
+   */
+  public async setSkybox(config: RaycastSkyboxConfig | string | null): Promise<void> {
+    if (!config) {
+      this.clearSkybox();
+      return;
+    }
+
+    const resolvedConfig: RaycastSkyboxConfig =
+      typeof config === "string" ? { texture: config } : config;
+
+    try {
+      // 1. Check if a CubeMap is specified or implied
+      const cubeMapTarget =
+        resolvedConfig.cubeMap ||
+        (resolvedConfig.texture && resolvedConfig.texture.toLowerCase().includes("cubemap")
+          ? resolvedConfig.texture
+          : undefined);
+
+      if (cubeMapTarget) {
+        const cubeTexture = await this.createCubeMapTexture(cubeMapTarget);
+        if (this.currentSkyboxCubeTexture && this.currentSkyboxCubeTexture !== this.emptyCubeMapTexture) {
+          try {
+            this.currentSkyboxCubeTexture.destroy(true);
+          } catch {}
+        }
+        this.currentSkyboxCubeTexture = cubeTexture;
+        this.currentSkyboxTexture = null;
+
+        const uniforms = this.skyboxShader.uniforms;
+        uniforms.uSkyboxCube = cubeTexture;
+        uniforms.uHasCubeMap = 1.0;
+        uniforms.uHasSkybox = 0.0;
+        this.currentSkyboxZoom = resolvedConfig.zoom ?? 2.2;
+        this.currentSkyboxYaw = ((resolvedConfig.yaw ?? 270.0) % 360 + 360) % 360;
+        uniforms.uSkyboxZoom = this.currentSkyboxZoom;
+        const vFactor = (0.8 * 2.0) / (gameConfig.width / gameConfig.height);
+        uniforms.uSkyboxVFactor = vFactor;
+        const yawRad = this.currentSkyboxYaw * (Math.PI / 180.0);
+        this.uSkyboxYawCS[0] = Math.cos(yawRad);
+        this.uSkyboxYawCS[1] = Math.sin(yawRad);
+        uniforms.uSkyboxYawCS = this.uSkyboxYawCS;
+        this.skyboxMesh.visible = true;
+        this.floorCeilingMesh.visible = !resolvedConfig.skyboxOnly;
+        return;
+      }
+
+      if (this.currentSkyboxCubeTexture && this.currentSkyboxCubeTexture !== this.emptyCubeMapTexture) {
+        try {
+          this.currentSkyboxCubeTexture.destroy(true);
+        } catch {}
+      }
+      this.currentSkyboxCubeTexture = null;
+
+      // 2. Fall back to 2D equirectangular/cylindrical texture (or stitched front/back)
+      let texture: Texture;
+
+      if (resolvedConfig.front && resolvedConfig.back) {
+        // If pre-stitched 360 texture is available in cache, prefer it for fast direct GPU binding
+        if (resolvedConfig.texture && Assets.cache.has(resolvedConfig.texture)) {
+          const raw = Assets.get(resolvedConfig.texture);
+          texture = raw instanceof Texture ? raw : raw?.texture || raw;
+        } else {
+          texture = await this.createStitchedSkyboxTexture(
+            resolvedConfig.front,
+            resolvedConfig.back
+          );
+        }
+      } else {
+        const texKey = resolvedConfig.texture;
+        if (!texKey) {
+          this.clearSkybox();
+          return;
+        }
+        const rawTex = Assets.cache.has(texKey) ? Assets.get(texKey) : await Assets.load(texKey);
+
+        texture =
+          rawTex instanceof Texture
+            ? rawTex
+            : rawTex?.texture instanceof Texture
+            ? rawTex.texture
+            : rawTex?.baseTexture
+            ? rawTex
+            : Texture.WHITE;
+      }
+
+      if (texture && texture.baseTexture) {
+        texture.baseTexture.wrapMode = WRAP_MODES.REPEAT;
+        texture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+        texture.baseTexture.mipmap = MIPMAP_MODES.OFF;
+        texture.baseTexture.update();
+      }
+
+      this.currentSkyboxTexture = texture;
+      this.currentSkyboxCubeTexture = null;
+      const imgW = texture.baseTexture?.realWidth || texture.width || 2880;
+      const imgH = texture.baseTexture?.realHeight || texture.height || 1440;
+      const hFov = 2.0 * Math.atan(0.8); // Camera horizontal FOV in radians (~1.3495 rad)
+
+      // Zoom factor: > 1.0 zooms out to reveal high ceiling beams, crane, and broader vista
+      const zoom = resolvedConfig.zoom ?? 3.5;
+      const userRepeatX = (resolvedConfig.repeatX ?? 1.0) * zoom;
+      const userRepeatY = (resolvedConfig.repeatY ?? 1.0) * zoom;
+
+      // In a 360-degree cylinder, naturalRepeatY matches vertical pixel density
+      // to horizontal pixel density (1:1 pixel aspect ratio, zero stretching):
+      const naturalRepeatY =
+        (hFov / (2.0 * Math.PI)) *
+        (imgW / imgH) *
+        (gameConfig.height / gameConfig.width);
+
+      const finalRepeatX = userRepeatX;
+      const finalRepeatY = userRepeatY * naturalRepeatY;
+
+      // Automatically align centerU with North direction (normalized angle = 0.25):
+      const centerU = resolvedConfig.centerU ?? 0.5;
+      const baseOffsetX = centerU - 0.25 * finalRepeatX;
+      let finalOffsetX = (baseOffsetX + (resolvedConfig.offsetX ?? 0.0)) % 1.0;
+      if (finalOffsetX < 0) finalOffsetX += 1.0;
+      const finalOffsetY = resolvedConfig.offsetY ?? 0.0;
+
+      const uniforms = this.skyboxShader.uniforms;
+      uniforms.uSkyboxTexture = texture;
+      uniforms.uHasSkybox = 1.0;
+      uniforms.uHasCubeMap = 0.0;
+      uniforms.uSkyboxRepeat = [finalRepeatX, finalRepeatY];
+      uniforms.uSkyboxOffset = [finalOffsetX, finalOffsetY];
+      this.skyboxMesh.visible = true;
+      this.floorCeilingMesh.visible = !resolvedConfig.skyboxOnly;
+    } catch (err) {
+      console.warn(`[RaycastScene] Failed to load skybox texture:`, err);
+      this.clearSkybox();
+    }
+  }
+
+  /**
+   * Disables the active skybox, reverting to the default sky gradient.
+   */
+  public clearSkybox(): void {
+    if (this.currentSkyboxCubeTexture && this.currentSkyboxCubeTexture !== this.emptyCubeMapTexture) {
+      try {
+        this.currentSkyboxCubeTexture.destroy(true);
+      } catch {}
+    }
+    this.currentSkyboxTexture = null;
+    this.currentSkyboxCubeTexture = null;
+    if (this.skyboxShader && this.skyboxShader.uniforms) {
+      const uniforms = this.skyboxShader.uniforms;
+      uniforms.uHasSkybox = 0.0;
+      uniforms.uHasCubeMap = 0.0;
+      uniforms.uSkyboxTexture = Texture.WHITE;
+      this.uSkyboxYawCS[0] = 1.0;
+      this.uSkyboxYawCS[1] = 0.0;
+      uniforms.uSkyboxYawCS = this.uSkyboxYawCS;
+      if (this.emptyCubeMapTexture) {
+        uniforms.uSkyboxCube = this.emptyCubeMapTexture;
+      }
+    }
+    if (this.skyboxMesh) {
+      this.skyboxMesh.visible = false;
+    }
+    if (this.floorCeilingMesh) {
+      this.floorCeilingMesh.visible = true;
+    }
+  }
+
+  /**
+   * Adjusts the skybox zoom (FOV scale factor). Higher zoom broadens the view, making objects look smaller / farther away.
+   */
+  public setSkyboxZoom(zoom: number): void {
+    this.currentSkyboxZoom = Math.max(0.1, Math.min(10.0, Math.round(zoom * 100) / 100));
+    if (this.skyboxShader?.uniforms) {
+      this.skyboxShader.uniforms.uSkyboxZoom = this.currentSkyboxZoom;
+    }
+    console.log(`[RaycastScene] Skybox Zoom set to: ${this.currentSkyboxZoom.toFixed(2)}`);
+    this.hud?.showToast(`Skybox Zoom: ${this.currentSkyboxZoom.toFixed(2)}x`, 0x00ffff, 1500);
+  }
+
+  /**
+   * Adjusts the skybox yaw rotation in degrees (0..360).
+   * 0 deg = North faces +Z (pz, open bay door)
+   * 90 deg = North faces -X (nx, left wall)
+   * 180 deg = North faces -Z (nz, blast door)
+   * 270 deg = North faces +X (px, right wall)
+   */
+  public setSkyboxYaw(degrees: number): void {
+    this.currentSkyboxYaw = ((degrees % 360) + 360) % 360;
+    const yawRad = this.currentSkyboxYaw * (Math.PI / 180.0);
+    this.uSkyboxYawCS[0] = Math.cos(yawRad);
+    this.uSkyboxYawCS[1] = Math.sin(yawRad);
+    if (this.skyboxShader?.uniforms) {
+      this.skyboxShader.uniforms.uSkyboxYawCS = this.uSkyboxYawCS;
+    }
+    const wallLabel = this.getCubeMapWallNameForYaw(this.currentSkyboxYaw);
+    console.log(`[RaycastScene] Skybox Yaw set to: ${this.currentSkyboxYaw.toFixed(1)}° (${wallLabel})`);
+    this.hud?.showToast(`Skybox Yaw: ${this.currentSkyboxYaw.toFixed(0)}° (${wallLabel})`, 0x00ffff, 1500);
+  }
+
+  /**
+   * Toggles skybox-only visualization mode (F8), hiding foreground floor & ceiling.
+   */
+  public toggleSkyboxOnly(forceState?: boolean): void {
+    this.isSkyboxOnlyActive = forceState !== undefined ? forceState : !this.isSkyboxOnlyActive;
+    if (this.floorCeilingMesh) {
+      this.floorCeilingMesh.visible = !this.isSkyboxOnlyActive;
+    }
+    console.log(`[RaycastScene] Skybox-only mode: ${this.isSkyboxOnlyActive}`);
+    this.hud?.showToast(`Skybox-Only: ${this.isSkyboxOnlyActive ? "ON" : "OFF"}`, 0x00ffff, 1500);
+  }
+
+  private getCubeMapWallNameForYaw(yaw: number): string {
+    const snap = Math.round(yaw / 90) % 4;
+    switch (snap) {
+      case 0: return "Facing PZ: Jungle Vista";
+      case 1: return "Facing NX: Control Room";
+      case 2: return "Facing NZ: Blast Doors";
+      case 3: return "Facing PX: Steel Wall";
+      default: return "";
+    }
+  }
+
+  public getSkyboxSettings(): { zoom: number; yaw: number; wall: string } {
+    return {
+      zoom: this.currentSkyboxZoom,
+      yaw: this.currentSkyboxYaw,
+      wall: this.getCubeMapWallNameForYaw(this.currentSkyboxYaw),
+    };
+  }
+
+  /**
+   * Cheat/debug: Instantly kills all active enemies within a given distance of the player.
+   */
+  public killNearbyEnemies(radius: number = 35.0): number {
+    if (!this.enemyManager) return 0;
+    const killed = this.enemyManager.killNearbyEnemies(
+      this.player.x,
+      this.player.y,
+      radius
+    );
+    if (killed > 0) {
+      this.hud?.showToast(`[💥] Eliminated ${killed} nearby enemies!`, 0xff4444, 2000);
+      this.hud?.flashScreen(0xff2222, 0.25);
+    } else {
+      this.hud?.showToast("[!] No active enemies within radius", 0x88bbdd, 1500);
+    }
+    return killed;
   }
 
   public getDoorSlideNumericMode(mode: DoorOpen | undefined): number {
@@ -2313,7 +2774,14 @@ export class RaycastScene extends BaseScene {
     if (this.tileTypeFlags[flatIdx] !== RaycastScene.TILE_DOOR) return false;
 
     const key = `${x},${y}`;
+    if (this.disabledDoors.has(key)) return false; // Held open/disabled by mechanism
     if (this.lockedDoors[key]) return false; // Enemies can never open doors that need a keycard
+    if (this.destructableWallManager) {
+      const activeWallAtTile = this.destructableWallManager.getWalls().find(
+        (w) => w.isActive() && w.gridX === x && w.gridY === y
+      );
+      if (activeWallAtTile) return false;
+    }
 
     const currentState = this.doorStatesFlat[flatIdx];
 
@@ -2437,6 +2905,19 @@ export class RaycastScene extends BaseScene {
         sound.stop("calm_loop");
       } catch {}
     }
+    for (const [_, inst] of this.activePropSounds) {
+      try { inst?.stop?.(); } catch {}
+    }
+    this.activePropSounds.clear();
+    this.disabledDoors.clear();
+    try {
+      this.clearSkybox();
+    } catch {}
+    try {
+      if (this.emptyCubeMapTexture) {
+        this.emptyCubeMapTexture.destroy(true);
+      }
+    } catch {}
     try {
       if (this.floorCeilingAtlasTexture && this.floorCeilingAtlasTexture !== Texture.WHITE) {
         this.floorCeilingAtlasTexture.destroy(true);
@@ -2500,6 +2981,11 @@ export class RaycastScene extends BaseScene {
     try {
       if (this.stationaryObjectManager) {
         this.stationaryObjectManager.dispose();
+      }
+    } catch {}
+    try {
+      if (this.allyManager) {
+        this.allyManager.dispose();
       }
     } catch {}
     try {
@@ -2680,6 +3166,7 @@ export class RaycastScene extends BaseScene {
   };
 
   private tryShoot(isAutoFire: boolean = false): void {
+    if (this.debugMenu?.isVisibleOpen) return;
     if (this.stairsManager && this.stairsManager.isTransitioning()) return;
     const currentCfg = this.playerController.weaponConfig;
     if (!currentCfg) return;
@@ -3004,13 +3491,45 @@ export class RaycastScene extends BaseScene {
     if (key === "m") {
       this.minimap?.toggle();
     }
+    // Toggle Skybox Only mode for testing skybox vista (F8)
+    if (e.key === "F8" || key === "f8") {
+      this.toggleSkyboxOnly();
+    }
+    // Skybox Zoom Adjustments ([ / - zooms in / enlarges, ] / = zooms out / widens)
+    if (key === "[" || key === "-") {
+      this.setSkyboxZoom(this.currentSkyboxZoom - 0.1);
+    }
+    if (key === "]" || key === "=" || key === "+") {
+      this.setSkyboxZoom(this.currentSkyboxZoom + 0.1);
+    }
+    // Skybox Yaw Rotation Adjustments (, / < rotates left, . / > rotates right)
+    if (key === "," || key === "<") {
+      const delta = e.shiftKey ? -15 : -2;
+      this.setSkyboxYaw(this.currentSkyboxYaw + delta);
+    }
+    if (key === "." || key === ">") {
+      const delta = e.shiftKey ? 15 : 2;
+      this.setSkyboxYaw(this.currentSkyboxYaw + delta);
+    }
+    // Snap / cycle to next 90-degree Skybox wall (Y)
+    if (key === "y" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      const nextSnap = (Math.round((this.currentSkyboxYaw + 45) / 90) * 90) % 360;
+      const targetYaw = nextSnap === Math.round(this.currentSkyboxYaw) ? (nextSnap + 90) % 360 : nextSnap;
+      this.setSkyboxYaw(targetYaw);
+    }
     // Toggle Objectives Datapad (Tab) / Close on ESC
     if (e.key === "Tab" || e.code === "Tab") {
       e.preventDefault();
       this.missionManager?.toggleObjectives();
     }
+    // Toggle In-Game Debug Datapad (` or ~ or F2)
+    if (key === "`" || key === "~" || e.key === "F2") {
+      this.debugMenu?.toggle();
+    }
     if (key === "escape") {
-      if (this.missionManager?.isObjectivesOpen) {
+      if (this.debugMenu?.isVisibleOpen) {
+        this.debugMenu.hide();
+      } else if (this.missionManager?.isObjectivesOpen) {
         this.missionManager.hideObjectives();
       } else if (this.minimap?.isOpen) {
         this.minimap.hide();
@@ -3133,7 +3652,8 @@ export class RaycastScene extends BaseScene {
           this.triggerScreenShake(5, 0.22);
           this.hud.showToast(`[-] Hit by Blaster Fire! (-${dmg} HP)`, 0xff4444);
         },
-        allThinWalls
+        allThinWalls,
+        this.stationaryObjectManager
       );
     }
 
@@ -3156,6 +3676,21 @@ export class RaycastScene extends BaseScene {
       this.lockedDoors,
       this.tileTypeFlags
     );
+
+    // Update friendly allies (e.g. rescued prisoner following Tuk)
+    if (this.allyManager) {
+      this.allyManager.update(
+        delta,
+        this.player.x,
+        this.player.y,
+        this.mapFlat,
+        this.mapWidth,
+        this.mapHeight,
+        this.doorStatesFlat,
+        this.tileTypeFlags,
+        allThinWalls
+      );
+    }
 
     // Check for item pickups
     const collected = this.pickupManager.checkPlayerPickups(
@@ -3185,7 +3720,11 @@ export class RaycastScene extends BaseScene {
   }
 
   private updatePlayer(delta: number) {
-    if ((this.stairsManager && this.stairsManager.isTransitioning()) || this.isLevelTransitioning) {
+    if (
+      (this.stairsManager && this.stairsManager.isTransitioning()) ||
+      this.isLevelTransitioning ||
+      this.debugMenu?.isVisibleOpen
+    ) {
       this.lastFrameDistMoved = 0;
       return;
     }
@@ -3516,7 +4055,15 @@ export class RaycastScene extends BaseScene {
     // 0. Prioritize interactive mission trigger prompt
     const missionPrompt = this.missionManager?.getActivePrompt();
     if (missionPrompt) {
-      this.hud.setPrompt(missionPrompt, 0x00e5ff);
+      const color = this.missionManager?.getActivePromptColor() ?? 0x00e5ff;
+      this.hud.setPrompt(missionPrompt, color);
+      return;
+    }
+
+    // 0.5 Check if player is aiming at an ally (rescued prisoner command prompt)
+    const allyPrompt = this.allyManager?.getInteractionPrompt(this.player.x, this.player.y, this.player.dirX, this.player.dirY);
+    if (allyPrompt) {
+      this.hud.setPrompt(allyPrompt.text, allyPrompt.color);
       return;
     }
 
@@ -3538,17 +4085,38 @@ export class RaycastScene extends BaseScene {
 
     if (!this.stairsManager) return;
 
-    const lookX = Math.floor(this.player.x + this.player.dirX * 1.1);
-    const lookY = Math.floor(this.player.y + this.player.dirY * 1.1);
-    const isFacingDoor =
-      lookX >= 0 &&
-      lookX < this.mapWidth &&
-      lookY >= 0 &&
-      lookY < this.mapHeight &&
-      this.tileTypeFlags[lookY * this.mapWidth + lookX] === RaycastScene.TILE_DOOR;
+    // Check if player is facing or near an interactable door
+    const nearbyDoor = this.getNearbyOrFacingDoor();
+    if (nearbyDoor) {
+      const doorKey = `${nearbyDoor.x},${nearbyDoor.y}`;
+      const flatIdx = nearbyDoor.y * this.mapWidth + nearbyDoor.x;
+      const currentState = this.doorStatesFlat[flatIdx];
+      const reqKey = this.lockedDoors[doorKey];
 
-    if (isFacingDoor) {
-      this.hud.setPrompt(null);
+      let promptText: string;
+      let promptColor = 0x00ffcc;
+
+      if (this.disabledDoors.has(doorKey)) {
+        promptText = "[!] DOOR OFFLINE";
+        promptColor = 0xffaa00;
+      } else if (reqKey && currentState === 0 && !this.unlockedKeycardDoors.has(doorKey)) {
+        const keyName = reqKey.toUpperCase() + " KEYCARD";
+        if (this.playerController.hasKeycard(reqKey)) {
+          promptText = this.mobileControls ? `[E / TAP] UNLOCK (${keyName})` : `[E] UNLOCK (${keyName})`;
+          promptColor = 0x00e5ff;
+        } else {
+          promptText = `[X] REQUIRES ${keyName}`;
+          promptColor = 0xff4444;
+        }
+      } else if (currentState <= 0) {
+        promptText = this.mobileControls ? "[E / TAP] OPEN DOOR" : "[E] OPEN DOOR";
+        promptColor = 0x00ffcc;
+      } else {
+        promptText = this.mobileControls ? "[E / TAP] CLOSE DOOR" : "[E] CLOSE DOOR";
+        promptColor = 0x00ffcc;
+      }
+
+      this.hud.setPrompt(promptText, promptColor);
       return;
     }
 
@@ -3572,11 +4140,75 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  private getNearbyOrFacingDoor(): { x: number; y: number; dist: number } | null {
+    if (!this.tileTypeFlags) return null;
+    const px = Math.floor(this.player.x);
+    const py = Math.floor(this.player.y);
+
+    // 1. Ray sample along player facing direction at multiple distances (up to 2.2 tiles)
+    const forwardDists = [0.5, 0.8, 1.1, 1.4, 1.7, 2.0, 2.2];
+    for (const d of forwardDists) {
+      const lx = Math.floor(this.player.x + this.player.dirX * d);
+      const ly = Math.floor(this.player.y + this.player.dirY * d);
+      if (lx < 0 || lx >= this.mapWidth || ly < 0 || ly >= this.mapHeight) continue;
+      const flatIdx = ly * this.mapWidth + lx;
+      if (this.tileTypeFlags[flatIdx] === RaycastScene.TILE_DOOR) {
+        const dist = Math.hypot(lx + 0.5 - this.player.x, ly + 0.5 - this.player.y);
+        return { x: lx, y: ly, dist };
+      }
+      // If a solid thick wall is hit before the door, stop searching along this ray
+      if (this.tileTypeFlags[flatIdx] === RaycastScene.TILE_WALL) {
+        break;
+      }
+    }
+
+    // 2. Search nearby cells within radius 2.2 tiles, scoring by alignment with facing vector and proximity
+    const candidates: Array<{ x: number; y: number; dist: number; score: number }> = [];
+    const searchRadius = 2;
+    for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+      for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+        const x = px + dx;
+        const y = py + dy;
+        if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) continue;
+        const flatIdx = y * this.mapWidth + x;
+        if (this.tileTypeFlags[flatIdx] === RaycastScene.TILE_DOOR) {
+          const doorCenterX = x + 0.5;
+          const doorCenterY = y + 0.5;
+          const toDoorX = doorCenterX - this.player.x;
+          const toDoorY = doorCenterY - this.player.y;
+          const dist = Math.hypot(toDoorX, toDoorY);
+          if (dist <= 2.2) {
+            const dot = (toDoorX * this.player.dirX + toDoorY * this.player.dirY) / (dist || 1);
+            if (dot > -0.2) {
+              const score = dot * 2.0 - dist;
+              candidates.push({ x, y, dist, score });
+            }
+          }
+        }
+      }
+    }
+
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => b.score - a.score);
+      return candidates[0];
+    }
+
+    return null;
+  }
+
   private tryOpenDoor() {
     if ((this.stairsManager && this.stairsManager.isTransitioning()) || this.isLevelTransitioning) return;
 
     // 0. Prioritize interactive mission triggers (terminals, alarms, switches)
     if (this.missionManager && this.missionManager.handleInteract()) {
+      return;
+    }
+
+    // 0.5 Prioritize interacting with ally when looking directly at him
+    if (
+      this.allyManager &&
+      this.allyManager.tryInteractWithAlly(this.player.x, this.player.y, this.player.dirX, this.player.dirY)
+    ) {
       return;
     }
 
@@ -3591,8 +4223,6 @@ export class RaycastScene extends BaseScene {
       return;
     }
 
-    const px = Math.floor(this.player.x);
-    const py = Math.floor(this.player.y);
     const lookX = Math.floor(this.player.x + this.player.dirX * 1.1);
     const lookY = Math.floor(this.player.y + this.player.dirY * 1.1);
 
@@ -3601,12 +4231,13 @@ export class RaycastScene extends BaseScene {
       return;
     }
 
-    // 2. Prioritize cell directly in front of player for doors
-    if (this.checkAndInteractDoor(lookX, lookY)) {
+    // 3. Prioritize facing or nearby doors (handles mobile joystick positions up to 2.2 tiles reach)
+    const door = this.getNearbyOrFacingDoor();
+    if (door && this.checkAndInteractDoor(door.x, door.y)) {
       return;
     }
 
-    // 3. Check adjacent cells or general nearby stairs
+    // 4. Check adjacent cells or general nearby stairs
     if (
       this.stairsManager &&
       (this.stairsManager.tryInteractNearbyStairs(this.player.x, this.player.y) ||
@@ -3615,12 +4246,14 @@ export class RaycastScene extends BaseScene {
       return;
     }
 
-    // 4. Check adjacent cells for doors
+    // 5. Fallback: check adjacent cells for doors
+    const px = Math.floor(this.player.x);
+    const py = Math.floor(this.player.y);
     for (let i = 0; i < RaycastScene.NEARBY_OFFSETS.length; i++) {
       const off = RaycastScene.NEARBY_OFFSETS[i];
       const x = px + off[0];
       const y = py + off[1];
-      if (x === lookX && y === lookY) continue;
+      if (door && x === door.x && y === door.y) continue;
       if (this.checkAndInteractDoor(x, y)) {
         return;
       }
@@ -3634,6 +4267,30 @@ export class RaycastScene extends BaseScene {
 
     const key = `${x},${y}`;
     const currentState = this.doorStatesFlat[flatIdx];
+
+    // Check if door has an active DoorProtector barrier physically guarding this doorway
+    if (this.destructableWallManager) {
+      const activeWallAtTile = this.destructableWallManager.getWalls().find(
+        (w) => w.isActive() && w.gridX === x && w.gridY === y
+      );
+      if (activeWallAtTile) {
+        this.hud?.showToast("[!] Security Barrier Active - Disable Barrier First", 0xffaa00);
+        return false;
+      }
+    }
+
+    if (this.disabledDoors.has(key)) {
+      if (currentState <= 0) {
+        if (this.missionManager?.isWaitRunning()) {
+          this.hud?.showToast("[⏳] Operation in progress, please wait...", 0xffaa00);
+        } else {
+          this.hud?.showToast("[!] Door Offline - Elevator / Terminal Required", 0xffaa00);
+        }
+      } else {
+        this.hud?.showToast("[!] Mechanism Active - Door Locked Open", 0xffaa00);
+      }
+      return false;
+    }
 
     // Check if door requires a keycard to unlock
     const reqKey = this.lockedDoors[key];
@@ -3714,7 +4371,140 @@ export class RaycastScene extends BaseScene {
     return false;
   }
 
-  public applyLinkAction(linkIds: (string | number)[], action: string = "disable"): void {
+  private extractSoundName(props: any): string | null {
+    if (!props) return null;
+    if (Array.isArray(props)) {
+      for (const p of props) {
+        const name = (p.name || "").toLowerCase();
+        if (name === "sound" || name === "soundontrigger" || name === "sfx" || name === "audio") {
+          if (p.value) return String(p.value).trim();
+        }
+      }
+    } else if (typeof props === "object") {
+      for (const k of Object.keys(props)) {
+        const lk = k.toLowerCase();
+        if (lk === "sound" || lk === "soundontrigger" || lk === "sfx" || lk === "audio") {
+          if (props[k]) return String(props[k]).trim();
+        }
+      }
+    }
+    return null;
+  }
+
+  private normalizeSoundName(raw: string): string {
+    let name = raw.replace(/\\/g, "/");
+    const lastSlash = name.lastIndexOf("/");
+    if (lastSlash !== -1) {
+      name = name.substring(lastSlash + 1);
+    }
+    const dot = name.lastIndexOf(".");
+    if (dot !== -1) {
+      name = name.substring(0, dot);
+    }
+    return name.trim();
+  }
+
+  private playPropSounds(
+    obj: any,
+    sourceTrigger?: ITriggerZone,
+    propCenterX?: number,
+    propCenterY?: number,
+    action: string = "disable"
+  ): void {
+    let soundName: string | null = null;
+    if (obj) {
+      soundName = this.extractSoundName(obj.properties);
+    }
+    if (!soundName && sourceTrigger) {
+      if (sourceTrigger.soundOnTrigger && sourceTrigger.soundOnTrigger.length > 0) {
+        soundName = sourceTrigger.soundOnTrigger[0];
+      } else if ((sourceTrigger as any).sound) {
+        soundName = (sourceTrigger as any).sound;
+      } else {
+        soundName = this.extractSoundName((sourceTrigger as any).properties);
+      }
+    }
+    if (!soundName && sourceTrigger?.wait?.shouldWait) {
+      soundName = "elevator";
+    }
+
+    if (!soundName) return;
+
+    const normName = this.normalizeSoundName(soundName);
+    let volume = 0.6;
+    if (propCenterX !== undefined && propCenterY !== undefined) {
+      const dist = Math.hypot(this.player.x - propCenterX, this.player.y - propCenterY);
+      const maxDist = 15;
+      volume = Math.max(0.05, Math.min(1.0, 1.0 - dist / maxDist)) * 0.7;
+    }
+
+    const isWaitTrigger = Boolean(
+      sourceTrigger?.isWaitRunning || (sourceTrigger?.wait?.shouldWait && action === "disable")
+    );
+    const soundKey = String(sourceTrigger?.id ?? obj?.id ?? normName);
+
+    try {
+      if (sound.exists(normName)) {
+        this.stopTriggerPropSounds(soundKey, normName);
+        const res = sound.play(normName, { loop: isWaitTrigger, volume });
+        if (isWaitTrigger) {
+          if (res && typeof (res as any).then === "function") {
+            (res as any)
+              .then((inst: any) => {
+                if (sourceTrigger && !sourceTrigger.isWaitRunning) {
+                  try {
+                    inst.stop?.();
+                  } catch {}
+                  return;
+                }
+                this.activePropSounds.set(soundKey, inst);
+                this.activePropSounds.set(normName, inst);
+              })
+              .catch(() => {});
+          } else if (res) {
+            this.activePropSounds.set(soundKey, res);
+            this.activePropSounds.set(normName, res);
+          }
+        }
+      } else {
+        console.warn(`Sound '${normName}' not found in Pixi sound cache.`);
+      }
+    } catch (e) {
+      console.warn(`Failed to play prop sound '${normName}':`, e);
+    }
+  }
+
+  private stopTriggerPropSounds(key: string | number, soundName?: string): void {
+    const sKey = String(key);
+    const inst = this.activePropSounds.get(sKey);
+    if (inst) {
+      try {
+        inst.stop?.();
+      } catch {}
+      this.activePropSounds.delete(sKey);
+    }
+    if (soundName) {
+      const norm = this.normalizeSoundName(soundName);
+      const inst2 = this.activePropSounds.get(norm);
+      if (inst2) {
+        try {
+          inst2.stop?.();
+        } catch {}
+        this.activePropSounds.delete(norm);
+      }
+      try {
+        if (sound.exists(norm)) {
+          sound.stop(norm);
+        }
+      } catch {}
+    }
+  }
+
+  public applyLinkAction(
+    linkIds: (string | number)[],
+    action: string = "disable",
+    sourceTrigger?: ITriggerZone
+  ): void {
     if (!linkIds || linkIds.length === 0) return;
     const normAction = (action || "disable").toLowerCase();
 
@@ -3722,44 +4512,111 @@ export class RaycastScene extends BaseScene {
       const numId = Number(rawId);
       const strId = String(rawId).trim();
 
-      // 1. Check DestructableWallManager (door protectors / security barriers)
+      // 1. Check DestructableWallManager (door protectors / security barriers by ID)
+      let isDoorProtector = false;
       if (this.destructableWallManager) {
         const wall = this.destructableWallManager.getWallById(strId);
         if (wall) {
+          isDoorProtector = true;
           if (normAction === "enable") {
             this.destructableWallManager.setWallActiveById(wall.id, true);
           } else if (normAction === "disable") {
             this.destructableWallManager.setWallActiveById(wall.id, false);
+            this.allyManager?.onDoorProtectorDisabled(wall.id);
           } else {
-            this.destructableWallManager.setWallActiveById(wall.id, !wall.isActive());
+            const nextActive = !wall.isActive();
+            this.destructableWallManager.setWallActiveById(wall.id, nextActive);
+            if (!nextActive) {
+              this.allyManager?.onDoorProtectorDisabled(wall.id);
+            }
           }
         }
       }
 
-      // 2. Check map objects (for doors, switches, elevator doors, etc.)
+      // 2. Check map objects (for doors, switches, elevator doors, barriers within object limits)
       const obj = this.mapObjectsById.get(numId);
       if (obj) {
+        const objLayer = String((obj as any)._layerName || "").toLowerCase();
+        if (objLayer.includes("protector") || objLayer.includes("barrier")) {
+          isDoorProtector = true;
+        }
+
         const tileW = this.currentMapData?.tilewidth || 64;
         const tileH = this.currentMapData?.tileheight || 64;
-        const centerX = obj.x + (obj.width || tileW) / 2;
-        const centerY = obj.gid ? (obj.y - (obj.height || tileH) / 2) : (obj.y + (obj.height || tileH) / 2);
-        const gx = Math.floor(centerX / tileW) + this.currentMapOffsetX;
-        const gy = Math.floor(centerY / tileH) + this.currentMapOffsetY;
+        const objW = Math.max(1, obj.width || tileW);
+        const objH = Math.max(1, obj.height || tileH);
+        const x1 = obj.x;
+        const x2 = obj.x + objW;
+        const y1 = obj.gid ? obj.y - objH : obj.y;
+        const y2 = obj.gid ? obj.y : obj.y + objH;
 
-        if (gx >= 0 && gx < this.mapWidth && gy >= 0 && gy < this.mapHeight) {
-          const flatIdx = gy * this.mapWidth + gx;
-          if (this.tileTypeFlags && this.tileTypeFlags[flatIdx] === RaycastScene.TILE_DOOR) {
-            if (normAction === "disable") {
-              // Disabling a door barrier opens the door
-              this.openDoorAt(gx, gy);
-            } else if (normAction === "enable") {
-              // Enabling a door barrier closes the door
-              this.closeDoorAt(gx, gy);
-            } else {
-              // Toggle
-              const cur = this.doorStatesFlat[flatIdx];
-              if (cur <= 0) this.openDoorAt(gx, gy);
-              else this.closeDoorAt(gx, gy);
+        const minGx = Math.floor(Math.min(x1, x2) / tileW) + this.currentMapOffsetX;
+        const maxGx = Math.floor((Math.max(x1, x2) - 0.001) / tileW) + this.currentMapOffsetX;
+        const minGy = Math.floor(Math.min(y1, y2) / tileH) + this.currentMapOffsetY;
+        const maxGy = Math.floor((Math.max(y1, y2) - 0.001) / tileH) + this.currentMapOffsetY;
+
+        const propCenterX = (x1 + x2) / 2 / tileW + this.currentMapOffsetX;
+        const propCenterY = (y1 + y2) / 2 / tileH + this.currentMapOffsetY;
+
+        // Disable / enable all doors within the rectangular limits of the linked object
+        for (let gy = minGy; gy <= maxGy; gy++) {
+          if (gy < 0 || gy >= this.mapHeight) continue;
+          for (let gx = minGx; gx <= maxGx; gx++) {
+            if (gx < 0 || gx >= this.mapWidth) continue;
+            const flatIdx = gy * this.mapWidth + gx;
+            const isDoorTile =
+              (this.tileTypeFlags && this.tileTypeFlags[flatIdx] === RaycastScene.TILE_DOOR) ||
+              (this.tileTypes && this.tileTypes[this.mapFlat[flatIdx]] === "door");
+
+            if (isDoorTile) {
+              const doorKey = `${gx},${gy}`;
+              if (isDoorProtector) {
+                // When acting on a door protector / security barrier:
+                // "disable" deactivates the barrier and OPENS/ENABLES the door!
+                // It should NEVER lock the door shut or mark it offline!
+                if (normAction === "disable") {
+                  this.disabledDoors.delete(doorKey);
+                  this.openDoorAt(gx, gy);
+                  this.allyManager?.onDoorProtectorDisabled(numId);
+                } else if (normAction === "enable") {
+                  this.closeDoorAt(gx, gy);
+                }
+              } else {
+                // Non-protector controlled doors (elevators / mechanisms)
+                if (normAction === "enable") {
+                  // Enabling a door unlocks it and opens it
+                  this.disabledDoors.delete(doorKey);
+                  this.openDoorAt(gx, gy);
+                } else if (normAction === "disable") {
+                  // Disabling a door locks it shut
+                  this.disabledDoors.add(doorKey);
+                  this.closeDoorAt(gx, gy);
+                } else {
+                  // Toggle
+                  if (this.disabledDoors.has(doorKey)) {
+                    this.disabledDoors.delete(doorKey);
+                    this.openDoorAt(gx, gy);
+                  } else {
+                    this.disabledDoors.add(doorKey);
+                    this.closeDoorAt(gx, gy);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Also disable/enable any DestructableWall barriers within limits of the linked object
+        if (this.destructableWallManager) {
+          for (const wall of this.destructableWallManager.getWalls()) {
+            if (wall.gridX >= minGx && wall.gridX <= maxGx && wall.gridY >= minGy && wall.gridY <= maxGy) {
+              if (normAction === "enable") {
+                this.destructableWallManager.setWallActiveById(wall.id, true);
+              } else if (normAction === "disable") {
+                this.destructableWallManager.setWallActiveById(wall.id, false);
+              } else {
+                this.destructableWallManager.setWallActiveById(wall.id, !wall.isActive());
+              }
             }
           }
         }
@@ -3786,19 +4643,137 @@ export class RaycastScene extends BaseScene {
     this.updateLevelFinishZonesStatus();
   }
 
+  private initControlledDoors(): void {
+    if (!this.missionManager) return;
+    const triggers = this.missionManager.getTriggers();
+    const tileW = this.currentMapData?.tilewidth || 64;
+    const tileH = this.currentMapData?.tileheight || 64;
+
+    for (const trigger of triggers) {
+      // ONLY waitable operations (such as elevator countdowns) should start with locked offline doors!
+      const isWaitable = Boolean(trigger.wait && trigger.wait.shouldWait && trigger.wait.waitTimeInSeconds > 0);
+      if (!isWaitable) continue;
+      if (!trigger.linkIds || trigger.linkIds.length === 0) continue;
+
+      for (const rawId of trigger.linkIds) {
+        const numId = Number(rawId);
+        const strId = String(rawId).trim();
+
+        // Never lock door protectors or security barriers as offline elevator doors
+        if (this.destructableWallManager?.getWallById(strId)) continue;
+        const obj = this.mapObjectsById.get(numId);
+        if (!obj) continue;
+        const objLayer = String((obj as any)._layerName || "").toLowerCase();
+        if (objLayer.includes("protector") || objLayer.includes("barrier")) continue;
+
+        const objW = Math.max(1, obj.width || tileW);
+        const objH = Math.max(1, obj.height || tileH);
+        const x1 = obj.x;
+        const x2 = obj.x + objW;
+        const y1 = obj.gid ? obj.y - objH : obj.y;
+        const y2 = obj.gid ? obj.y : obj.y + objH;
+
+        const minGx = Math.floor(Math.min(x1, x2) / tileW) + this.currentMapOffsetX;
+        const maxGx = Math.floor((Math.max(x1, x2) - 0.001) / tileW) + this.currentMapOffsetX;
+        const minGy = Math.floor(Math.min(y1, y2) / tileH) + this.currentMapOffsetY;
+        const maxGy = Math.floor((Math.max(y1, y2) - 0.001) / tileH) + this.currentMapOffsetY;
+
+        for (let gy = minGy; gy <= maxGy; gy++) {
+          if (gy < 0 || gy >= this.mapHeight) continue;
+          for (let gx = minGx; gx <= maxGx; gx++) {
+            if (gx < 0 || gx >= this.mapWidth) continue;
+            const flatIdx = gy * this.mapWidth + gx;
+            const isDoorTile =
+              (this.tileTypeFlags && this.tileTypeFlags[flatIdx] === RaycastScene.TILE_DOOR) ||
+              (this.tileTypes && this.tileTypes[this.mapFlat[flatIdx]] === "door");
+
+            if (isDoorTile) {
+              const doorKey = `${gx},${gy}`;
+              // Initial state: elevator door is disabled (locked closed) until enabled by trigger wait
+              this.disabledDoors.add(doorKey);
+              this.doorStates[doorKey] = 0;
+              this.doorStatesFlat[flatIdx] = 0;
+            }
+          }
+        }
+      }
+    }
+  }
+
   private handleTriggerFired(trigger: ITriggerZone): void {
-    if (trigger.linkIds && trigger.linkIds.length > 0) {
-      const action = trigger.linkAction || "disable";
-      this.applyLinkAction(trigger.linkIds, action);
+    const triggerCenterX = (trigger.minX + trigger.maxX) / 2;
+    const triggerCenterY = (trigger.minY + trigger.maxY) / 2;
+    const isWaitable = Boolean(trigger.wait && trigger.wait.shouldWait && trigger.wait.waitTimeInSeconds > 0);
+
+    if (isWaitable) {
+      // Waitable operation: play looping spatial sound from prop / trigger during wait countdown.
+      // The link action (e.g. enabling / opening doors) will execute when the wait countdown finishes!
+      if (trigger.linkIds && trigger.linkIds.length > 0) {
+        const firstId = Number(trigger.linkIds[0]);
+        const obj = this.mapObjectsById.get(firstId);
+        if (obj) {
+          const tileW = this.currentMapData?.tilewidth || 64;
+          const tileH = this.currentMapData?.tileheight || 64;
+          const propCenterX = (obj.x + (obj.width || tileW) / 2) / tileW + this.currentMapOffsetX;
+          const propCenterY = (obj.y + (obj.height || tileH) / 2) / tileH + this.currentMapOffsetY;
+          this.playPropSounds(obj, trigger, propCenterX, propCenterY, "disable");
+        } else {
+          this.playPropSounds(null, trigger, triggerCenterX, triggerCenterY, "disable");
+        }
+      } else {
+        this.playPropSounds(null, trigger, triggerCenterX, triggerCenterY, "disable");
+      }
+    } else {
+      // Non-waitable instant trigger: play prop sound if configured, then apply link action immediately
+      if (trigger.linkIds && trigger.linkIds.length > 0) {
+        const firstId = Number(trigger.linkIds[0]);
+        const obj = this.mapObjectsById.get(firstId);
+        const tileW = this.currentMapData?.tilewidth || 64;
+        const tileH = this.currentMapData?.tileheight || 64;
+        const propCenterX = obj ? (obj.x + (obj.width || tileW) / 2) / tileW + this.currentMapOffsetX : triggerCenterX;
+        const propCenterY = obj ? (obj.y + (obj.height || tileH) / 2) / tileH + this.currentMapOffsetY : triggerCenterY;
+        const action = trigger.linkAction && trigger.linkAction !== "-" ? trigger.linkAction : "disable";
+        this.playPropSounds(obj, trigger, propCenterX, propCenterY, action);
+        this.applyLinkAction(trigger.linkIds, action, trigger);
+      } else {
+        this.playPropSounds(null, trigger, triggerCenterX, triggerCenterY, trigger.linkAction || "disable");
+      }
     }
   }
 
   private handleTriggerWaitComplete(trigger: ITriggerZone): void {
+    // 1. Stop looping prop sounds associated with this trigger, its linked IDs, or configured sound aliases
+    this.stopTriggerPropSounds(trigger.id);
+    if (trigger.linkIds) {
+      for (const id of trigger.linkIds) {
+        this.stopTriggerPropSounds(id);
+      }
+    }
+    if (trigger.soundOnTrigger && trigger.soundOnTrigger.length > 0) {
+      for (const s of trigger.soundOnTrigger) {
+        this.stopTriggerPropSounds(s, s);
+      }
+    }
+    this.stopTriggerPropSounds("elevator", "elevator");
+    try {
+      if (sound.exists("elevator")) {
+        sound.stop("elevator");
+      }
+    } catch {}
+
+    // 2. Play completion chime / door sound
+    try {
+      if (sound.exists("door_1")) {
+        sound.play("door_1", { volume: 0.5 });
+      }
+    } catch {}
+
+    // 3. Execute completion action on linked objects (enable/open doors after wait finishes)
     if (trigger.linkIds && trigger.linkIds.length > 0) {
-      // Revert action when wait timer finishes (e.g. elevator closes door after 4s)
-      const action = trigger.linkAction || "disable";
-      const revertAction = action === "disable" ? "enable" : "disable";
-      this.applyLinkAction(trigger.linkIds, revertAction);
+      const action = (trigger.wait && trigger.wait.shouldWait)
+        ? (trigger.linkAction && trigger.linkAction !== "-" && trigger.linkAction !== "disable" ? trigger.linkAction : "enable")
+        : (trigger.linkAction && trigger.linkAction !== "-" ? trigger.linkAction : "enable");
+      this.applyLinkAction(trigger.linkIds, action, trigger);
     }
   }
 
@@ -3831,6 +4806,35 @@ export class RaycastScene extends BaseScene {
 
       // Frustum culling: if both endpoints are to the right of the FOV, cull
       if (tx1 > 1.2 * ty1 && tx2 > 1.2 * ty2 && ty1 > 0 && ty2 > 0) continue;
+
+      // Project endpoints to screen columns with near-plane clipping
+      let cx1 = tx1;
+      let cy1 = ty1;
+      let cx2 = tx2;
+      let cy2 = ty2;
+
+      const NEAR = 0.05;
+      if (cy1 < NEAR) {
+        const t = (NEAR - cy1) / (cy2 - cy1);
+        cx1 = cx1 + t * (cx2 - cx1);
+        cy1 = NEAR;
+      } else if (cy2 < NEAR) {
+        const t = (NEAR - cy2) / (cy1 - cy2);
+        cx2 = cx2 + t * (cx1 - cx2);
+        cy2 = NEAR;
+      }
+
+      const screenW = gameConfig.width;
+      const col1 = (screenW / 2) * (1 + cx1 / cy1);
+      const col2 = (screenW / 2) * (1 + cx2 / cy2);
+
+      const minCol = Math.max(0, Math.floor(Math.min(col1, col2)));
+      const maxCol = Math.min(screenW - 1, Math.ceil(Math.max(col1, col2)));
+
+      if (minCol > maxCol) continue;
+
+      wall.minCol = minCol;
+      wall.maxCol = maxCol;
 
       this.activeThinWalls.push(wall);
     }
@@ -3869,11 +4873,6 @@ export class RaycastScene extends BaseScene {
 
     const pool = this.hitPool[column];
     let hitCount = 0;
-    for (let k = 0; k < pool.length; k++) {
-      pool[k].isDoor = false;
-      pool[k].doorSlide = undefined;
-      pool[k].doorOpen = undefined;
-    }
     let solidWallDist = this.MAX_RENDER_DISTANCE;
     let currentDist = 0;
 
@@ -4103,6 +5102,8 @@ export class RaycastScene extends BaseScene {
 
     // Only test frustum-visible thin walls that are in front of the solid wall
     for (const wall of this.activeThinWalls) {
+      if (wall.minCol !== undefined && wall.maxCol !== undefined && (column < wall.minCol || column > wall.maxCol)) continue;
+
       const x1 = wall.x1;
       const y1 = wall.y1;
       const x2 = wall.x2;
@@ -4307,6 +5308,14 @@ export class RaycastScene extends BaseScene {
     this.globalMinWallBottom = gMinBot;
     this.globalMaxWallBottom = gMaxBot;
 
+    if (gMaxTop < gMinBot && gMaxTop > 0 && gMinBot < screenH) {
+      this.uWallBandUniform[0] = gMaxTop / screenH;
+      this.uWallBandUniform[1] = gMinBot / screenH;
+    } else {
+      this.uWallBandUniform[0] = 0.0;
+      this.uWallBandUniform[1] = 0.0;
+    }
+
     // 3. Update GPU floor/ceiling GLSL shader uniforms (rendered natively in background mesh)
     this.uPlayerPosUniform[0] = this.player.x;
     this.uPlayerPosUniform[1] = this.player.y;
@@ -4477,7 +5486,10 @@ export class RaycastScene extends BaseScene {
           }
 
           if (isThinWall) {
-            sprite.zIndex = Math.floor((this.MAX_RENDER_DISTANCE - ray.distance) * 1000);
+            const newZ = Math.floor((this.MAX_RENDER_DISTANCE - ray.distance) * 1000);
+            if (sprite.zIndex !== newZ) {
+              sprite.zIndex = newZ;
+            }
           }
           const rDrawStart = Math.floor(drawStart);
           const rDrawEnd = Math.ceil(drawEnd);
@@ -4556,6 +5568,22 @@ export class RaycastScene extends BaseScene {
     // 8. Render 8-directional stationary objects (e.g. holotables) with Z-buffer occlusion
     if (this.stationaryObjectManager) {
       this.stationaryObjectManager.render(
+        this.player.x,
+        this.player.y,
+        this.player.dirX,
+        this.player.dirY,
+        this.player.planeX,
+        this.player.planeY,
+        this.zBuffer,
+        this.MAX_RENDER_DISTANCE,
+        this.doorDistBuffer,
+        this.doorBottomBuffer
+      );
+    }
+
+    // 8.5 Render friendly allies (e.g. rescued prisoner) with hardware rotation & Z-buffer occlusion
+    if (this.allyManager) {
+      this.allyManager.render(
         this.player.x,
         this.player.y,
         this.player.dirX,
@@ -4818,7 +5846,10 @@ export class RaycastScene extends BaseScene {
           sprite.width = 1;
           sprite.height = Math.max(1, drawEndY - stripeStartY);
           sprite.tint = obj.tint ?? tint;
-          sprite.zIndex = Math.floor((this.MAX_RENDER_DISTANCE - transformY) * 1000);
+          const newZ = Math.floor((this.MAX_RENDER_DISTANCE - transformY) * 1000);
+          if (sprite.zIndex !== newZ) {
+            sprite.zIndex = newZ;
+          }
           sprite.visible = true;
         }
       }
@@ -4848,6 +5879,19 @@ export class RaycastScene extends BaseScene {
     this.uDirUniform[1] = this.player.dirY;
     this.uPlaneUniform[0] = this.player.planeX;
     this.uPlaneUniform[1] = this.player.planeY;
+
+    // Teleport any following allies with the player to the new stair landing
+    if (this.allyManager) {
+      this.allyManager.teleportFollowingAllies(
+        this.player.x,
+        this.player.y,
+        nx,
+        ny,
+        this.mapFlat,
+        this.mapWidth,
+        this.mapHeight
+      );
+    }
   }
 
   public getPlayer(): { x: number; y: number; dirX: number; dirY: number; planeX: number; planeY: number } {

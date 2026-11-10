@@ -30,6 +30,7 @@ export interface IMinimapDataSource {
   getLevelFinishZones?(): Array<{ x1: number; y1: number; x2: number; y2: number; enabled?: boolean; targetLevel?: string }>;
   getPlayer(): { x: number; y: number; dirX: number; dirY: number };
   getActiveEnemies?(): Array<{ x: number; y: number; isDead?: boolean; isAlerted?: boolean }>;
+  getAllies?(): Array<{ x: number; y: number; isDead?: boolean; isFollowing?: boolean }>;
   getPickups?(): Array<{ id: number; x: number; y: number; type: any; keyColor?: string; collected?: boolean; amount?: number; weaponType?: any }>;
   getStationaryObjects?(): Array<{ x: number; y: number; name?: string }>;
   getStairs?(): Array<{ x: number; y: number; stairType: "up" | "down" | "generic" }>;

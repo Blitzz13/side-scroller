@@ -217,6 +217,8 @@ export class RaycastDirectionalObject {
     // Frustum culling: must be in front of player and within max render distance
     if (transformY <= 0.1 || transformY > maxRenderDistance) {
       sprite.visible = false;
+      if (sprite.mask !== null) sprite.mask = null;
+      if (this.occlusionMask) this.occlusionMask.visible = false;
       this.screenX = -9999;
       this.screenY = -9999;
       return false;
@@ -250,6 +252,8 @@ export class RaycastDirectionalObject {
 
     if (drawStartX > drawEndX) {
       sprite.visible = false;
+      if (sprite.mask !== null) sprite.mask = null;
+      if (this.occlusionMask) this.occlusionMask.visible = false;
       this.screenX = -9999;
       this.screenY = -9999;
       return false;
@@ -258,65 +262,91 @@ export class RaycastDirectionalObject {
     // Per-column occlusion mask: draw only columns where object is in front of wall or under opening door
     const mask = this.occlusionMask;
     if (mask) {
-      mask.clear();
-
-      let runStart = -1;
-      let runTopY = -1;
-      let hasDrawnAnyRun = false;
+      let fullyVisible = true;
+      let anyVisible = false;
 
       for (let col = drawStartX; col <= drawEndX; col++) {
         if (transformY < zBuffer[col]) {
-          let topY = 0;
-          if (doorDistBuffer && doorBottomBuffer && doorDistBuffer[col] < transformY) {
-            topY = Math.max(0, Math.floor(doorBottomBuffer[col]));
-          }
-          if (topY < screenH) {
-            if (runStart >= 0 && topY === runTopY) {
-              // Continue current run
-            } else {
-              if (runStart >= 0) {
-                mask.beginFill(0xffffff);
-                mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
-                mask.endFill();
-                hasDrawnAnyRun = true;
-              }
-              runStart = col;
-              runTopY = topY;
-            }
+          const doorClip =
+            doorDistBuffer && doorBottomBuffer && doorDistBuffer[col] < transformY
+              ? Math.max(0, Math.floor(doorBottomBuffer[col]))
+              : 0;
+          if (doorClip < screenH) {
+            anyVisible = true;
+            if (doorClip > 0) fullyVisible = false;
           } else {
-            // Door panel completely covers column down to floor
-            if (runStart >= 0) {
-              mask.beginFill(0xffffff);
-              mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
-              mask.endFill();
-              hasDrawnAnyRun = true;
-              runStart = -1;
-            }
+            fullyVisible = false;
           }
         } else {
-          // Occluded by solid wall
-          if (runStart >= 0) {
-            mask.beginFill(0xffffff);
-            mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
-            mask.endFill();
-            hasDrawnAnyRun = true;
-            runStart = -1;
-          }
+          fullyVisible = false;
         }
       }
 
-      if (runStart >= 0) {
-        mask.beginFill(0xffffff);
-        mask.drawRect(runStart, runTopY, drawEndX - runStart + 1, screenH - runTopY);
-        mask.endFill();
-        hasDrawnAnyRun = true;
-      }
-
-      if (!hasDrawnAnyRun && drawStartX <= drawEndX) {
+      if (!anyVisible) {
         sprite.visible = false;
+        if (sprite.mask !== null) sprite.mask = null;
+        mask.visible = false;
         this.screenX = -9999;
         this.screenY = -9999;
         return false;
+      }
+
+      if (fullyVisible) {
+        // Fast path: 100% visible, detach mask to avoid batch flush & 3 stencil passes
+        if (sprite.mask !== null) {
+          sprite.mask = null;
+        }
+        mask.visible = false;
+      } else {
+        // Partially occluded: attach stencil mask and build column runs
+        mask.visible = true;
+        if (sprite.mask !== mask) {
+          sprite.mask = mask;
+        }
+        mask.clear();
+
+        let runStart = -1;
+        let runTopY = -1;
+
+        for (let col = drawStartX; col <= drawEndX; col++) {
+          if (transformY < zBuffer[col]) {
+            let topY = 0;
+            if (doorDistBuffer && doorBottomBuffer && doorDistBuffer[col] < transformY) {
+              topY = Math.max(0, Math.floor(doorBottomBuffer[col]));
+            }
+            if (topY < screenH) {
+              if (runStart >= 0 && topY === runTopY) {
+                // Continue current run
+              } else {
+                if (runStart >= 0) {
+                  mask.beginFill(0xffffff);
+                  mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
+                  mask.endFill();
+                }
+                runStart = col;
+                runTopY = topY;
+              }
+            } else if (runStart >= 0) {
+              // Door panel completely covers column down to floor
+              mask.beginFill(0xffffff);
+              mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
+              mask.endFill();
+              runStart = -1;
+            }
+          } else if (runStart >= 0) {
+            // Occluded by solid wall
+            mask.beginFill(0xffffff);
+            mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
+            mask.endFill();
+            runStart = -1;
+          }
+        }
+
+        if (runStart >= 0) {
+          mask.beginFill(0xffffff);
+          mask.drawRect(runStart, runTopY, drawEndX - runStart + 1, screenH - runTopY);
+          mask.endFill();
+        }
       }
     }
 
@@ -353,9 +383,12 @@ export class RaycastDirectionalObject {
     sprite.tint = (shadeInt << 16) | (shadeInt << 8) | shadeInt;
 
     // Depth sorting
-    sprite.zIndex = Math.floor((maxRenderDistance - transformY) * 1000);
-    if (this.occlusionMask) {
-      this.occlusionMask.zIndex = sprite.zIndex;
+    const newZ = Math.floor((maxRenderDistance - transformY) * 1000);
+    if (sprite.zIndex !== newZ) {
+      sprite.zIndex = newZ;
+    }
+    if (this.occlusionMask && sprite.mask) {
+      this.occlusionMask.zIndex = newZ;
     }
 
     return true;

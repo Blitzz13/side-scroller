@@ -1,5 +1,5 @@
 import { Container } from "pixi.js";
-import { IMissionManagerCallbacks } from "./ObjectiveTypes";
+import { IMissionManagerCallbacks, ITriggerZone } from "./ObjectiveTypes";
 import { RaycastObjectiveManager } from "./RaycastObjectiveManager";
 import { RaycastTriggerManager } from "./RaycastTriggerManager";
 import { ObjectivesUI } from "./ObjectivesUI";
@@ -27,6 +27,18 @@ export class RaycastMissionManager {
 
   public getActivePrompt(): string | null {
     return this.triggerManager.getActivePromptText();
+  }
+
+  public getActivePromptColor(): number {
+    return this.triggerManager.getActivePromptColor();
+  }
+
+  public getTriggers(): ITriggerZone[] {
+    return this.triggerManager.getTriggers();
+  }
+
+  public isWaitRunning(): boolean {
+    return this.triggerManager.getTriggers().some((t) => Boolean(t.isWaitRunning));
   }
 
   public areAllObjectivesCompleted(): boolean {

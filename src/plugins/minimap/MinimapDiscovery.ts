@@ -5,6 +5,17 @@ import { IDiscoveredMapObject, IMinimapDataSource, MinimapTileType } from "./Min
  * and persistent discovery of map objects (keycards, pickups, stairs, terminals).
  */
 export class MinimapDiscovery {
+  private static readonly NUM_RAYS = 180;
+  private static readonly RAY_COS = new Float32Array(180);
+  private static readonly RAY_SIN = new Float32Array(180);
+  static {
+    for (let i = 0; i < 180; i++) {
+      const angle = (i / 180) * (Math.PI * 2);
+      MinimapDiscovery.RAY_COS[i] = Math.cos(angle);
+      MinimapDiscovery.RAY_SIN[i] = Math.sin(angle);
+    }
+  }
+
   private _discoveredTiles: Uint8Array = new Uint8Array(0);
   private _discoveredObjects: Map<string, IDiscoveredMapObject> = new Map();
   private _totalWalkableTiles: number = 0;
@@ -90,10 +101,9 @@ export class MinimapDiscovery {
       }
     }
 
-    // Skip if player position and angle haven't changed meaningfully
+    // Skip if player position hasn't changed meaningfully (radial raycast is omnidirectional, so rotation is irrelevant)
     const positionDeltaSq = (playerX - this.lastDiscoveredPlayerX) ** 2 + (playerY - this.lastDiscoveredPlayerY) ** 2;
-    const rotationDelta = Math.abs(dirX - this.lastDiscoveredDirX) + Math.abs(dirY - this.lastDiscoveredDirY);
-    if (!force && positionDeltaSq < 0.003 && rotationDelta < 0.01) {
+    if (!force && positionDeltaSq < 0.04) {
       return false;
     }
     this.lastDiscoveredPlayerX = playerX;
@@ -130,15 +140,14 @@ export class MinimapDiscovery {
     }
 
     // 2. Line-of-Sight Radial Raycasting (Room & Corridor Discovery up to 14 tiles)
-    // Cast rays in full circle with 2-degree increments (180 rays)
-    const numRays = 180;
+    // Cast rays in full circle using precomputed trig table (180 rays)
+    const numRays = MinimapDiscovery.NUM_RAYS;
     const maxSightDistance = 14.0;
     const stepSize = 0.28;
 
     for (let rayIndex = 0; rayIndex < numRays; rayIndex++) {
-      const angle = (rayIndex / numRays) * (Math.PI * 2);
-      const rayDirX = Math.cos(angle);
-      const rayDirY = Math.sin(angle);
+      const rayDirX = MinimapDiscovery.RAY_COS[rayIndex];
+      const rayDirY = MinimapDiscovery.RAY_SIN[rayIndex];
 
       let currentX = playerX;
       let currentY = playerY;

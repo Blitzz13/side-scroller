@@ -149,6 +149,14 @@ export class RaycastObjectiveManager extends utils.EventEmitter {
     return this.objectives.length > 0;
   }
 
+  public getObjective(key: string): ILevelObjective | undefined {
+    if (!key) return undefined;
+    const cleanKey = key.trim().toLowerCase();
+    return this.objectives.find(
+      (o) => o.key.toLowerCase() === cleanKey || o.id.toLowerCase() === cleanKey
+    );
+  }
+
   public completeObjective(key: string): boolean {
     if (!key) return false;
     const cleanKey = key.trim().toLowerCase();

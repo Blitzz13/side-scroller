@@ -24,25 +24,33 @@ export const STATIONARY_OBJECT_REGISTRY: Record<string, StationaryObjectConfig> 
   at_st: {
     name: "at_st",
     spritesheet: "assets/raycast/decorations/at_st.json",
-    scale: 1.8,
-    referenceHeight: 300,
-    hitRadius: 0.95,
+    scale: 2.3,
+    referenceHeight: 1615,
+    hitRadius: 0.65,
     blocksMovement: true,
   },
   tie_fighter: {
     name: "tie_fighter",
     spritesheet: "assets/raycast/decorations/tie_fighter.json",
     scale: 1.8,
-    referenceHeight: 250,
-    hitRadius: 0.95,
+    referenceHeight: 656,
+    hitRadius: 0.68,
     blocksMovement: true,
   },
   tie_bomber: {
     name: "tie_bomber",
     spritesheet: "assets/raycast/decorations/tie_bomber.json",
     scale: 1.8,
-    referenceHeight: 250,
-    hitRadius: 0.95,
+    referenceHeight: 670,
+    hitRadius: 0.85,
+    blocksMovement: true,
+  },
+  at_at: {
+    name: "at_at",
+    spritesheet: "assets/at_at.json",
+    scale: 3.5,
+    referenceHeight: 262,
+    hitRadius: 1.25,
     blocksMovement: true,
   },
 };
@@ -183,15 +191,19 @@ export class RaycastStationaryObjectManager {
           const x = tileX + offsetX + 0.5;
           const y = tileY + offsetY + 0.5;
 
+          const finalScale = layerScale ?? meta.scale ?? matchedConfig.scale;
+          const scaleMultiplier =
+            matchedConfig.scale && finalScale ? finalScale / matchedConfig.scale : 1;
+
           const options: StationaryObjectOptions = {
-            scale: layerScale ?? meta.scale ?? matchedConfig.scale,
+            scale: finalScale,
             scaleX: layerScaleX ?? meta.scaleX,
             scaleY: layerScaleY ?? meta.scaleY,
             vOffset: layerVOffset ?? meta.vOffset ?? 0,
             z: layerZ ?? meta.z,
             anchor: layerAnchor ?? (meta.anchor as string) ?? "floor",
             referenceHeight: matchedConfig.referenceHeight,
-            hitRadius: matchedConfig.hitRadius,
+            hitRadius: (matchedConfig.hitRadius ?? 0.45) * scaleMultiplier,
             blocksMovement: matchedConfig.blocksMovement,
           };
 
@@ -243,15 +255,19 @@ export class RaycastStationaryObjectManager {
             });
           }
 
+          const finalObjScale = objScale ?? matchedConfig.scale;
+          const scaleMultiplier =
+            matchedConfig.scale && finalObjScale ? finalObjScale / matchedConfig.scale : 1;
+
           const options: StationaryObjectOptions = {
-            scale: objScale ?? matchedConfig.scale,
+            scale: finalObjScale,
             scaleX: objScaleX,
             scaleY: objScaleY,
             vOffset: objVOffset ?? 0,
             z: objZ,
             anchor: objAnchor ?? "floor",
             referenceHeight: matchedConfig.referenceHeight,
-            hitRadius: matchedConfig.hitRadius,
+            hitRadius: (matchedConfig.hitRadius ?? 0.45) * scaleMultiplier,
             blocksMovement: matchedConfig.blocksMovement,
           };
 
@@ -276,6 +292,16 @@ export class RaycastStationaryObjectManager {
       nameStr.includes("holotable")
     ) {
       return STATIONARY_OBJECT_REGISTRY.isb_holotable;
+    }
+    if (
+      imgStr.includes("at_at") ||
+      imgStr.includes("atat") ||
+      typeStr.includes("at_at") ||
+      typeStr.includes("atat") ||
+      nameStr.includes("at_at") ||
+      nameStr.includes("atat")
+    ) {
+      return STATIONARY_OBJECT_REGISTRY.at_at;
     }
     if (
       imgStr.includes("at_st") ||
@@ -320,7 +346,11 @@ export class RaycastStationaryObjectManager {
     dirY: number = 1,
     options?: StationaryObjectOptions
   ): RaycastStationaryObject {
-    const sheet = this.spritesheets[name] || this.spritesheets[`assets/raycast/decorations/${name}.json`];
+    const regCfg = STATIONARY_OBJECT_REGISTRY[name];
+    const sheet =
+      this.spritesheets[name] ||
+      this.spritesheets[`assets/raycast/decorations/${name}.json`] ||
+      (regCfg ? this.spritesheets[regCfg.spritesheet] : undefined);
     const obj = new RaycastStationaryObject(
       this.nextId++,
       name,

@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Text } from "pixi.js";
+import { Container, Graphics, Sprite, Text, Circle } from "pixi.js";
 import { IDisposable } from "../characters/interfaces/IDisposable";
 import { VirtualJoystick, JoystickVector } from "./VirtualJoystick";
 import { VirtualButton } from "./VirtualButton";
@@ -18,6 +18,7 @@ export class MobileControls extends Container implements IDisposable {
   private btnSprint: VirtualButton;
   private btnMap: Container;
   private btnObjectives: Container;
+  private btnDebug: Container;
   private buttonTurnSpeed: number = 0.04;
 
   constructor() {
@@ -26,7 +27,16 @@ export class MobileControls extends Container implements IDisposable {
     const screenW = gameConfig.width;
     const screenH = gameConfig.height;
 
-    // 1. Right-side touch look area (swipe anywhere on right half of screen to look)
+    // Debounced action trigger (opens door, interacts with terminals / switches / allies)
+    let lastActionTime = 0;
+    const triggerAction = () => {
+      const now = Date.now();
+      if (now - lastActionTime < 250) return;
+      lastActionTime = now;
+      (this as any).emit("action");
+    };
+
+    // 1. Right-side touch look area (swipe anywhere on right half of screen to look, tap to interact)
     this.lookArea = new TouchLookArea(screenW / 2, screenH);
     this.lookArea.position.set(screenW / 2, 0);
     this.lookArea.on("tap", (e: any) => {
@@ -38,6 +48,9 @@ export class MobileControls extends Container implements IDisposable {
       const inWeaponView = posX >= screenW * 0.45 && posX <= screenW * 0.85 && posY >= screenH * 0.50;
       if (inWeaponHud || inWeaponView) {
         (this as any).emit("switchWeapon");
+      } else {
+        // Tapping screen directly opens doors or interacts with objects in view
+        triggerAction();
       }
     });
     this.addChild(this.lookArea);
@@ -66,11 +79,11 @@ export class MobileControls extends Container implements IDisposable {
     this.addChild(this.btnFire);
 
     // 6. Action / Interact Button ([E] Open Door / Use)
-    this.btnAction = new VirtualButton(42, "E", 0x224422);
+    this.btnAction = new VirtualButton(46, "E", 0x224422);
     this.btnAction.position.set(screenW - 85, screenH - 230);
-    this.btnAction.on("tap", () => {
-      (this as any).emit("action");
-    });
+    this.btnAction.hitArea = new Circle(0, 0, 54);
+    this.btnAction.on("press", triggerAction);
+    this.btnAction.on("tap", triggerAction);
     this.addChild(this.btnAction);
 
     // 7. Weapon Switch Button ([WPN])
@@ -148,6 +161,10 @@ export class MobileControls extends Container implements IDisposable {
       drawBtnBg(false);
       this.btnMap.scale.set(1.0);
     });
+    this.btnMap.on("pointercancel", () => {
+      drawBtnBg(false);
+      this.btnMap.scale.set(1.0);
+    });
     this.addChild(this.btnMap);
 
     // 11. Objectives Info Button ([i])
@@ -200,7 +217,66 @@ export class MobileControls extends Container implements IDisposable {
       drawObjBtnBg(false);
       this.btnObjectives.scale.set(1.0);
     });
+    this.btnObjectives.on("pointercancel", () => {
+      drawObjBtnBg(false);
+      this.btnObjectives.scale.set(1.0);
+    });
     this.addChild(this.btnObjectives);
+
+    // 12. In-Game Debug / Dev Menu Button ([DEV])
+    this.btnDebug = new Container();
+    this.btnDebug.position.set(screenW - 310, 60);
+    this.btnDebug.eventMode = "static";
+    this.btnDebug.cursor = "pointer";
+
+    const debugBg = new Graphics();
+    const drawDebugBtnBg = (pressed: boolean) => {
+      debugBg.clear();
+      const bgColor = pressed ? 0x004466 : 0x091929;
+      const borderColor = pressed ? 0x00ffff : 0x00e5ff;
+      debugBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
+      debugBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
+      debugBg.drawCircle(0, 0, 36);
+      debugBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
+      debugBg.drawCircle(0, 0, 31);
+      debugBg.endFill();
+    };
+    drawDebugBtnBg(false);
+    this.btnDebug.addChild(debugBg);
+
+    const devLabel = new Text("DEV", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 16,
+      fontWeight: "bold",
+      fill: 0x00ffff,
+      dropShadow: true,
+      dropShadowColor: 0x002233,
+      dropShadowDistance: 1,
+    });
+    devLabel.anchor.set(0.5);
+    devLabel.position.set(0, 0);
+    this.btnDebug.addChild(devLabel);
+
+    this.btnDebug.on("pointerdown", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      drawDebugBtnBg(true);
+      this.btnDebug.scale.set(0.92);
+    });
+    this.btnDebug.on("pointerup", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      drawDebugBtnBg(false);
+      this.btnDebug.scale.set(1.0);
+      (this as any).emit("toggleDebug");
+    });
+    this.btnDebug.on("pointerupoutside", () => {
+      drawDebugBtnBg(false);
+      this.btnDebug.scale.set(1.0);
+    });
+    this.btnDebug.on("pointercancel", () => {
+      drawDebugBtnBg(false);
+      this.btnDebug.scale.set(1.0);
+    });
+    this.addChild(this.btnDebug);
   }
 
   public get moveVector(): JoystickVector {

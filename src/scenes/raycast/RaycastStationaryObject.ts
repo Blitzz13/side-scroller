@@ -96,6 +96,7 @@ export class RaycastStationaryObject extends RaycastDirectionalObject {
       towards: getSequence([
         `${p}_standing_down`,
         "standing_down",
+        `${p}_down`,
         `${p}_towards`,
         "towards",
         `${p}_standing_towards`,
@@ -114,6 +115,7 @@ export class RaycastStationaryObject extends RaycastDirectionalObject {
         "standing_towards_left",
         `${p}_walking_towards_left_diagonal`,
         "walking_towards_left_diagonal",
+        `${p}_left`,
       ]),
       left: getSequence([
         `${p}_standing_left`,
@@ -134,10 +136,12 @@ export class RaycastStationaryObject extends RaycastDirectionalObject {
         "standing_away_left",
         `${p}_walking_away_left_diagonal`,
         "walking_away_left_diagonal",
+        `${p}_up`,
       ]),
       away: getSequence([
         `${p}_standing_away`,
         "standing_away",
+        `${p}_up`,
         `${p}_away`,
         "away",
         `${p}_walking_away`,

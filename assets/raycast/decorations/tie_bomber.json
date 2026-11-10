@@ -4,92 +4,20 @@
       "frame": {
         "x": 0,
         "y": 0,
-        "w": 89,
-        "h": 70
+        "w": 1325,
+        "h": 754
       },
-      "rotated": false,
-      "trimmed": false,
+      "rotated": true,
+      "trimmed": true,
       "spriteSourceSize": {
-        "x": 0,
+        "x": 4,
         "y": 0,
-        "w": 89,
-        "h": 70
+        "w": 1325,
+        "h": 754
       },
       "sourceSize": {
-        "w": 89,
-        "h": 70
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
-    "towards_left_diagonal.png": {
-      "frame": {
-        "x": 89,
-        "y": 0,
-        "w": 89,
-        "h": 70
-      },
-      "rotated": false,
-      "trimmed": false,
-      "spriteSourceSize": {
-        "x": 0,
-        "y": 0,
-        "w": 89,
-        "h": 70
-      },
-      "sourceSize": {
-        "w": 89,
-        "h": 70
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
-    "away.png": {
-      "frame": {
-        "x": 178,
-        "y": 0,
-        "w": 67,
-        "h": 61
-      },
-      "rotated": false,
-      "trimmed": false,
-      "spriteSourceSize": {
-        "x": 0,
-        "y": 0,
-        "w": 67,
-        "h": 61
-      },
-      "sourceSize": {
-        "w": 67,
-        "h": 61
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
-    "towards.png": {
-      "frame": {
-        "x": 245,
-        "y": 0,
-        "w": 67,
-        "h": 61
-      },
-      "rotated": false,
-      "trimmed": false,
-      "spriteSourceSize": {
-        "x": 0,
-        "y": 0,
-        "w": 67,
-        "h": 61
-      },
-      "sourceSize": {
-        "w": 67,
-        "h": 61
+        "w": 1337,
+        "h": 759
       },
       "pivot": {
         "x": 0.5,
@@ -98,22 +26,94 @@
     },
     "left.png": {
       "frame": {
-        "x": 312,
-        "y": 0,
-        "w": 64,
-        "h": 61
+        "x": 0,
+        "y": 1325,
+        "w": 1255,
+        "h": 692
       },
       "rotated": false,
       "trimmed": false,
       "spriteSourceSize": {
         "x": 0,
         "y": 0,
-        "w": 64,
-        "h": 61
+        "w": 1255,
+        "h": 692
       },
       "sourceSize": {
-        "w": 64,
-        "h": 61
+        "w": 1255,
+        "h": 692
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "towards_left_diagonal.png": {
+      "frame": {
+        "x": 754,
+        "y": 0,
+        "w": 1285,
+        "h": 734
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 1,
+        "w": 1285,
+        "h": 734
+      },
+      "sourceSize": {
+        "w": 1285,
+        "h": 735
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "away.png": {
+      "frame": {
+        "x": 1255,
+        "y": 1285,
+        "w": 1194,
+        "h": 655
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 2,
+        "w": 1194,
+        "h": 655
+      },
+      "sourceSize": {
+        "w": 1194,
+        "h": 657
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "towards.png": {
+      "frame": {
+        "x": 1488,
+        "y": 0,
+        "w": 1140,
+        "h": 629
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 1140,
+        "h": 629
+      },
+      "sourceSize": {
+        "w": 1141,
+        "h": 629
       },
       "pivot": {
         "x": 0.5,
@@ -127,8 +127,8 @@
     "image": "tie_bomber.png",
     "format": "RGBA8888",
     "size": {
-      "w": 376,
-      "h": 70
+      "w": 2449,
+      "h": 2017
     },
     "scale": 1
   }

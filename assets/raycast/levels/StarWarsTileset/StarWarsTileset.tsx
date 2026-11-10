@@ -241,12 +241,12 @@
   <image source="assets/raycast/enemies/prisoner.png" width="35" height="69"/>
  </tile>
  <tile id="55">
-  <image source="assets/raycast/enemies/at_st.png" width="54" height="102"/>
+  <image source="assets/raycast/decorations/at_st.png" width="4268" height="1647"/>
  </tile>
  <tile id="56">
-  <image source="assets/raycast/enemies/tie_fighter.png" width="46" height="66"/>
+  <image source="assets/raycast/decorations/tie_fighter.png" width="2546" height="2006"/>
  </tile>
  <tile id="57">
-  <image source="assets/raycast/enemies/tie_bomber.png" width="67" height="61"/>
+  <image source="assets/raycast/decorations/tie_bomber.png" width="3466" height="2045"/>
  </tile>
 </tileset>

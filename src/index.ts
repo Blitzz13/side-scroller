@@ -65,7 +65,15 @@ window.onload = async (): Promise<void> => {
   setupAndroidFullscreen();
   resizeCanvas();
   app.stage.interactive = true;
-  changeScene(Scene.Raycast);
+
+  const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const urlLevel = urlParams?.get("level");
+
+  if (urlLevel) {
+    changeScene(Scene.Raycast, urlLevel, true);
+  } else {
+    changeScene(Scene.Raycast);
+  }
 
   // Update stats on each frame
   Ticker.shared.add(() => {

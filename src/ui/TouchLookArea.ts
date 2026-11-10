@@ -36,6 +36,7 @@ export class TouchLookArea extends Container implements IDisposable {
     this.on("globalpointermove", this.onPointerMove, this);
     this.on("pointerup", this.onPointerUp, this);
     this.on("pointerupoutside", this.onPointerUp, this);
+    this.on("pointercancel", this.onPointerUp, this);
   }
 
   public consumeDelta(): number {
@@ -86,6 +87,7 @@ export class TouchLookArea extends Container implements IDisposable {
     this.off("globalpointermove", this.onPointerMove, this);
     this.off("pointerup", this.onPointerUp, this);
     this.off("pointerupoutside", this.onPointerUp, this);
+    this.off("pointercancel", this.onPointerUp, this);
     this.destroy({ children: true });
   }
 }

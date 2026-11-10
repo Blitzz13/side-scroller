@@ -2,6 +2,447 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-11-10] - Mobile In-Game Debug Datapad, Skybox Shader & Config Decoupling, Enemy Drop Fixes, and Asset Optimizations
+
+### 1. In-Game Mobile & Desktop Debug Datapad ([`src/scenes/raycast/RaycastDebugMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastDebugMenu.ts))
+- **Touch-Friendly In-Game Datapad UI**:
+  - Implemented an on-screen cyberpunk datapad modal overlay engineered specifically for mobile touch screens and desktop testing.
+  - Added dedicated floating circular `[DEV]` toggle button in the top-right header via [`MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts).
+  - Supported desktop hotkeys: <kbd>`</kbd> (Backquote / Tilde), <kbd>F2</kbd>, and <kbd>Esc</kbd> to open and close the datapad.
+  - **Full Input Isolation**: Completely suppresses character locomotion, camera rotation, virtual joystick drags, and weapon firing while the debug datapad is active, preventing accidental movement or firing during touch interaction.
+- **Tabbed Interface Architecture**:
+  - **`🌌 SKYBOX & VISTA`**:
+    - **Live Badge Readout**: Real-time display of current camera Yaw (degrees), Skybox Yaw offset, and Zoom magnification factor.
+    - **Zoom Controls**: Quick preset buttons (`1.0x`, `1.5x`, `2.0x`, `2.5x`, `3.0x`, `3.5x`) and fine increment steps (`-0.1`, `+0.1`).
+    - **Wall Snapping**: Instant cardinal direction snap buttons: North (`0°`), East (`90°`), South (`180°`), and West (`270°`).
+    - **Fine Yaw Adjustment**: Calibrated single-degree and multi-degree step controls: `[-15°]`, `[-5°]`, `[-1°]`, `[+1°]`, `[+5°]`, `[+15°]`.
+    - **Copy Configuration**: One-tap button copying the active `{ zoom, yaw, pitch }` JSON structure directly to the system clipboard for immediate persistence into code.
+  - **`⚡ CHEATS & LEVEL WARP`**:
+    - **God Mode**: Toggleable full invulnerability against all laser damage and environmental hazards.
+    - **Refill Health & Shield**: Instantly restores maximum shields and health pools.
+    - **Refill All Ammo**: Tops off ammunition reserves across all weapon types.
+    - **Unlock All Weapons**: Grants full arsenal access (Blaster, Scatter Blaster, Heavy Repeater, Concussion Rifle).
+    - **Grant All Keycards**: Grants Blue, Red, and Yellow security clearance cards.
+    - **Cycle Door Mode**: Toggles door behavior between Normal, Always Open, and Proximity trigger modes.
+    - **Eliminate All Nearby Enemies**: Area-of-effect elimination clearing all hostile targets within a 15-tile radius around the player.
+    - **Instant Level Warping**: Direct teleportation buttons to Level 1, Level 2, and Level 3 without returning to the title menu.
+
+### 2. Dedicated Skybox Shader Pipeline & Dual-Mesh Architecture ([`src/scenes/raycast/shaders/skybox.vert`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/skybox.vert), [`src/scenes/raycast/shaders/skybox.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/skybox.frag))
+- **Mobile Register Pressure Optimization**:
+  - Previously, CubeMap sampling (`samplerCube`), 2D cylindrical/equirectangular sampling (`sampler2D`), floor/ceiling raymarching, texture atlas unpacking, and perspective trigonometry were all combined into a single monolithic fragment shader ([`floorCeiling.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.frag)).
+  - On mobile tile-based deferred renderers (TBDR GPUs like Mali and Adreno), this heavy register allocation inflated VGPR usage and degraded framerates.
+- **Dual-Mesh Rendering System** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **Background Skybox Mesh (`zIndex: 0`)**: Powered by dedicated [`skybox.vert`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/skybox.vert) and [`skybox.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/skybox.frag) shaders. Samples CubeMap or panoramic vistas cleanly with minimal arithmetic and zero overhead. Automatically disabled and skipped on indoor levels.
+  - **Foreground Floor/Ceiling Mesh (`zIndex: 1`)**: Dedicated floor/ceiling shader using only 2 samplers (`uMapTexture` and `uAtlas`). Executes raymarched floor and ceiling planes and issues `discard;` on empty/sky ceiling tiles (`ceilTexId == 0`), exposing the background skybox mesh beneath with perfect hardware early-Z clipping.
+
+### 3. Skybox Configuration Decoupling ([`src/configs/SkyboxConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SkyboxConfig.ts))
+- **Decoupled from Tiled Level Maps**:
+  - Extracted skybox parameters out of Tiled JSON map custom properties ([`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json)) and [`RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts) into an independent TypeScript configuration module [`src/configs/SkyboxConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SkyboxConfig.ts).
+  - Prevents Tiled map re-exports from overwriting, clobbering, or deleting visual skybox calibration (`zoom`, `yaw`, `pitch`, `textureKey`).
+  - Set default Level 3 skybox rotation to `yaw: 270.0°`, correctly orienting the open hangar blast doors and exterior vistas.
+
+### 4. Enemy Weapon & Pickup Drop Fix ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts))
+- **Resolved Weapon Drop Regression**:
+  - Restored proper weapon and loot drop propagation upon enemy defeat.
+  - Verified that enemy death handlers trigger pickup manager drop tables correctly at the enemy's world coordinates before despawning the enemy sprite.
+
+### 5. Asset Cleanup & Dead Code Removal
+- **Removed Obsolete 2D Skybox Assets**:
+  - Deleted ~19 MB of unneeded legacy textures:
+    - [`assets/common/hanger.jpg`](file:///D:/Projects/side-scroller/assets/common/hanger.jpg)
+    - [`assets/common/hanger.webp`](file:///D:/Projects/side-scroller/assets/common/hanger.webp)
+    - [`assets/common/hanger2.webp`](file:///D:/Projects/side-scroller/assets/common/hanger2.webp)
+    - [`assets/common/imperial_hanger.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger.jpg)
+    - [`assets/common/imperial_hanger_360.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_360.jpg)
+    - [`assets/common/imperial_hanger_back.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_back.jpg)
+    - [`assets/common/imperial_hanger_front.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_front.jpg)
+    - [`assets/common/imperial_hanger_seamless.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_seamless.jpg)
+    - [`test_cubemap_render.png`](file:///D:/Projects/side-scroller/test_cubemap_render.png)
+- **Dead Code Cleanup**:
+  - Removed obsolete fallback string checks and legacy skybox branching from [`RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) and [`SkyboxConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SkyboxConfig.ts).
+
+## [2026-10-22] - Hangar Skybox Scale Calibration & Perspective Correction
+
+### 1. Skybox Zoom & Portal Scaling ([`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- **Why the Skybox Appeared "Way Too Big"**:
+  - At `zoom = 1.8`, only vertical texture coordinates $V \in [0.28, 0.50]$ were sampled on the ceiling hemisphere, causing the blast door opening to consume 63% of screen width and 96% of screen height. Background forklifts and crates appeared disproportionately large compared to foreground 3D sprites.
+- **Perspective Calibration**:
+  - Scaled `skyboxZoom` to `3.5` in both Level 3 code configuration and map properties.
+  - At `zoom = 3.5`, vertical sampling expands to $V \in [0.077, 0.50]$, revealing the full curved industrial ceiling arches, crane beams, and hanging chains overhead.
+  - The central blast door occupies ~32% of screen width and ~48% of screen height, rendering as a distant atmospheric portal rather than an overwhelming foreground graphic.
+  - Retains perfect 1:1 square pixel aspect ratio without any stretching or squashing.
+- **Asset Registration & Redundancy** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Registered both [`hanger.webp`](file:///D:/Projects/side-scroller/assets/common/hanger.webp) and [`hanger.jpg`](file:///D:/Projects/side-scroller/assets/common/hanger.jpg) to provide seamless fallback support.
+
+## [2026-10-22] - True 360° x 180° Equirectangular Hangar Skybox ([`hanger.webp`](file:///D:/Projects/side-scroller/assets/common/hanger.webp))
+
+### 1. High-Fidelity 2:1 Equirectangular Panorama Integration
+- Activated [`hanger.webp`](file:///D:/Projects/side-scroller/assets/common/hanger.webp) ($2880 \times 1440$, 2:1 aspect ratio) as the default Level 3 skybox:
+  - Canonical 360° equirectangular skybox featuring curved overhead industrial ceiling arches, crane beams, and hanging chains in the zenith.
+  - Center ($U = 0.50$): Giant hexagonal blast door looking out at jungle, satellite dish, and atmospheric fog.
+  - Flanks: Interior elevated control booths with glowing amber and cyan control rooms, side maintenance bays with parked shuttles, and smoking exhaust vents.
+  - Bottom: Radial circular metal deck grating.
+- **Aspect Ratio & Perspective Tuning** ([`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json)):
+  - Configured `zoom: 1.8` to showcase the massive structural ceiling arches and overhead crane in the ceiling hemisphere ($V \in [0.28, 0.50]$) while retaining the 1:1 square pixel aspect ratio.
+  - Centered open blast doors looking North (`centerU: 0.5`) with full wrap-around continuity.
+- **Asset Preload & Bundle Emission** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added `hanger` to Pixi's preloaded assets manifest bundle and verified clean webpack compilation.
+
+## [2026-10-22] - Skybox Zoom Control & Expansive Hangar Field of View
+
+### 1. Configurable Zoom & FOV Expansion ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts))
+- **Cause of "Too Zoomed In" View**:
+  - The base 1:1 repeat rate mapped only ~48.7% of the image height across the screen (and only ~24.3% in the ceiling hemisphere), cutting off the high roof girders, overhead crane, and hanging chains while over-magnifying the blast door window.
+- **Aspect-Preserving Zoom Scaling**:
+  - Added `zoom` factor to [`RaycastSkyboxConfig`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts#L1-L10) and Tiled map property `skyboxZoom` (defaulted to `1.7` for Level 3).
+  - Multiplies both horizontal and vertical scale synchronously by `zoom`:
+    $$\text{finalRepeatX} = \text{userRepeatX} \times \text{zoom}$$
+    $$\text{finalRepeatY} = \text{userRepeatY} \times \text{naturalRepeatY} \times \text{zoom}$$
+  - Preserves the exact 1:1 square pixel aspect ratio while expanding the visible field of view by $1.7\times$.
+  - The entire blast door frame, overhead crane beams, hanging chains, and side columns are now in view without telephoto cropping.
+- **Dynamic North Centering**:
+  - Added automatic offset calculation (`baseOffsetX = centerU - 0.25 * finalRepeatX`) so that modifying `zoom` automatically keeps the blast door centered North without requiring manual offset adjustments.
+
+## [2026-10-22] - Seamless 360° Cylindrical Panorama ([`imperial_hanger_seamless.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_seamless.jpg))
+
+### 1. Integrated Seamless $4128 \times 1024$ Panoramic Skybox
+- Activated [`imperial_hanger_seamless.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_seamless.jpg) as the primary skybox for Level 3:
+  - Complete 360-degree cylindrical panorama with wrap-around boundaries.
+  - Center ($U = 0.50$): Giant open blast door looking out at jungle and mountain base.
+  - Flanks & Rear ($U \in [0.75, 1.0] \cup [0.0, 0.25]$): Interior hangar walls, elevated control booths, hazard blast doors, shuttle, and consoles.
+- **Cardinal Direction Alignment**:
+  - Configured `offsetX: 0.25` so that walking North in Level 3 centers the open jungle bay directly ahead, looking South centers the interior shuttle and control bay behind the player, and looking East/West reveals the hangar side walls.
+- **1:1 Aspect Ratio Calibration**:
+  - Automatically calculates $\text{naturalRepeatY} = \frac{1.3495}{6.2832} \times \frac{4128}{1024} \times \frac{720}{1280} \approx 0.4870$, matching horizontal and vertical pixel densities ($1.4437$ screen px / img px) for an exact 1:1 square pixel aspect ratio without stretching.
+
+## [2026-10-22] - Stitched 360° Front/Back Hangar Skybox & Zero-Duplication Panorama
+
+### 1. Dual-View 360° Cylindrical Stitching ([`assets/common/imperial_hanger_360.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_360.jpg), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Front & Back Stitching Without Duplication**:
+  - Combined [`imperial_hanger_front.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_front.jpg) ($2752 \times 1536$, looking forward at open blast door and jungle) and [`imperial_hanger_back.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_back.jpg) ($2752 \times 1536$, looking backward at closed blast door, control booths, shuttle, and welding sparks) into a single continuous $5504 \times 1536$ 360-degree cylinder texture.
+  - Eliminated the 4x duplication: Front spans the forward $180^\circ$ hemisphere, and Back spans the rear $180^\circ$ hemisphere. The player sees the front view once and the back view once when rotating in a full circle.
+- **Dynamic Runtime & Cached Loading**:
+  - Added [`createStitchedSkyboxTexture(frontKey, backKey)`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts#L2194) in `RaycastScene` to dynamically stitch arbitrary front/back image pairs via an offscreen HTML5 canvas if needed, while prioritizing the pre-stitched $5504 \times 1536$ asset for zero-overhead GPU loading.
+  - Preloaded `imperial_hanger_360`, `imperial_hanger_front`, and `imperial_hanger_back` in [`GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts).
+
+### 2. Perfect 1:1 Aspect Ratio Calibration ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts))
+- **Zero-Distortion Aspect Ratio**:
+  - Calibrated vertical scale formula:
+    $$\text{naturalRepeatY} = \frac{\text{userRepeatX} \times \text{hFov}}{2\pi} \times \frac{\text{imgW}}{\text{imgH}} \times \frac{\text{screenH}}{\text{screenW}} = \frac{1.3495}{6.2832} \times \frac{5504}{1536} \times \frac{720}{1280} \approx 0.4329$$
+  - With `repeatX: 1.0`, vertical pixel density matches horizontal pixel density to 5 decimal places ($1.0828$ screen px / img px), yielding an exact 1:1 square pixel aspect ratio with zero stretching.
+- **True Cardinal Direction Alignment**:
+  - **North ($U = 0.25$)**: Center of `imperial_hanger_front.jpg` (open blast door looking out at jungle and landing pad).
+  - **East ($U = 0.50$)**: Junction of Front right wall and Back left wall (steel columns and consoles).
+  - **South ($U = 0.75$)**: Center of `imperial_hanger_back.jpg` (interior blast doors, illuminated control booths, shuttle).
+  - **West ($U = 0.00 / 1.00$)**: Junction of Back right wall and Front left wall (steel columns and doorway).
+
+
+
+### 1. Eliminated Distortion & Auto-Preserved 1:1 Pixel Aspect Ratio ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Cause of Stretching**:
+  - The previous projection mapped 100% of the image height into only the top half of the screen ($coord.y < 0.5$, 360px), while 360° of horizontal rotation mapped across the full image ($77.3^\circ$ viewport $\approx 21.4\%$ of image width). This caused horizontal elements to stretch by over $9.2\times$ relative to vertical elements, making cranes, chains, and consoles look flattened and wide.
+- **Aspect Ratio Calibration**:
+  - `setSkybox` now automatically calculates the natural horizontal repeat based on texture dimensions, screen aspect ratio ($16:9$), and camera field of view ($hFov \approx 77.3^\circ$):
+    - `naturalRepeatX = (2 * PI / hFov) * (screenAspect / imgAspect)`
+  - With `repeatX: 1.0`, horizontal pixel density matches vertical pixel density with a 1:1 aspect ratio, rendering circular fixtures, chains, and vehicles without distortion.
+
+### 2. Perspective Horizon Alignment & Full Screen Mapping ([`src/scenes/raycast/shaders/floorCeiling.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.frag))
+- **True Horizon Centering**:
+  - Centered vertical UV mapping at the 3D world horizon: `skyV = clamp((coord.y - 0.5) * uSkyboxRepeat.y + 0.5 + uSkyboxOffset.y, 0.0, 1.0)`.
+  - When looking at eye level ($coord.y = 0.5$), the skybox renders its exact horizon ($V = 0.5$).
+  - In ceiling areas ($coord.y < 0.5$), only the upper half of the image (hangar ceiling, crane, roof beams) is displayed, preventing the floor of the image from appearing overhead.
+  - In open / floorless areas ($coord.y > 0.5$), the lower half of the image (ground plates, deck) displays continuously without seams.
+- **North-Facing Alignment**:
+  - Calibrated `offsetX: 0.35` for Level 3 so the giant open hangar blast door looking out at the jungle is centered directly ahead when the player looks North.
+
+## [2026-10-22] - 360° Cylindrical Panoramic Skybox & Per-Level Configuration System
+
+### 1. Cylindrical Panoramic 3D Skybox Shader ([`src/scenes/raycast/shaders/floorCeiling.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.frag))
+- **Continuous 360° Panoramic Projection**:
+  - Enhanced the GPU floor & ceiling fragment shader with horizontal 360-degree cylindrical panoramic projection:
+    - Calculates the camera ray angle in world space via `atan(rayDir.y, rayDir.x)`.
+    - Normalizes the horizontal panorama UV coordinate to $[0, 1]$ with repeat and offset support: `fract((angle / 6.28318530718 + 0.5) * uSkyboxRepeat.x + uSkyboxOffset.x)`.
+    - Normalizes the vertical UV coordinate across the ceiling half-screen: `clamp((coord.y / 0.5) * uSkyboxRepeat.y + uSkyboxOffset.y, 0.0, 1.0)`.
+  - As the player rotates, the skybox smoothly scrolls in sync with mouse look and camera yaw.
+  - Areas without ceiling tiles (such as Level 3's open hangar) naturally expose the high-resolution hangar backdrop overhead, while indoor corridors with ceiling tiles preserve their respective ceiling textures.
+
+### 2. Level Configuration & Registry Architecture ([`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts))
+- **`RaycastSkyboxConfig` & `RaycastLevelConfig` Interfaces**:
+  - Provides declarative configuration options: `texture`, `repeatX`, `repeatY`, `offsetX`, `offsetY`, and `skyboxOnly`.
+- **Hybrid Configuration Pipeline**:
+  - Evaluates Tiled map custom properties first (`skybox`, `skyboxRepeatX`, `skyboxRepeatY`, `skyboxOffsetX`, `skyboxOffsetY`, `skyboxOnly`), allowing map designers to configure or disable (`"none"`, `"null"`) skyboxes directly in Tiled JSON files without touching code.
+  - Falls back to `RAYCAST_LEVEL_CONFIGS` code registry in [`RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts).
+  - Preloaded `assets/common/imperial_hanger.jpg` as the default skybox for Level 3 ("Level 3 - Imperial Hangar").
+
+### 3. Dynamic Skybox Integration in Scene ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- Added `imperial_hanger` to Pixi's preloaded asset manifest in [`GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts).
+- Configured wrap mode `WRAP_MODES.REPEAT` and linear filtering `SCALE_MODES.LINEAR` for smooth texture sampling without seam artifacts.
+- Added public methods `setSkybox(config)` and `clearSkybox()` for runtime skybox changes.
+- Integrated automatic skybox setup into `loadLevel(levelName)`.
+- Configured `"skybox": "assets/common/imperial_hanger.jpg"` in root properties of [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json).
+
+
+
+## [2026-10-21] - High-Resolution AT-ST, TIE Fighter & TIE Bomber Sprite Scaling & Proportions
+
+### 1. Updated Decoration Scale & Reference Heights ([`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts))
+- **Normalized High-Resolution Dimensions**:
+  - The newly updated texture atlases replaced the low-resolution images (`54x102`, `46x66`, `67x61`) with high-resolution spritesheets up to `4268x1647`. Because the 3D projection formula calculates `spriteHeight = baseHeight * scale * (texH / referenceHeight)`, the old `referenceHeight` values caused sprites to render ~16x larger than intended (over 30 world tiles tall).
+  - **AT-ST Walker**:
+    - Updated `referenceHeight` from `102` to `1615` (matching the new `towards.png` frame height).
+    - Preserved `scale: 2.3` and `hitRadius: 0.65`, restoring the walker to its canonical 2.3-tile height (~2.3x human height) with accurate collision bounds.
+  - **TIE Fighter**:
+    - Updated `referenceHeight` from `66` to `1056` (matching the new `towards.png` frame height).
+    - Set `scale: 1.8` and `hitRadius: 0.68`, restoring the fighter to a proportional 1.8-tile height and 1.3-to-1.7 tile wingspan.
+  - **TIE Bomber**:
+    - Calibrated `referenceHeight` to `710` (matching the standard side/diagonal frame height) and scaled up `scale` to `1.8` (with `hitRadius: 0.85`).
+    - Eliminates the perspective underscaling that previously occurred from the rear and side view angles, establishing an imposing ~1.7–1.9 tile height and ~3.1–3.4 tile width matching the stature of the TIE Fighter.
+
+### 2. Synchronized Asset Metadata ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx))
+- Corrected fallback image paths in `RaycastScene.ts` (tiles 55, 56, 57) from `assets/raycast/enemies/` to `assets/raycast/decorations/`.
+- Updated image paths and sheet dimensions in `StarWarsTileset.tsx` to match the new high-resolution decoration files.
+
+
+
+## [2026-10-21] - Ally Prisoner Speed Calibration, Jitter-Free Animation Hysteresis, Wall Collision & Command Range Tuning
+
+### 1. Speed Pacing & Companion Movement Tuning ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Naturally Paced Follow Speed**:
+  - Calibrated base movement speed down from `0.024` to `0.016` (player run speed is `0.020`). The prisoner now trails smoothly behind the player at a natural companion walking pace instead of sprinting ahead or repeatedly overtaking.
+  - Reduced catchup speed from `0.038` to `0.022`, triggered only when the player is more than `4.8` tiles away.
+  - Adjusted arrival `stopDistance` to `1.8` tiles and collision body radius `hitRadius` to `0.25` for comfortable corridor navigation.
+
+### 2. Elimination of Animation Start/Stop Jitter ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts))
+- **State Hysteresis Loop**:
+  - Added distance hysteresis between stopping and resuming movement:
+    - While in motion, the prisoner continues moving until `distToPlayer <= 1.8` (`stopDistance`).
+    - While idle/stopped, the prisoner remains standing until `distToPlayer >= 2.6` (`resumeDistance`) or line of sight is broken.
+  - Prevents continuous single-frame toggling between walking and standing frames when the player hovers near the stopping radius.
+- **Continuous Motion State Persistence**:
+  - Waypoint transitions and minor axis sliding during path traversal no longer clear `isMoving` for single frames.
+  - Pixi's 4-frame directional walking animation loops continuously and smoothly without stuttering or repeatedly resetting to frame 0.
+
+### 3. Wall Collision Integrity & Full A* Pathfinding Navigation ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Corrected `tileTypeFlags` Enum Matching**:
+  - Replaced faulty `tileTypeFlags[idx] === 1` checks with `tileTypeFlags[idx] === 2` (`TILE_DOOR`). In `RaycastScene`, `TILE_WALL = 1` and `TILE_DOOR = 2`; testing `1` had previously caused the ally and A* pathfinder to treat every solid wall as an open door.
+  - Fixed A* `isWalkable`, `smoothPath`, `tryMove`, and door detection so walls are recognized as impenetrable solids.
+- **Thick Capsule Clearance & Anti-Corner-Clipping**:
+  - Implemented `isThickLineClear(..., radius = 0.25)` testing character body clearance along travel vectors and path segments.
+  - Prevents path smoothing (`smoothPath`) from cutting corners across doorways and wall corners.
+  - Allies now consistently use full A* navigation when moving between rooms and corridors, only switching to direct pursuit when the player is close ($\le 2.2$ tiles) with clear line-of-sight.
+- **Circle-to-AABB Wall & Thin Wall Collision**:
+  - Updated `tryMove` to use precise circle-to-AABB distance clamping against solid tiles and closed doors, combined with thin wall bounding box checks and two-axis sliding.
+
+### 4. Compact Command Proximity & Line-of-Sight Check ([`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Intimate Interaction Range**:
+  - Reduced command radius from `3.5` tiles down to `1.8` tiles, and tightened aiming angle to $\cos(\theta) \ge 0.72$.
+  - Players must now be standing close and looking directly at the prisoner to view HUD prompts or toggle follow commands.
+- **Occlusion Check**:
+  - Added `hasLineOfSight` verification to `tryInteractWithAlly` and `getInteractionPrompt` so players cannot interact with or command the prisoner through solid walls.
+
+
+
+## [2026-10-20] - Fix Prisoner Spritesheet Texture, Default Non-Following State & Stair Teleportation
+
+### 1. Fix Prisoner Spritesheet Metadata Texture ([`assets/raycast/enemies/prisoner.json`](file:///D:/Projects/side-scroller/assets/raycast/enemies/prisoner.json), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Corrected Underlying Image Reference**:
+  - In `prisoner.json`, line 847 was erroneously set to `"image": "implerial_officer.png"`, causing Pixi to bind all prisoner animation frames to the Imperial Officer spritesheet texture instead of [`assets/raycast/enemies/prisoner.png`](file:///D:/Projects/side-scroller/assets/raycast/enemies/prisoner.png).
+  - Corrected `prisoner.json` metadata `image` to `"prisoner.png"`.
+  - In `RaycastAllyManager.initSpritesheet`, explicitly preloads `assets/raycast/enemies/prisoner.png` as `baseTexture` and binds it across all spritesheet texture frames for guaranteed visual fidelity.
+
+### 2. Default Non-Following Behavior Upon Liberation ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Wait by Default**:
+  - When the security barrier is deactivated, the prisoner is freed (`isFreed: true`), but now defaults to **not following** (`isFollowing: false`).
+  - Displays dialogue prompt: `[+] Prisoner: 'The cell barrier is down! Press [E] when you want me to follow.'`
+  - The prisoner remains in the cell/area until the player looks at him and presses **`E`** to issue the follow command (`[E] COMMAND: FOLLOW ME`).
+
+### 3. Stair Traversal Teleportation ([`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Synchronized Floor Transitions**:
+  - Added `RaycastAllyManager.teleportFollowingAllies(...)`, invoked directly by `RaycastScene.setPlayerPosition` whenever the player uses a staircase or level transition.
+  - Automatically transports any freed, following allies directly to clear ground behind or beside the player on the new floor/landing, resets pathfinding waypoints, and updates facing orientation to match the player.
+
+
+
+## [2026-10-20] - Rescued Prisoner Ally NPC System with Dynamic Follow & Interaction
+
+### 1. Dedicated Friendly Companion Architecture ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **`RaycastAlly` Class**:
+  - Extends `RaycastDirectionalObject` to inherit 8-directional trigonometry, billboard projection, occlusion masking with Z-buffer, and texture frame updates.
+  - Initialized with [`assets/raycast/enemies/prisoner.json`](file:///D:/Projects/side-scroller/assets/raycast/enemies/prisoner.json) (`scale: 0.7`, `referenceHeight: 69`, matching human scale).
+  - Supports 8-directional standing idle animations and fluid 4-frame walking sequences across all cardinal and diagonal angles.
+- **`RaycastAllyManager` Class**:
+  - Manages ally lifecycle, parsing from Tiled map `Allies` layers (e.g. tile GID 55 in [`level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json)), spawning, rendering, and pathfinding coordination.
+  - Fully integrated into `RaycastScene` rendering and update loops.
+
+### 2. Security Barrier Liberation & Automated Following
+- **Automatic Liberation Trigger**:
+  - In `applyLinkAction`, when door protectors or security barriers (e.g. object 77 / 82 in `level3.json`) are disabled, `onDoorProtectorDisabled` is called.
+  - The prisoner transitions from imprisoned to freed (`isFreed: true, isFollowing: true`), emits audio feedback, displays a celebratory dialogue toast (`[+] Prisoner: 'The security barrier is down! Lead the way!'`), and immediately begins following the player.
+- **Following & Navigation AI**:
+  - When following, uses direct pursuer navigation when line-of-sight is unobstructed, and smoothed `AStarPathfinder` waypoint routing through winding corridors.
+  - Automatically opens non-locked doors in his path (`onAllyOpenDoor`).
+  - Halts smoothly when within stop distance ($2.0$ tiles) and faces the player; yields backward if the player steps directly into his position ($< 0.85$ tiles).
+  - Dynamically increases to catchup speed ($0.038$) if the player sprints ahead ($> 5.5$ tiles).
+
+### 3. Contextual Dialogue & Command Toggle via "e/E" ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts))
+- **Look-at Aim Detection**:
+  - Tests interaction range ($3.5$ tiles) and view alignment ($\cos(\theta) > 0.65$) to ensure the player is looking at the ally.
+- **Dynamic HUD Prompts**:
+  - Displays `[!] SECURITY BARRIER ACTIVE - DISABLE FIRST` if the prisoner is still behind active forcefields.
+  - Displays `[E] COMMAND: WAIT HERE` when the ally is following.
+  - Displays `[E] COMMAND: FOLLOW ME` when the ally is holding position.
+- **Command Toggle via "e/E"**:
+  - Pressing `E` while looking at the prisoner toggles between waiting in place (`[!] Prisoner: 'Holding position here.'`) and following (`[+] Prisoner: 'Right behind you!'`), accompanied by tactical radio audio.
+
+### 4. Minimap Tactical Tracking ([`src/plugins/minimap/MinimapRenderer.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapRenderer.ts), [`src/plugins/minimap/MinimapTypes.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapTypes.ts))
+- Rescued allies are rendered on the minimap as distinct bright green radar blips (`0x22cc44`), distinguishing them from red hostile enemies and cyan player arrows.
+
+
+
+## [2026-10-20] - Fix Vehicle Visual Scale & Laser Hitbox Alignment for AT-ST, TIE Fighter & TIE Bomber
+
+### 1. Visual Scale Correction (`referenceHeight` & `scale`) ([`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts))
+- **Mathematical Root Cause of "Tiny" Sprites**:
+  - The 3D raycasting sprite projection formula computes:
+    $$\text{spriteHeight} = \text{baseHeight} \times \text{scale} \times \frac{\text{texH}}{\text{referenceHeight}}$$
+  - Previously, `referenceHeight` was hardcoded to `300` for `at_st` and `250` for `tie_fighter` and `tie_bomber`, while actual sprite frame heights (`texH`) in their decoration spritesheets were only `102px` (`at_st`), `66px` (`tie_fighter`), and `61px` (`tie_bomber`).
+  - This drastically shrank them on screen:
+    - TIE Fighter rendered at only $1.8 \times (66 / 250) = 0.47\times$ wall height (less than half wall height) and $0.33$ tiles wide.
+    - TIE Bomber rendered at only $1.8 \times (61 / 250) = 0.44\times$ wall height and $0.48$ tiles wide.
+    - AT-ST rendered at only $1.8 \times (102 / 300) = 0.61\times$ wall height (smaller than a stormtrooper) and $0.32$ tiles wide.
+- **Accurate Reference Dimensions & Scale**:
+  - `at_st`: Set `referenceHeight: 102`, `scale: 2.3`. Renders at a towering $2.3\times$ wall height (nearly $3.3\times$ stormtrooper height), with an authentic $1.22$ to $1.60$ tile visual width across all 8 directions.
+  - `tie_fighter`: Set `referenceHeight: 66`, `scale: 1.9`. Renders at $1.9\times$ wall height and $1.32$ (front) to $1.81$ (diagonal) tiles wide.
+  - `tie_bomber`: Set `referenceHeight: 61`, `scale: 1.8`. Renders at $1.8\times$ wall height and a broad $1.98$ (front) to $2.63$ (diagonal) tiles wide for its dual ordnance/cockpit pod hull.
+  - Added `at_at` entry (`referenceHeight: 262`, `scale: 3.5`, `hitRadius: 1.25`, `spritesheet: "assets/at_at.json"`) for full walker compatibility.
+
+### 2. Laser Hitbox Alignment & Blocking Discrepancy ([`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Mathematical Root Cause of "Block Laser Bolts in Wider Area"**:
+  - In `findClosestHit`, ray hits against stationary objects test perpendicular distance: $\text{perpDist} \le \text{hitRadius}$.
+  - Previously, `hitRadius` was hardcoded to `0.95` (diameter $1.90$ tiles) for all vehicles.
+  - While visual models were shrunken to only $0.32$ – $0.48$ tiles wide, their invisible laser blocking collider spanned $1.90$ tiles wide (almost $6\times$ wider than the visible sprite!).
+  - As a result, laser bolts fired near vehicles were intercepted by invisible air, and enemies standing clearly in sight behind or near vehicles could not be targeted.
+- **Tightened Hit Radii Matching Visual Proportions**:
+  - `at_st`: `hitRadius` set to `0.65` (diameter $1.30$ tiles), exactly matching the $1.22$ – $1.33$ tile visual width.
+  - `tie_fighter`: `hitRadius` set to `0.68` (diameter $1.36$ tiles), aligning with front and side wings ($1.32$ – $1.38$ tiles).
+  - `tie_bomber`: `hitRadius` set to `0.85` (diameter $1.70$ tiles), matching the twin pod body.
+  - In `parseMapObjects`, any custom `scale` set on a map layer or object now scales `hitRadius` proportionally.
+- **In-Flight Laser Collision & Cover System**:
+  - Added `stationaryObjectManager` collision detection to `RaycastLaserManager.update` for both player and enemy laser projectiles in flight.
+  - Parked AT-ST walkers and TIE craft now act as real tactical cover from enemy blaster fire.
+
+### 3. Sprite Sheet Frame Matching & Map Filter Expansion ([`src/scenes/raycast/RaycastStationaryObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObject.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- Extended `RaycastStationaryObject.initFromSpritesheet` animation candidate prefixes to support `${p}_down`, `${p}_left`, and `${p}_up`.
+- Added `at_at` / `atat` to `RaycastScene` walls layer and texture map exclusion filters to prevent stationary vehicles from being treated as standard solid grid walls.
+
+
+
+## [2026-10-20] - Fix Door Protector Link Actions & Prevent Unmarked Doors From Locking Offline
+
+### 1. Door Protector Semantics in Link Actions ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Separated Security Barrier Actions from Elevator Door Lockout**:
+  - Previously, `applyLinkAction` treated all linked objects identically: when `action === "disable"` was received (e.g. from Trigger 73, Trigger 67, or Wall 75 deactivating a security barrier/waterfall), the code deactivated the barrier but then erroneously locked the door behind it shut and added it to `disabledDoors`, causing the door to display `[!] Door Offline - Elevator / Terminal Required` and preventing the player from opening it.
+  - Added `isDoorProtector` detection by checking `DestructableWallManager` registration and map object layer names containing `"protector"` or `"barrier"`.
+  - For door protectors, `normAction === "disable"` properly deactivates the barrier, ensures the door is removed from `disabledDoors`, and opens the door (`openDoorAt(gx, gy)`). Door protectors are never locked offline.
+
+### 2. Guarded Initial Controlled Door Locking (`initControlledDoors`) ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Strictly Limited Initial Lockout to Waitable Triggers**:
+  - `initControlledDoors()` now strictly skips any non-waitable triggers (`!isWaitable`) and explicitly ignores objects that are door protectors or security barriers.
+  - Standard doors and protector doors are never placed in `disabledDoors` on level load unless explicitly tied to an active countdown elevator mechanism.
+
+### 3. Contextual Feedback for Active Barriers in Door Interaction ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- In `checkAndInteractDoor`, if a player interacts with a door while an active `DoorProtector` is guarding that doorway, the game now provides clear contextual feedback: `[!] Security Barrier Active - Disable Barrier First` rather than the misleading `Door Offline` message.
+
+
+## [2026-10-20] - Fix Door Opening on Timer Finish & Stopping Prop Sounds After Wait Timer
+
+### 1. Waitable Trigger Link Action Resolution & Door Opening ([`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **`linkAction` Defaulting**:
+  - In `RaycastTriggerManager.parseMapTriggers`, `linkAction` now initializes to empty `""` instead of hardcoded `"disable"`.
+  - For waitable triggers (`wait.shouldWait: true`), if no explicit `action` is defined in Tiled, `linkAction` now defaults to `"enable"` (previously it was defaulting to `"disable"`, causing wait triggers to call `closeDoorAt` and lock the door shut upon completion).
+  - Also added parsing for direct `action` and `linkaction` properties on trigger objects in addition to nested `link.action`.
+- **Door Opening Execution on Wait Complete**:
+  - In `RaycastScene.handleTriggerWaitComplete`, wait completion explicitly ensures `"enable"` action is applied to linked objects (`trigger.linkIds`).
+  - Calls `applyLinkAction(trigger.linkIds, "enable", trigger)`, which removes the door key from `disabledDoors` and invokes `openDoorAt(gx, gy)`.
+  - `openDoorAt` sets `doorStates[doorKey] = 0.01` and `doorStatesFlat[flatIdx] = 0.01`, which `updateDoors` smoothly animates to `1.0` (fully open).
+- **Consolidated Wait Completion Lifecycle**:
+  - Added `completeTriggerWait` helper in `RaycastTriggerManager` shared by both per-frame `update` and `setTimeout`, guaranteeing the `[✓] Operation Complete!` toast, objective completion, callback invocation, and `hasTriggered = true` state.
+
+### 2. Looping Elevator Sound Teardown & Prop Sound Decoupling ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Decoupled Sound Playback from `applyLinkAction`**:
+  - Removed `playPropSounds` call from inside `applyLinkAction`. Previously, `handleTriggerWaitComplete` stopped the sound but then called `applyLinkAction`, which immediately restarted the elevator audio in an infinite loop.
+  - Sound playback for triggers is now handled cleanly in `handleTriggerFired` (looping for wait countdowns, single shot for instant triggers).
+- **Guaranteed Sound Teardown on Wait Completion**:
+  - Enhanced `stopTriggerPropSounds(key, soundName)`: stops the registered `SoundInstance` in `activePropSounds` and also invokes Pixi sound's global `sound.stop(soundAlias)` to terminate all playing audio instances.
+  - In `handleTriggerWaitComplete`, explicitly stops the trigger ID, linked object IDs, all aliases in `trigger.soundOnTrigger`, and Pixi sound alias `"elevator"`.
+  - In `playPropSounds`, protected against late-resolving promises: if the wait countdown completes before the sound promise resolves, the resulting instance is stopped immediately instead of registered to play.
+
+
+## [2026-10-20] - Fix Waitable Door Enabling Lifecycle & Phantom Enemy Spawning in Doors
+
+### 1. Phantom Stormtrooper Stuck in Door Fix ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- **Why It Happened**:
+  - In `level3.json`, object 131 (an empty bounding-box rectangle used to target the elevator door at `x: -1216, y: 2816`) was inadvertently placed on the `PositionedEnemies` layer.
+  - In Tiled, object 131 had no `gid` (sprite/tile image), no `type`, and no `name`, rendering as an invisible/transparent rectangle on top of the door graphics.
+  - In `RaycastEnemyManager.ts`, any object layer containing `"enem"` was scanned for enemies; objects without a `gid` previously fell back to `const typeName = obj.type || obj.name || "stormtrooper"`. Because `type` and `name` were blank, the game defaulted it to `"stormtrooper"` and spawned an enemy directly inside the elevator door tile.
+  - Once spawned inside the doorway threshold, the enemy AI pinch protection immediately forced the door open.
+- **Fix**:
+  - Moved object 131 from `PositionedEnemies` to `PositionedObjects` in `level3.json`.
+  - Updated `RaycastEnemyManager.parseMapEnemies` so that objects without a `gid` require an explicit enemy `type` or `name` before spawning. Non-enemy shapes, bounding boxes, or empty rectangles on enemy layers are now safely skipped.
+
+### 2. Waitable Door Locking & Enabling Lifecycle ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts))
+- **Initial State Door Locking (`initControlledDoors`)**:
+  - Implemented `initControlledDoors()` in `RaycastScene.loadLevel`: doors linked to triggers with `wait.shouldWait: true` or `linkAction: "enable"` now automatically start in `disabledDoors` as locked closed (`state = 0`).
+  - Player cannot open the door before activating the trigger; pressing `[E]` shows toast `[!] Door Offline - Elevator / Terminal Required`.
+  - Enemy AI pathfinding and door interaction are also barred from opening disabled closed doors.
+- **Trigger Wait Countdown & Completion Execution**:
+  - For waitable triggers, `handleTriggerFired` now plays the looping spatial prop sound (`elevator.wav`) and maintains the door's locked closed state throughout the countdown.
+  - If player presses `[E]` on the door during countdown, displays `[⏳] Operation in progress, please wait...`.
+  - Upon countdown completion (`handleTriggerWaitComplete`), `applyLinkAction(..., "enable")` runs: removes the door from `disabledDoors` and opens the door (`openDoorAt(gx, gy)`).
+  - Clarified door semantics in `applyLinkAction`: `"enable"` unlocks and opens doors; `"disable"` locks doors shut.
+
+## [2026-10-19] - Waitable Triggers, Objective Prompt Messages, Prop Sound Playback & Bounding Box Door Disabling
+
+### 1. Interactive Waitable Triggers & Live Countdown Prompts ([`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts))
+- **Live Countdown & Objective Message Prompts**:
+  - Interactive triggers (`shouldBePressed = true`) parse custom `displayMessage` / `message` properties and link to level objectives (`isObjective`, `objectiveKey`).
+  - Displays context-aware HUD prompts: `[E] PRESS [E] - <OBJECTIVE_TITLE>` or `[E] PRESS [E] TO ACTIVATE` in bright cyan (`0x00e5ff`).
+  - When a trigger uses the `Wait` property (`wait.shouldWait: true` and `waitTimeInSeconds > 0`), the trigger enters an active wait state.
+  - While running, the prompt dynamically updates in amber (`0xffaa00`) with a real-time countdown: `[⏳] <ACTION>... (Ns)` or `[⏳] PLEASE WAIT... (Ns)`.
+  - Added `getActivePromptColor()` across `RaycastTriggerManager` and `RaycastMissionManager` so the HUD accurately renders amber countdowns during active operations.
+  - Interacting with an active wait trigger shows feedback toast `[⏳] Operation in progress, please wait...` without resetting the timer.
+  - On countdown completion, fires `onTriggerWaitComplete`, marks the objective complete, displays `[✓] Operation Complete!` toast, and reverts linked mechanisms.
+
+### 2. Prop Sound Playback with Spatial Falloff & Wait Looping ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Audio Extraction from Linked Props & Triggers**:
+  - Implemented `extractSoundName` and `normalizeSoundName` to read sound effects from linked objects (`sound`, `soundOnTrigger`, `sfx`, `audio`) or from the trigger definition.
+  - Defaults to `"elevator"` sound effect when `wait.shouldWait` is active on an elevator or mechanical door trigger.
+- **Spatial Falloff & Distance Attenuation**:
+  - Implemented `playPropSounds` to calculate spatial volume falloff between player position and the center of the linked prop or trigger: `Math.max(0.05, Math.min(1.0, 1.0 - dist / 15)) * 0.7`.
+- **Looping & Teardown Lifecycle**:
+  - Loops waitable sounds for the duration of the wait countdown and stores the active sound instance in `this.activePropSounds`.
+  - On wait completion, stops the looping sound via `stopTriggerPropSounds` and plays a door/completion chime (`door_1`).
+  - Cleans up all active prop sounds on scene destroy and level transitions (`loadLevel`).
+
+### 3. Disabling Doors & Barriers within Limits of Linked Objects ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Bounding Box Object Coverage**:
+  - Updated `applyLinkAction` to calculate full rectangular grid limits `[minGx..maxGx] x [minGy..maxGy]` from the linked object's dimensions and Tiled tile/shape coordinates (`x, y, width, height, gid`, plus `currentMapOffsetX, currentMapOffsetY`).
+  - All door tiles located anywhere within those bounds are disabled / enabled simultaneously.
+- **Door Locking Mechanism & Override Protection**:
+  - Tracked disabled doors in `this.disabledDoors: Set<string>`.
+  - When disabled (`normAction === "disable"`), doors are forced open via `this.openDoorAt(gx, gy)` and locked in the open state.
+  - Guarded both player interaction (`checkAndInteractDoor`) and enemy pathfinding/door opening (`checkAndInteractEnemyDoor`) against closing or altering disabled doors while an active mechanism holds them open.
+  - On wait timer expiration (`handleTriggerWaitComplete`), releases the override (`this.disabledDoors.delete(key)`) and automatically closes the doors (`this.closeDoorAt(gx, gy)`).
+  - Also toggles any `DestructableWall` security barriers within the linked object bounds.
+
+### 4. Level 3 Objective Manifest ([`assets/raycast/levels/objectives/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/objectives/level3.json))
+- Created complete objective definition JSON for Level 3 containing:
+  - `find_way_out`: "Find a Way Out - Search the detention area for an exit route"
+  - `fix_the_water`: "Drain the Water - Restore drainage flow to lower sewage water levels"
+  - `turnOnTheWalker`: "Activate the Walker - Power up the AT-ST walker mechanism"
+  - `disable_hanger_shield`: "Disable Hangar Shield - Shut down security barrier to access landing bay"
+  - `escape`: "Escape - Board the Imperial transport or reach the extraction zone"
+
 ## [2026-10-19] - Level 3 Assets, Thin Wall Alignment Auto-Orientation & Object Link Infrastructure
 
 ### 1. Thin Wall & Door Protector Alignment & Rotation Fixes ([`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/raycast/DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))

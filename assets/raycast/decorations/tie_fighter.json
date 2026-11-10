@@ -1,71 +1,23 @@
 {
   "frames": {
-    "towards.png": {
-      "frame": {
-        "x": 0,
-        "y": 0,
-        "w": 46,
-        "h": 66
-      },
-      "rotated": false,
-      "trimmed": false,
-      "spriteSourceSize": {
-        "x": 0,
-        "y": 0,
-        "w": 46,
-        "h": 66
-      },
-      "sourceSize": {
-        "w": 46,
-        "h": 66
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
     "away.png": {
       "frame": {
-        "x": 46,
+        "x": 0,
         "y": 0,
-        "w": 46,
-        "h": 67
+        "w": 783,
+        "h": 1067
       },
       "rotated": false,
-      "trimmed": false,
+      "trimmed": true,
       "spriteSourceSize": {
         "x": 0,
         "y": 0,
-        "w": 46,
-        "h": 67
+        "w": 783,
+        "h": 1067
       },
       "sourceSize": {
-        "w": 46,
-        "h": 67
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
-    "left.png": {
-      "frame": {
-        "x": 92,
-        "y": 0,
-        "w": 48,
-        "h": 72
-      },
-      "rotated": false,
-      "trimmed": false,
-      "spriteSourceSize": {
-        "x": 0,
-        "y": 0,
-        "w": 48,
-        "h": 72
-      },
-      "sourceSize": {
-        "w": 48,
-        "h": 72
+        "w": 784,
+        "h": 1067
       },
       "pivot": {
         "x": 0.5,
@@ -74,22 +26,22 @@
     },
     "away_left_diagonal.png": {
       "frame": {
-        "x": 140,
-        "y": 0,
-        "w": 63,
-        "h": 76
+        "x": 0,
+        "y": 1067,
+        "w": 939,
+        "h": 1023
       },
-      "rotated": false,
-      "trimmed": false,
+      "rotated": true,
+      "trimmed": true,
       "spriteSourceSize": {
         "x": 0,
         "y": 0,
-        "w": 63,
-        "h": 76
+        "w": 939,
+        "h": 1023
       },
       "sourceSize": {
-        "w": 63,
-        "h": 76
+        "w": 943,
+        "h": 1023
       },
       "pivot": {
         "x": 0.5,
@@ -98,22 +50,70 @@
     },
     "towards_left_diagonal.png": {
       "frame": {
-        "x": 203,
+        "x": 783,
         "y": 0,
-        "w": 63,
-        "h": 76
+        "w": 989,
+        "h": 1059
       },
       "rotated": false,
-      "trimmed": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 6,
+        "y": 0,
+        "w": 989,
+        "h": 1059
+      },
+      "sourceSize": {
+        "w": 997,
+        "h": 1059
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "left.png": {
+      "frame": {
+        "x": 1023,
+        "y": 1059,
+        "w": 899,
+        "h": 1027
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 1,
+        "w": 899,
+        "h": 1027
+      },
+      "sourceSize": {
+        "w": 903,
+        "h": 1028
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "towards.png": {
+      "frame": {
+        "x": 1772,
+        "y": 0,
+        "w": 774,
+        "h": 1056
+      },
+      "rotated": false,
+      "trimmed": true,
       "spriteSourceSize": {
         "x": 0,
         "y": 0,
-        "w": 63,
-        "h": 76
+        "w": 774,
+        "h": 1056
       },
       "sourceSize": {
-        "w": 63,
-        "h": 76
+        "w": 777,
+        "h": 1056
       },
       "pivot": {
         "x": 0.5,
@@ -127,8 +127,8 @@
     "image": "tie_fighter.png",
     "format": "RGBA8888",
     "size": {
-      "w": 266,
-      "h": 76
+      "w": 2546,
+      "h": 2006
     },
     "scale": 1
   }

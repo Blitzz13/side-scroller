@@ -892,7 +892,8 @@ export class RaycastPickupManager {
 
       if (pickup.collected) {
         sprite.visible = false;
-        if (pickup.occlusionMask) pickup.occlusionMask.clear();
+        if (sprite.mask !== null) sprite.mask = null;
+        if (pickup.occlusionMask) pickup.occlusionMask.visible = false;
         continue;
       }
 
@@ -918,7 +919,8 @@ export class RaycastPickupManager {
 
       if (transformY <= 0.1 || transformY > maxRenderDistance) {
         sprite.visible = false;
-        if (pickup.occlusionMask) pickup.occlusionMask.clear();
+        if (sprite.mask !== null) sprite.mask = null;
+        if (pickup.occlusionMask) pickup.occlusionMask.visible = false;
         continue;
       }
 
@@ -977,61 +979,87 @@ export class RaycastPickupManager {
       // Per-column occlusion mask with Graphics stencil
       const mask = pickup.occlusionMask;
       if (mask) {
-        mask.clear();
-        let runStart = -1;
-        let runTopY = -1;
-        let hasDrawnAnyRun = false;
+        let fullyVisible = true;
+        let anyVisible = false;
 
         for (let col = drawStartX; col <= drawEndX; col++) {
           if (transformY < zBuffer[col]) {
-            let topY = 0;
-            if (doorDistBuffer && doorBottomBuffer && doorDistBuffer[col] < transformY) {
-              topY = Math.max(0, Math.floor(doorBottomBuffer[col]));
-            }
-            if (topY < screenH) {
-              if (runStart >= 0 && topY === runTopY) {
-                // Continue current horizontal run
-              } else {
-                if (runStart >= 0) {
-                  mask.beginFill(0xffffff);
-                  mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
-                  mask.endFill();
-                  hasDrawnAnyRun = true;
-                }
-                runStart = col;
-                runTopY = topY;
-              }
+            const doorClip =
+              doorDistBuffer && doorBottomBuffer && doorDistBuffer[col] < transformY
+                ? Math.max(0, Math.floor(doorBottomBuffer[col]))
+                : 0;
+            if (doorClip < screenH) {
+              anyVisible = true;
+              if (doorClip > 0) fullyVisible = false;
             } else {
-              // topY >= screenH: door panel covers column down to floor
-              if (runStart >= 0) {
+              fullyVisible = false;
+            }
+          } else {
+            fullyVisible = false;
+          }
+        }
+
+        if (!anyVisible) {
+          sprite.visible = false;
+          if (sprite.mask !== null) sprite.mask = null;
+          mask.visible = false;
+          continue;
+        }
+
+        if (fullyVisible) {
+          // Fast path: completely unoccluded -> detach mask for zero stencil overhead
+          if (sprite.mask !== null) {
+            sprite.mask = null;
+          }
+          mask.visible = false;
+        } else {
+          mask.visible = true;
+          if (sprite.mask !== mask) {
+            sprite.mask = mask;
+          }
+          mask.clear();
+
+          let runStart = -1;
+          let runTopY = -1;
+
+          for (let col = drawStartX; col <= drawEndX; col++) {
+            if (transformY < zBuffer[col]) {
+              let topY = 0;
+              if (doorDistBuffer && doorBottomBuffer && doorDistBuffer[col] < transformY) {
+                topY = Math.max(0, Math.floor(doorBottomBuffer[col]));
+              }
+              if (topY < screenH) {
+                if (runStart >= 0 && topY === runTopY) {
+                  // Continue current horizontal run
+                } else {
+                  if (runStart >= 0) {
+                    mask.beginFill(0xffffff);
+                    mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
+                    mask.endFill();
+                  }
+                  runStart = col;
+                  runTopY = topY;
+                }
+              } else if (runStart >= 0) {
+                // topY >= screenH: door panel covers column down to floor
                 mask.beginFill(0xffffff);
                 mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
                 mask.endFill();
-                hasDrawnAnyRun = true;
                 runStart = -1;
               }
-            }
-          } else {
-            // Occluded by solid wall
-            if (runStart >= 0) {
+            } else if (runStart >= 0) {
+              // Occluded by solid wall
               mask.beginFill(0xffffff);
               mask.drawRect(runStart, runTopY, col - runStart, screenH - runTopY);
               mask.endFill();
-              hasDrawnAnyRun = true;
               runStart = -1;
             }
           }
-        }
-        if (runStart >= 0) {
-          mask.beginFill(0xffffff);
-          mask.drawRect(runStart, runTopY, drawEndX - runStart + 1, screenH - runTopY);
-          mask.endFill();
-          hasDrawnAnyRun = true;
-        }
-
-        if (!hasDrawnAnyRun && drawStartX <= drawEndX) {
-          sprite.visible = false;
-          continue;
+          if (runStart >= 0) {
+            mask.beginFill(0xffffff);
+            mask.drawRect(runStart, runTopY, drawEndX - runStart + 1, screenH - runTopY);
+            mask.endFill();
+          }
         }
       }
 
@@ -1050,9 +1078,12 @@ export class RaycastPickupManager {
       sprite.tint = (shadeInt << 16) | (shadeInt << 8) | shadeInt;
 
       // Depth sorting
-      sprite.zIndex = Math.floor((maxRenderDistance - transformY) * 1000);
-      if (pickup.occlusionMask) {
-        pickup.occlusionMask.zIndex = sprite.zIndex;
+      const newZ = Math.floor((maxRenderDistance - transformY) * 1000);
+      if (sprite.zIndex !== newZ) {
+        sprite.zIndex = newZ;
+      }
+      if (pickup.occlusionMask && sprite.mask) {
+        pickup.occlusionMask.zIndex = newZ;
       }
     }
   }
@@ -1081,9 +1112,10 @@ export class RaycastPickupManager {
           item.collected = true;
           if (item.animatedSprite) {
             item.animatedSprite.visible = false;
+            if (item.animatedSprite.mask !== null) item.animatedSprite.mask = null;
           }
           if (item.occlusionMask) {
-            item.occlusionMask.clear();
+            item.occlusionMask.visible = false;
           }
           collectedList.push(item);
 

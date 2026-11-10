@@ -75,7 +75,7 @@ export class RaycastTriggerManager extends utils.EventEmitter {
         let isObjective = false;
         let objectiveKey = "";
         let displayMessage = "";
-        let linkAction = "disable";
+        let linkAction = "";
         let linkIds: string[] = [];
         let wait: { shouldWait: boolean; waitTimeInSeconds: number } | undefined = undefined;
         let soundOnTrigger: string[] = [];
@@ -106,7 +106,12 @@ export class RaycastTriggerManager extends utils.EventEmitter {
               } else if (typeof prop.value === "string" && prop.value.trim()) {
                 voicelines.push(prop.value.trim());
               }
-            } else if (pName === "soundontrigger") {
+            } else if (
+              pName === "soundontrigger" ||
+              pName === "sound" ||
+              pName === "sfx" ||
+              pName === "audio"
+            ) {
               if (Array.isArray(prop.value)) {
                 for (const item of prop.value) {
                   if (typeof item === "string" && item.trim()) {
@@ -120,11 +125,13 @@ export class RaycastTriggerManager extends utils.EventEmitter {
               }
             } else if (pName === "link" && prop.value && typeof prop.value === "object") {
               if (prop.value.action) {
-                linkAction = String(prop.value.action).toLowerCase();
+                linkAction = String(prop.value.action).trim().toLowerCase();
               }
               if (prop.value.linkIds) {
                 linkIds.push(...extractLinkIds(prop.value.linkIds));
               }
+            } else if (pName === "action" || pName === "linkaction") {
+              linkAction = String(prop.value).trim().toLowerCase();
             } else if (
               pName === "linkids" ||
               pName === "linkid" ||
@@ -138,6 +145,12 @@ export class RaycastTriggerManager extends utils.EventEmitter {
                 shouldWait: Boolean(prop.value.shouldWait),
                 waitTimeInSeconds: parseFloat(prop.value.waitTimeInSeconds) || 0,
               };
+            } else if (pName === "shouldwait") {
+              if (!wait) wait = { shouldWait: false, waitTimeInSeconds: 0 };
+              wait.shouldWait = Boolean(prop.value);
+            } else if (pName === "waittimeinseconds" || pName === "waittime") {
+              if (!wait) wait = { shouldWait: true, waitTimeInSeconds: 0 };
+              wait.waitTimeInSeconds = parseFloat(prop.value) || 0;
             } else if (
               pName === "objective" &&
               prop.value &&
@@ -151,12 +164,14 @@ export class RaycastTriggerManager extends utils.EventEmitter {
               }
               if (prop.value.displayMessage !== undefined) {
                 displayMessage = String(prop.value.displayMessage).trim();
+              } else if (prop.value.message !== undefined) {
+                displayMessage = String(prop.value.message).trim();
               }
             } else if (pName === "isobjective") {
               isObjective = Boolean(prop.value);
             } else if (pName === "objectivekey") {
               objectiveKey = String(prop.value).trim();
-            } else if (pName === "displaymessage") {
+            } else if (pName === "displaymessage" || pName === "message") {
               displayMessage = String(prop.value).trim();
             }
           }
@@ -173,6 +188,14 @@ export class RaycastTriggerManager extends utils.EventEmitter {
 
         if (minX > maxX) [minX, maxX] = [maxX, minX];
         if (minY > maxY) [minY, maxY] = [maxY, minY];
+
+        if (!linkAction || linkAction === "-") {
+          if (wait && wait.shouldWait) {
+            linkAction = "enable";
+          } else {
+            linkAction = "disable";
+          }
+        }
 
         const triggerZone: ITriggerZone = {
           id: obj.id,
@@ -240,6 +263,11 @@ export class RaycastTriggerManager extends utils.EventEmitter {
     let activeInteractiveInside: ITriggerZone | null = null;
 
     for (const trigger of this.triggers) {
+      // Check if wait timer completed
+      if (trigger.isWaitRunning && trigger.waitEndTime && Date.now() >= trigger.waitEndTime) {
+        this.completeTriggerWait(trigger);
+      }
+
       const isInside =
         playerX >= trigger.minX &&
         playerX <= trigger.maxX &&
@@ -251,66 +279,111 @@ export class RaycastTriggerManager extends utils.EventEmitter {
 
       if (!wasInside && isInside) {
         // Player entered trigger zone
-        if (trigger.event === "onEnter" && !trigger.hasTriggered) {
+        if (trigger.event === "onEnter" && !trigger.hasTriggered && !trigger.isWaitRunning) {
           if (!trigger.shouldBePressed) {
             this.fireTrigger(trigger);
           }
         }
       } else if (wasInside && !isInside) {
         // Player exited trigger zone
-        if (trigger.event === "onExit" && !trigger.hasTriggered) {
+        if (trigger.event === "onExit" && !trigger.hasTriggered && !trigger.isWaitRunning) {
           if (!trigger.shouldBePressed) {
             this.fireTrigger(trigger);
           }
         }
       }
 
-      if (isInside && trigger.shouldBePressed && !trigger.hasTriggered) {
+      if (isInside && trigger.shouldBePressed && (!trigger.hasTriggered || trigger.isWaitRunning)) {
         activeInteractiveInside = trigger;
       }
     }
 
     // Update HUD interaction prompt
-    if (activeInteractiveInside !== this.currentInsideInteractiveTrigger) {
-      this.currentInsideInteractiveTrigger = activeInteractiveInside;
-      if (this.currentInsideInteractiveTrigger) {
-        const promptText = this.getActivePromptText() || "[E] PRESS [E] TO INTERACT";
-        this.callbacks.showPrompt?.(promptText);
+    this.currentInsideInteractiveTrigger = activeInteractiveInside;
+    if (this.currentInsideInteractiveTrigger) {
+      const promptText = this.getActivePromptText();
+      if (promptText) {
+        const color = this.currentInsideInteractiveTrigger.isWaitRunning ? 0xffaa00 : 0x00e5ff;
+        this.callbacks.showPrompt?.(promptText, color);
       } else {
         this.callbacks.hidePrompt?.();
       }
+    } else {
+      this.callbacks.hidePrompt?.();
     }
   }
 
+  public getActivePromptColor(): number {
+    return this.currentInsideInteractiveTrigger?.isWaitRunning ? 0xffaa00 : 0x00e5ff;
+  }
+
   public getActivePromptText(): string | null {
-    if (
-      this.currentInsideInteractiveTrigger &&
-      !this.currentInsideInteractiveTrigger.hasTriggered
-    ) {
-      if (this.currentInsideInteractiveTrigger.displayMessage) {
-        const cleanMsg = this.currentInsideInteractiveTrigger.displayMessage
-          .replace(/_/g, " ")
-          .toUpperCase();
+    if (!this.currentInsideInteractiveTrigger) return null;
+    const trigger = this.currentInsideInteractiveTrigger;
+
+    // 1. If currently waiting, show countdown and objective/wait message
+    if (trigger.isWaitRunning && trigger.waitEndTime) {
+      const remainingSec = Math.max(0, Math.ceil((trigger.waitEndTime - Date.now()) / 1000));
+      if (trigger.displayMessage && trigger.displayMessage.toLowerCase() !== "press_e") {
+        const cleanMsg = trigger.displayMessage.replace(/_/g, " ").toUpperCase();
+        return `[⏳] ${cleanMsg}... (${remainingSec}s)`;
+      }
+      if (trigger.isObjective && trigger.objectiveKey) {
+        const obj = this.objectiveManager.getObjective(trigger.objectiveKey);
+        const title = (obj?.title || trigger.objectiveKey.replace(/_/g, " ")).toUpperCase();
+        return `[⏳] ${title}... (${remainingSec}s)`;
+      }
+      return `[⏳] PLEASE WAIT... (${remainingSec}s)`;
+    }
+
+    // 2. Before triggering: display interaction prompt with objective message
+    if (!trigger.hasTriggered) {
+      if (trigger.displayMessage) {
+        const raw = trigger.displayMessage.trim();
+        const lower = raw.toLowerCase();
+        if (lower === "press_e" || lower === "press e" || lower === "e") {
+          if (trigger.isObjective && trigger.objectiveKey) {
+            const obj = this.objectiveManager.getObjective(trigger.objectiveKey);
+            const title = (obj?.title || trigger.objectiveKey.replace(/_/g, " ")).toUpperCase();
+            return `[E] PRESS [E] - ${title}`;
+          }
+          return "[E] PRESS [E] TO ACTIVATE";
+        }
+        const cleanMsg = raw.replace(/_/g, " ").toUpperCase();
+        if (cleanMsg.startsWith("PRESS ")) {
+          return `[E] ${cleanMsg}`;
+        }
         return `[E] PRESS [E] TO ${cleanMsg}`;
       }
-      if (this.currentInsideInteractiveTrigger.isObjective) {
-        return "[E] PRESS [E] TO FINISH OBJECTIVE";
+
+      if (trigger.isObjective && trigger.objectiveKey) {
+        const obj = this.objectiveManager.getObjective(trigger.objectiveKey);
+        const title = (obj?.title || trigger.objectiveKey.replace(/_/g, " ")).toUpperCase();
+        return `[E] PRESS [E] TO ${title}`;
       }
+
+      if (trigger.isObjective) {
+        return "[E] PRESS [E] TO COMPLETE OBJECTIVE";
+      }
+
       return "[E] PRESS [E] TO INTERACT";
     }
+
     return null;
   }
 
   public handleInteract(): boolean {
-    if (
-      this.currentInsideInteractiveTrigger &&
-      !this.currentInsideInteractiveTrigger.hasTriggered
-    ) {
+    if (this.currentInsideInteractiveTrigger) {
       const trigger = this.currentInsideInteractiveTrigger;
-      this.fireTrigger(trigger);
-      this.currentInsideInteractiveTrigger = null;
-      this.callbacks.hidePrompt?.();
-      return true;
+      if (trigger.isWaitRunning && trigger.waitEndTime) {
+        const remainingSec = Math.max(1, Math.ceil((trigger.waitEndTime - Date.now()) / 1000));
+        this.callbacks.showToast?.(`[⏳] Please wait, in progress... (${remainingSec}s)`, 0xffaa00, 1.5);
+        return true;
+      }
+      if (!trigger.hasTriggered) {
+        this.fireTrigger(trigger);
+        return true;
+      }
     }
     return false;
   }
@@ -326,8 +399,8 @@ export class RaycastTriggerManager extends utils.EventEmitter {
       }
     }
 
-    // 2. Play trigger SFX sound effects
-    if (trigger.soundOnTrigger && trigger.soundOnTrigger.length > 0) {
+    // 2. Play trigger SFX sound effects (non-waiting triggers)
+    if (trigger.soundOnTrigger && trigger.soundOnTrigger.length > 0 && (!trigger.wait || !trigger.wait.shouldWait)) {
       for (const sName of trigger.soundOnTrigger) {
         this.playTriggerSound(sName);
       }
@@ -338,25 +411,60 @@ export class RaycastTriggerManager extends utils.EventEmitter {
       this.callbacks.onTriggerAlarm?.();
     }
 
-    // 4. Mark linked objective complete
+    // 4. Mark linked objective complete or display objective toast
+    if (trigger.isObjective) {
+      if (trigger.objectiveKey) {
+        if (!trigger.wait || !trigger.wait.shouldWait) {
+          this.objectiveManager.completeObjective(trigger.objectiveKey);
+        } else {
+          const obj = this.objectiveManager.getObjective(trigger.objectiveKey);
+          const title = obj?.title || trigger.objectiveKey.replace(/_/g, " ");
+          this.callbacks.showToast?.(`[★] Objective Initiated: ${title}`, 0x00e5ff, 3.0);
+        }
+      } else if (trigger.displayMessage) {
+        const clean = trigger.displayMessage.replace(/_/g, " ");
+        this.callbacks.showToast?.(`[★] Objective: ${clean}`, 0x00e5ff, 3.0);
+      }
+    } else if (trigger.displayMessage && !trigger.shouldBePressed) {
+      const clean = trigger.displayMessage.replace(/_/g, " ");
+      this.callbacks.showToast?.(`[!] ${clean}`, 0x00e5ff, 3.0);
+    }
+
+    // 5. Initialize wait timer if configured
+    if (trigger.wait && trigger.wait.shouldWait && trigger.wait.waitTimeInSeconds > 0) {
+      trigger.isWaitRunning = true;
+      trigger.waitEndTime = Date.now() + trigger.wait.waitTimeInSeconds * 1000;
+      const waitMsg =
+        trigger.displayMessage && trigger.displayMessage.toLowerCase() !== "press_e"
+          ? trigger.displayMessage.replace(/_/g, " ")
+          : "System active";
+      this.callbacks.showToast?.(
+        `[⏳] ${waitMsg}... (${trigger.wait.waitTimeInSeconds}s)`,
+        0xffaa00,
+        2.5
+      );
+
+      setTimeout(() => {
+        this.completeTriggerWait(trigger);
+      }, trigger.wait.waitTimeInSeconds * 1000);
+    }
+
+    // 6. Notify callbacks and listeners
+    this.callbacks.onTriggerFired?.(trigger);
+    this.emit("triggerFired", trigger);
+  }
+
+  private completeTriggerWait(trigger: ITriggerZone): void {
+    if (!trigger.isWaitRunning) return;
+    trigger.isWaitRunning = false;
+    trigger.waitEndTime = undefined;
+    trigger.hasTriggered = true; // Mark as triggered so it does not loop/re-prompt indefinitely
+    this.callbacks.showToast?.("[✓] Operation Complete!", 0x00ffcc, 2.5);
     if (trigger.isObjective && trigger.objectiveKey) {
       this.objectiveManager.completeObjective(trigger.objectiveKey);
     }
-
-    // 5. Notify callbacks and listeners
-    this.callbacks.onTriggerFired?.(trigger);
-    this.emit("triggerFired", trigger);
-
-    // 6. Handle Wait timer
-    if (trigger.wait && trigger.wait.shouldWait && trigger.wait.waitTimeInSeconds > 0) {
-      trigger.isWaitRunning = true;
-      setTimeout(() => {
-        trigger.isWaitRunning = false;
-        trigger.hasTriggered = false; // Allow re-interaction after wait period
-        this.callbacks.onTriggerWaitComplete?.(trigger);
-        this.emit("triggerWaitComplete", trigger);
-      }, trigger.wait.waitTimeInSeconds * 1000);
-    }
+    this.callbacks.onTriggerWaitComplete?.(trigger);
+    this.emit("triggerWaitComplete", trigger);
   }
 
   private playTriggerSound(name: string): void {

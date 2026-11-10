@@ -328,7 +328,8 @@ export class RaycastLaserManager {
     breakableManager?: any,
     player?: { x: number; y: number; z?: number },
     onPlayerHit?: (damage: number) => void,
-    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>
+    thinWalls?: Array<{ x1: number; y1: number; x2: number; y2: number; isDestructableWall?: boolean }>,
+    stationaryObjectManager?: any
   ): void {
     const dt = delta / 60;
 
@@ -459,6 +460,21 @@ export class RaycastLaserManager {
           continue;
         }
 
+        // Check collision with stationary objects (parked vehicles, holotables)
+        if (stationaryObjectManager && stationaryObjectManager.objects && laser.distanceTraveled > 0.2) {
+          for (const s of stationaryObjectManager.objects) {
+            if (!s.blocksMovement) continue;
+            const distToS = Math.hypot(s.x - laser.currentX, s.y - laser.currentY);
+            if (distToS <= s.hitRadius) {
+              this.spawnImpact(laser.currentX, laser.currentY, laser.currentZ);
+              laser.alive = false;
+              this.destroyLaser(laser, i);
+              break;
+            }
+          }
+          if (!laser.alive) continue;
+        }
+
         // Check target arrival (breakable or wall)
         if (progress >= 1.0) {
           if (laser.targetBreakable && breakableManager) {
@@ -508,6 +524,21 @@ export class RaycastLaserManager {
             const distToB = Math.hypot(b.x - laser.currentX, b.y - laser.currentY);
             if (distToB <= (b.hitRadius ?? 0.4)) {
               breakableManager.damageBreakable(b, laser.damage);
+              this.spawnImpact(laser.currentX, laser.currentY, laser.currentZ);
+              laser.alive = false;
+              this.destroyLaser(laser, i);
+              break;
+            }
+          }
+          if (!laser.alive) continue;
+        }
+
+        // Check collision with stationary objects (parked vehicles, holotables as cover)
+        if (stationaryObjectManager && stationaryObjectManager.objects && laser.distanceTraveled > 0.2) {
+          for (const s of stationaryObjectManager.objects) {
+            if (!s.blocksMovement) continue;
+            const distToS = Math.hypot(s.x - laser.currentX, s.y - laser.currentY);
+            if (distToS <= s.hitRadius) {
               this.spawnImpact(laser.currentX, laser.currentY, laser.currentZ);
               laser.alive = false;
               this.destroyLaser(laser, i);

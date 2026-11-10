@@ -49,6 +49,7 @@ export class VirtualButton extends Container implements IDisposable {
     this.on("pointerdown", this.onPointerDown, this);
     this.on("pointerup", this.onPointerUp, this);
     this.on("pointerupoutside", this.onPointerUp, this);
+    this.on("pointercancel", this.onPointerCancel, this);
   }
 
   public get isPressed(): boolean {
@@ -138,10 +139,24 @@ export class VirtualButton extends Container implements IDisposable {
     }
   }
 
+  private onPointerCancel(e: FederatedPointerEvent): void {
+    if (this.activePointerId === e.pointerId) {
+      if (e && typeof e.stopPropagation === "function") {
+        e.stopPropagation();
+      }
+      this.activePointerId = null;
+      this._isPressed = false;
+      this.drawButton(this._isToggled);
+      this.scale.set(1.0);
+      (this as any).emit("release", e);
+    }
+  }
+
   public dispose(): void {
     this.off("pointerdown", this.onPointerDown, this);
     this.off("pointerup", this.onPointerUp, this);
     this.off("pointerupoutside", this.onPointerUp, this);
+    this.off("pointercancel", this.onPointerCancel, this);
     this.destroy({ children: true });
   }
 }

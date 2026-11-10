@@ -21,6 +21,65 @@ export class RaycastPlayerController {
   private stepIndex: number = 0;
   private readonly STEP_DISTANCE_THRESHOLD: number = 0.58;
   private currentSurface: "default" | "water" = "default";
+  private _isGodMode: boolean = false;
+
+  public get isGodMode(): boolean {
+    return this._isGodMode;
+  }
+
+  public toggleGodMode(): boolean {
+    this._isGodMode = !this._isGodMode;
+    const toastText = this._isGodMode ? "[🛡️] GOD MODE: ACTIVATED (IMMORTAL)" : "[🛡️] GOD MODE: DEACTIVATED";
+    const toastColor = this._isGodMode ? 0x00ff88 : 0xff4444;
+    this.hud.showToast(toastText, toastColor, 2000);
+    return this._isGodMode;
+  }
+
+  public refillHealthAndShield(): void {
+    this.state.health = this.state.maxHealth;
+    this.state.shield = this.state.maxShield;
+    this.hud.setHealth(this.state.health, this.state.maxHealth);
+    this.hud.setShield(this.state.shield, this.state.maxShield);
+    this.hud.showToast("[❤️] Health & Shield Restored (100%)", 0x00ff88, 1500);
+    this.hud.flashScreen(0x00ff88, 0.25);
+  }
+
+  public refillAllAmmo(): void {
+    for (const [wType, _] of this.inventory) {
+      const cfg = getRaycastWeaponConfig(wType);
+      const max = cfg ? cfg.maxAmmo : 99;
+      this.inventory.set(wType, max);
+    }
+    if (this.state.equippedWeapon !== null) {
+      const curMax = this.state.weaponConfig?.maxAmmo ?? 99;
+      this.state.ammo = curMax;
+      this.hud.setWeapon(this.state.weaponConfig?.name || null, this.state.ammo);
+    }
+    this.hud.showToast("[🔋] All Ammo Refilled to Maximum", 0x00e5ff, 1500);
+  }
+
+  public unlockAllWeapons(): void {
+    const weapons = [RaycastWeaponType.DH17, RaycastWeaponType.E11, RaycastWeaponType.THERMAL_DETONATOR];
+    for (const w of weapons) {
+      const cfg = getRaycastWeaponConfig(w);
+      if (cfg) {
+        this.inventory.set(w, cfg.maxAmmo);
+      }
+    }
+    if (this.state.equippedWeapon !== null) {
+      const curMax = this.state.weaponConfig?.maxAmmo ?? 99;
+      this.state.ammo = curMax;
+      this.hud.setWeapon(this.state.weaponConfig?.name || null, this.state.ammo);
+    }
+    this.hud.showToast("[🔫] All Weapons Unlocked (DH-17, E-11, Detonator)", 0xffaa00, 1500);
+  }
+
+  public grantAllKeycards(): void {
+    this.addKeycard("red");
+    this.addKeycard("blue");
+    this.addKeycard("green");
+    this.hud.showToast("[🔑] Granted Red, Blue & Green Keycards", 0x00ffff, 1500);
+  }
 
   constructor(weaponView: RaycastWeaponView, hud: RaycastHUD) {
     this.weaponView = weaponView;
@@ -157,6 +216,7 @@ export class RaycastPlayerController {
   }
 
   public takeDamage(amount: number): void {
+    if (this._isGodMode) return;
     if (amount <= 0) return;
 
     let healthDamage = amount;

@@ -404,6 +404,31 @@ export class MinimapRenderer {
       }
     }
 
+    // 4.5 Draw Allies (Green blip)
+    if (dataSource.getAllies) {
+      const allies = dataSource.getAllies();
+      for (const ally of allies) {
+        if (ally.isDead) continue;
+
+        const allyCellX = Math.floor(ally.x);
+        const allyCellY = Math.floor(ally.y);
+        const allyTileIndex = allyCellY * mapWidth + allyCellX;
+
+        if (hasFog && discoveredTiles[allyTileIndex] !== 1) {
+          continue;
+        }
+
+        const allyScreenX = mapOffsetX + ally.x * cellSize;
+        const allyScreenY = mapOffsetY + ally.y * cellSize;
+        const allyRadius = Math.max(2.5, cellSize * 0.28);
+
+        dynamicGraphics.lineStyle(1, 0x88ff88, 1);
+        dynamicGraphics.beginFill(0x22cc44, 0.95);
+        dynamicGraphics.drawCircle(allyScreenX, allyScreenY, allyRadius);
+        dynamicGraphics.endFill();
+      }
+    }
+
     // 5. Draw Player
     const player = dataSource.getPlayer();
     if (player) {
