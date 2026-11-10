@@ -199,7 +199,10 @@ export class RaycastScene extends BaseScene {
   private uSkyboxYawCS = new Float32Array([1.0, 0.0]);
   private currentSkyboxZoom: number = 2.2;
   private currentSkyboxYaw: number = 0.0;
-  private uWallBandUniform = new Float32Array([0.0, 0.0]);
+  private wallBoundsData = new Uint8Array(gameConfig.width * 4);
+  private wallBoundsTexture!: Texture;
+  private skyboxGeom!: MeshGeometry;
+  private skyboxFullScreen: boolean = false;
   private uCeilingBoundsUniform = new Float32Array([-1.0, -1.0, -1.0, -1.0]);
   private graphicsUsed: boolean = false;
 
@@ -314,22 +317,41 @@ export class RaycastScene extends BaseScene {
 
     this.emptyCubeMapTexture = this.createEmptyCubeMapTexture();
 
-    // 1. Dedicated Skybox mesh (rendered behind floor & ceiling at zIndex = 0)
+    // 1. Dedicated Skybox mesh (rendered behind floor & ceiling at zIndex = 0).
+    // Covers only the top (ceiling) half of the screen during gameplay.
+    this.wallBoundsData.fill(0);
+    for (let c = 0; c < gameConfig.width; c++) {
+      this.wallBoundsData[c * 4] = 255; // wallTop = screen bottom (no occlusion)
+      this.wallBoundsData[c * 4 + 2] = 255;
+      this.wallBoundsData[c * 4 + 3] = 255; // opaque alpha: avoids premultiply side effects
+    }
+    this.wallBoundsTexture = new Texture(
+      new BaseTexture(
+        new BufferResource(this.wallBoundsData, { width: gameConfig.width, height: 1 }),
+        {
+          scaleMode: SCALE_MODES.NEAREST,
+          mipmap: MIPMAP_MODES.OFF,
+          wrapMode: WRAP_MODES.CLAMP,
+        }
+      )
+    );
+
     const skyboxGeom = new MeshGeometry(
       new Float32Array([
         0, 0,
         gameConfig.width, 0,
-        gameConfig.width, gameConfig.height,
-        0, gameConfig.height,
+        gameConfig.width, gameConfig.height * 0.5,
+        0, gameConfig.height * 0.5,
       ]) as any,
       new Float32Array([
         0, 0,
         1, 0,
-        1, 1,
-        0, 1,
+        1, 0.5,
+        0, 0.5,
       ]) as any,
       new Uint16Array([0, 1, 2, 0, 2, 3]) as any
     );
+    this.skyboxGeom = skyboxGeom;
 
     this.skyboxShader = Shader.from(
       skyboxVert,
@@ -346,14 +368,15 @@ export class RaycastScene extends BaseScene {
         uSkyboxYawCS: this.uSkyboxYawCS,
         uSkyboxRepeat: [1.0, 1.0],
         uSkyboxOffset: [0.0, 0.0],
-        uWallBand: this.uWallBandUniform,
+        uWallBoundsTex: this.wallBoundsTexture,
       }
     );
     this.skyboxMesh = new Mesh(skyboxGeom, this.skyboxShader);
     this.skyboxMesh.zIndex = 0;
     this.skyboxMesh.visible = false;
 
-    // 2. Dedicated Floor/Ceiling mesh (rendered at zIndex = 1, discards open ceiling regions)
+    // 2. Dedicated Floor/Ceiling mesh (zIndex = 1). Opaque on indoor levels; on skybox levels
+    // open ceiling cells output alpha 0 so the skybox shows through (no discard needed).
     this.floorCeilingShader = Shader.from(
       floorCeilingVert,
       floorCeilingFrag,
@@ -368,11 +391,14 @@ export class RaycastScene extends BaseScene {
         uAtlasGrid: [4.0, 4.0],
         uTileSize: 256.0,
         uCeilingBounds: this.uCeilingBoundsUniform,
+        uWallBoundsTex: this.wallBoundsTexture,
+        uSkyActive: 0.0,
       }
     );
 
     this.floorCeilingMesh = new Mesh(floorCeilingGeom, this.floorCeilingShader);
     this.floorCeilingMesh.zIndex = 1;
+    this.floorCeilingMesh.state.blend = false;
 
     this.graphics = new Graphics();
 
@@ -409,7 +435,6 @@ export class RaycastScene extends BaseScene {
         sprite.x = i;
         sprite.roundPixels = true;
         sprite.visible = false;
-        this.wallContainer.addChild(sprite);
         columnSprites.push(sprite);
       }
       this.spritePool.push(columnSprites);
@@ -421,7 +446,6 @@ export class RaycastScene extends BaseScene {
         sprite.x = i;
         sprite.roundPixels = true;
         sprite.visible = false;
-        this.thinWallContainer.addChild(sprite);
         thinSprites.push(sprite);
       }
       this.thinWallSpritePool.push(thinSprites);
@@ -463,7 +487,6 @@ export class RaycastScene extends BaseScene {
       sprite.width = 1;
       sprite.roundPixels = true;
       sprite.visible = false;
-      this.objectContainer.addChild(sprite);
       this.objectSpritePool.push(sprite);
     }
 
@@ -879,6 +902,69 @@ export class RaycastScene extends BaseScene {
     this.updateLevelFinishZonesStatus();
   }
 
+  /**
+   * Scans every layer (tile data, infinite-map chunks, object gids, nested groups) and returns
+   * the set of tile ids (gid - firstgid) used by the level. Always includes the default
+   * destroyed-wall textures (20, 21) and any explicit destroyedTextureId properties.
+   */
+  private collectUsedTileIds(mapData: any): Set<number> {
+    const used = new Set<number>([20, 21]);
+    const fgid = mapData.tilesets?.[0]?.firstgid ?? 1;
+    const addGid = (raw: number) => {
+      const gid = raw & 0x1fffffff;
+      if (gid > 0) used.add(gid - fgid);
+    };
+    const scanProps = (props: any) => {
+      if (!Array.isArray(props)) return;
+      for (const p of props) {
+        if (p && typeof p.name === "string" && /textureid|texture_id/i.test(p.name) && typeof p.value === "number") {
+          used.add(p.value);
+        }
+      }
+    };
+    const scan = (layers: any[]) => {
+      if (!Array.isArray(layers)) return;
+      for (const layer of layers) {
+        if (!layer) continue;
+        if (Array.isArray(layer.data)) layer.data.forEach(addGid);
+        if (Array.isArray(layer.chunks)) {
+          for (const chunk of layer.chunks) {
+            if (Array.isArray(chunk?.data)) chunk.data.forEach(addGid);
+          }
+        }
+        if (Array.isArray(layer.objects)) {
+          for (const obj of layer.objects) {
+            if (obj?.gid) addGid(obj.gid);
+            scanProps(obj?.properties);
+          }
+        }
+        scanProps(layer.properties);
+        if (Array.isArray(layer.layers)) scan(layer.layers);
+      }
+    };
+    scan(mapData.layers);
+
+    // Breakable walls swap to a "<name>_destroyed" tile (or 39 for grilled walls): keep those too.
+    const baseNames = new Set<string>();
+    const tileImages: { id: number; img: string }[] = [];
+    for (const ts of mapData.tilesets || []) {
+      for (const t of ts?.tiles || []) {
+        const img = ((t.image as string) || "").toLowerCase();
+        tileImages.push({ id: t.id, img });
+        if (used.has(t.id) && img) {
+          baseNames.add((img.split(/[\\/]/).pop() || "").replace(/\.[^/.]+$/, ""));
+        }
+      }
+    }
+    for (const t of tileImages) {
+      for (const base of baseNames) {
+        if (base && t.img.includes(`${base}_destroyed`)) used.add(t.id);
+      }
+    }
+    used.add(39);
+    return used;
+  }
+
   private handleWallBlockDestroyed(broken: RaycastBreakable): void {
     const gx = broken.gridX !== undefined ? broken.gridX : Math.floor(broken.x);
     const gy = broken.gridY !== undefined ? broken.gridY : Math.floor(broken.y);
@@ -1017,6 +1103,17 @@ export class RaycastScene extends BaseScene {
           });
         }
       });
+    }
+
+    // Only load / upload / slice tiles actually referenced by this level's layers
+    // (the tileset is shared across levels; unused 2048x2048 textures waste VRAM).
+    const usedTileIds = this.collectUsedTileIds(mapData);
+    if (usedTileIds.size > 0) {
+      for (const key of Object.keys(textureMap)) {
+        if (!usedTileIds.has(parseInt(key))) {
+          delete textureMap[parseInt(key)];
+        }
+      }
     }
 
     const texturePromises = Object.entries(textureMap).map(
@@ -1259,7 +1356,7 @@ export class RaycastScene extends BaseScene {
         } catch {}
       }
     });
-    await this.stationaryObjectManager.initSpritesheets();
+    await this.stationaryObjectManager.initSpritesheets(mapData, this.tileMeta, firstgid);
     this.stationaryObjectManager.onObjectSpawned = (gx, gy) => {
       if (this.map && this.map[gy] && this.map[gy][gx] !== undefined) {
         this.map[gy][gx] = 0;
@@ -2380,8 +2477,7 @@ export class RaycastScene extends BaseScene {
         this.uSkyboxYawCS[0] = Math.cos(yawRad);
         this.uSkyboxYawCS[1] = Math.sin(yawRad);
         uniforms.uSkyboxYawCS = this.uSkyboxYawCS;
-        this.skyboxMesh.visible = true;
-        this.floorCeilingMesh.visible = !resolvedConfig.skyboxOnly;
+        this.setSkyboxActive(true, !!resolvedConfig.skyboxOnly);
         return;
       }
 
@@ -2465,8 +2561,7 @@ export class RaycastScene extends BaseScene {
       uniforms.uHasCubeMap = 0.0;
       uniforms.uSkyboxRepeat = [finalRepeatX, finalRepeatY];
       uniforms.uSkyboxOffset = [finalOffsetX, finalOffsetY];
-      this.skyboxMesh.visible = true;
-      this.floorCeilingMesh.visible = !resolvedConfig.skyboxOnly;
+      this.setSkyboxActive(true, !!resolvedConfig.skyboxOnly);
     } catch (err) {
       console.warn(`[RaycastScene] Failed to load skybox texture:`, err);
       this.clearSkybox();
@@ -2496,12 +2591,33 @@ export class RaycastScene extends BaseScene {
         uniforms.uSkyboxCube = this.emptyCubeMapTexture;
       }
     }
-    if (this.skyboxMesh) {
-      this.skyboxMesh.visible = false;
+    if (this.skyboxMesh && this.floorCeilingMesh) {
+      this.setSkyboxActive(false, false);
     }
-    if (this.floorCeilingMesh) {
-      this.floorCeilingMesh.visible = true;
-    }
+  }
+
+  /**
+   * Shows/hides the skybox and configures the floor/ceiling mesh accordingly:
+   * - Skybox active: ceiling holes output alpha 0 (blend on) so the sky shows through.
+   * - No skybox: floor/ceiling is a fully opaque pass (blend off).
+   * The skybox quad covers only the top half unless skybox-only mode is on.
+   */
+  private setSkyboxActive(active: boolean, skyboxOnly: boolean): void {
+    this.skyboxMesh.visible = active;
+    this.floorCeilingMesh.visible = !(active && skyboxOnly) && !(active && this.isSkyboxOnlyActive);
+    this.floorCeilingShader.uniforms.uSkyActive = active ? 1.0 : 0.0;
+    this.floorCeilingMesh.state.blend = active;
+    this.updateSkyboxGeometry(active && (skyboxOnly || this.isSkyboxOnlyActive));
+  }
+
+  private updateSkyboxGeometry(fullScreen: boolean): void {
+    if (!this.skyboxGeom || this.skyboxFullScreen === fullScreen) return;
+    this.skyboxFullScreen = fullScreen;
+    const w = gameConfig.width;
+    const h = gameConfig.height * (fullScreen ? 1.0 : 0.5);
+    const v = fullScreen ? 1.0 : 0.5;
+    this.skyboxGeom.getBuffer("aVertexPosition").update(new Float32Array([0, 0, w, 0, w, h, 0, h]));
+    this.skyboxGeom.getBuffer("aTextureCoord").update(new Float32Array([0, 0, 1, 0, 1, v, 0, v]));
   }
 
   /**
@@ -2543,6 +2659,9 @@ export class RaycastScene extends BaseScene {
     this.isSkyboxOnlyActive = forceState !== undefined ? forceState : !this.isSkyboxOnlyActive;
     if (this.floorCeilingMesh) {
       this.floorCeilingMesh.visible = !this.isSkyboxOnlyActive;
+    }
+    if (this.skyboxMesh) {
+      this.updateSkyboxGeometry(this.skyboxMesh.visible && this.isSkyboxOnlyActive);
     }
     console.log(`[RaycastScene] Skybox-only mode: ${this.isSkyboxOnlyActive}`);
     this.hud?.showToast(`Skybox-Only: ${this.isSkyboxOnlyActive ? "ON" : "OFF"}`, 0x00ffff, 1500);
@@ -2932,6 +3051,7 @@ export class RaycastScene extends BaseScene {
       if (this.floorCeilingMesh) {
         this.floorCeilingMesh.destroy({ children: true });
       }
+      this.wallBoundsTexture?.destroy(true);
     } catch {}
     try {
       if (this.mobileControls) {
@@ -5308,13 +5428,21 @@ export class RaycastScene extends BaseScene {
     this.globalMinWallBottom = gMinBot;
     this.globalMaxWallBottom = gMaxBot;
 
-    if (gMaxTop < gMinBot && gMaxTop > 0 && gMinBot < screenH) {
-      this.uWallBandUniform[0] = gMaxTop / screenH;
-      this.uWallBandUniform[1] = gMinBot / screenH;
-    } else {
-      this.uWallBandUniform[0] = 0.0;
-      this.uWallBandUniform[1] = 0.0;
+    // Upload per-column wall occlusion bounds (R = top / screenH, G = bottom / screenH)
+    const bounds = this.wallBoundsData;
+    for (let i = 0; i < screenW; i++) {
+      const idx = i * 4;
+      const top = this.wallTop[i];
+      const bot = this.wallBottom[i];
+      if (bot > top) {
+        bounds[idx] = Math.min(255, Math.ceil((top / screenH) * 255));
+        bounds[idx + 1] = Math.max(0, Math.floor((bot / screenH) * 255));
+      } else {
+        bounds[idx] = 255;
+        bounds[idx + 1] = 0;
+      }
     }
+    this.wallBoundsTexture.baseTexture.update();
 
     // 3. Update GPU floor/ceiling GLSL shader uniforms (rendered natively in background mesh)
     this.uPlayerPosUniform[0] = this.player.x;
@@ -5407,10 +5535,12 @@ export class RaycastScene extends BaseScene {
         if (isThinWall) {
           if (thinIdx < thinSprites.length) {
             sprite = thinSprites[thinIdx++];
+            if (!sprite.parent) this.thinWallContainer.addChild(sprite);
           }
         } else {
           if (solidIdx < colSprites.length) {
             sprite = colSprites[solidIdx++];
+            if (!sprite.parent) this.wallContainer.addChild(sprite);
           }
         }
         if (!sprite) continue;
@@ -5831,6 +5961,7 @@ export class RaycastScene extends BaseScene {
           let sprite: Sprite;
           if (poolIdx < this.objectSpritePool.length) {
             sprite = this.objectSpritePool[poolIdx];
+            if (!sprite.parent) this.objectContainer.addChild(sprite);
           } else {
             sprite = new Sprite();
             sprite.width = 1;

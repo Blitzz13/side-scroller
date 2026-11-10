@@ -2,6 +2,38 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-11-10] - Mobile 120 FPS Engine Performance Optimizations
+
+### 1. Zero-`discard` Fragment Shaders & Hardware TBDR Early-Z Restoration
+- **Eliminated Mobile Pipeline Stalls (`floorCeiling.frag` & `skybox.frag`)**:
+  - Removed all `discard;` instructions across the fragment shaders. On mobile Tile-Based Deferred Renderers (Mali, Adreno, Apple GPU), `discard` forced the hardware rasterizer out of `OPAQUE` Early-Z / Forward Pixel Kill (FPK) mode into `PUNCH_THROUGH` / Late-Z, causing fragment stalls across all ~3.7M framebuffer pixels.
+  - Transparent ceiling regions now write alpha `0.0` when a skybox is active, cleanly revealing the background skybox mesh using hardware blending.
+  - On indoor levels without a skybox (Level 1 & Level 2), `floorCeilingMesh.state.blend = false` makes floor and ceiling rendering a pure hardware opaque pass.
+
+### 2. Per-Column Solid Wall Occlusion Culling (`uWallBoundsTex`)
+- **1280x1 Dynamic Occlusion Texture**:
+  - Packed the CPU-calculated per-column top and bottom solid wall bounds (`wallTop[i]`, `wallBottom[i]`) into an ultra-compact `1280 × 1` RGBA texture (`uWallBoundsTex`).
+  - Frag shaders perform an immediate single-tap early-out check at the top of `main()`, skipping heavy perspective raymarching, math divisions, and dual atlas lookups for the 70%–90% of screen pixels occluded behind corridor walls.
+
+### 3. Half-Screen Skybox Quad Optimization
+- **Restricted Mesh Geometry During Gameplay**:
+  - Skybox mesh quad (`skyboxGeom`) now spans only the top ceiling half of the screen (`0` to `height * 0.5`, UV `0.0` to `0.5`) during normal gameplay, eliminating ~1.84M redundant CubeMap fragment invocations per frame on the bottom floor plane.
+  - Automatically expands to a full-screen quad when toggling debug skybox-only mode (`F8` / Datapad).
+
+### 4. Selective Tile & Spritesheet VRAM Loading
+- **Level-Specific Asset Ingestion**:
+  - `loadLevel()` now scans the active map layers first to collect `usedTileIds` and only loads, uploads (`baseTexture.update()`), and slices 1px column textures for tiles actually present in the level, preventing unused ~2048x2048 textures from consuming ~240 MB VRAM on Level 1.
+  - `RaycastStationaryObjectManager.initSpritesheets()` now only loads spritesheets required by objects in the current level and uploads each sheet texture once rather than per frame.
+
+### 5. Display Graph & Mobile Compositor Overhead Reduction
+- **Lazy-Attached Sprite Pools**:
+  - Wall column slices, thin walls, and object sprite pools are now instantiated without immediately populating container child lists, only attaching to the scene graph upon first display to drastically reduce `sortChildren()`, `updateTransform()`, and traversal overhead.
+- **Mobile Resolution & Stats Capping**:
+  - Mobile touch devices now cap DPR framebuffer resolution to `1.5`, providing clean nearest-neighbor scaling without pushing 4K-tier fragment counts.
+  - Disabled `pixi-stats` 2D DOM canvas overlay by default on mobile devices to prevent 120 Hz compositor synchronization stalls (enabled on desktop or via `?stats` query parameter).
+
+---
+
 ## [2026-11-10] - Mobile In-Game Debug Datapad, Skybox Shader & Config Decoupling, Enemy Drop Fixes, and Asset Optimizations
 
 ### 1. In-Game Mobile & Desktop Debug Datapad ([`src/scenes/raycast/RaycastDebugMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastDebugMenu.ts))

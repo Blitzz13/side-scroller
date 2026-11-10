@@ -20,12 +20,19 @@ import { Stats } from "pixi-stats";
 BaseTexture.defaultOptions.scaleMode = SCALE_MODES.NEAREST;
 BaseTexture.defaultOptions.mipmap = MIPMAP_MODES.OFF;
 
+// Mobile GPUs can't sustain 120 Hz at a 2560x1440 framebuffer for a 1280x720 pixel-art raycaster,
+// so cap the render resolution on touch devices (CSS `image-rendering: pixelated` keeps it crisp).
+const isMobileDevice =
+  /android|iphone|ipad|ipod/i.test(navigator.userAgent) ||
+  (typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches);
+const maxResolution = isMobileDevice ? 1.5 : 2;
+
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
   width: gameConfig.width,
   height: gameConfig.height,
   autoDensity: true,
-  resolution: Math.max(1, Math.min(window.devicePixelRatio || 1, 2)),
+  resolution: Math.max(1, Math.min(window.devicePixelRatio || 1, maxResolution)),
   antialias: false,
 });
 
@@ -60,7 +67,9 @@ window.onload = async (): Promise<void> => {
   document.body.appendChild(app.view);
 
   // Add Pixi Stats and adjust its z-index
-  const stats = new Stats(app.renderer);
+  // Pixi Stats overlay: skipped on mobile (2D canvas redraws every frame hurt 120 Hz); force with ?stats
+  const showStats = new URLSearchParams(window.location.search).has("stats") || !isMobileDevice;
+  const stats = showStats ? new Stats(app.renderer) : null;
 
   setupAndroidFullscreen();
   resizeCanvas();
@@ -76,9 +85,11 @@ window.onload = async (): Promise<void> => {
   }
 
   // Update stats on each frame
-  Ticker.shared.add(() => {
-    stats.update();
-  });
+  if (stats) {
+    Ticker.shared.add(() => {
+      stats.update();
+    });
+  }
 };
 
 let transitionOverlay: Graphics | null = null;

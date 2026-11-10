@@ -14,12 +14,14 @@ uniform float uHasSkybox;
 uniform float uHasCubeMap;
 uniform vec2 uSkyboxRepeat;
 uniform vec2 uSkyboxOffset;
-uniform vec2 uWallBand; // [globalMaxWallTop / screenH, globalMinWallBottom / screenH]
+uniform sampler2D uWallBoundsTex; // 1280x1 RGBA: R = wallTop/screenH, G = wallBottom/screenH
 
 void main(void) {
-    // 1. Early-out for horizon band 100% occluded by solid walls across all columns
-    if (uWallBand.y > uWallBand.x && vTextureCoord.y >= uWallBand.x && vTextureCoord.y <= uWallBand.y) {
-        discard;
+    // 1. Per-column early-out for pixels 100% occluded by solid walls
+    vec2 wallBounds = texture2D(uWallBoundsTex, vec2(vTextureCoord.x, 0.5)).rg;
+    if (vTextureCoord.y >= wallBounds.r && vTextureCoord.y <= wallBounds.g) {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
     }
 
     // 2. 3D CubeMap Skybox sampling

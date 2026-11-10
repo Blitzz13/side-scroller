@@ -66,11 +66,51 @@ export class RaycastStationaryObjectManager {
     this.container = container;
   }
 
-  public async initSpritesheets(): Promise<void> {
-    for (const cfg of Object.values(STATIONARY_OBJECT_REGISTRY)) {
+  public async initSpritesheets(
+    mapData?: any,
+    tileMeta?: Record<number, TileMeta>,
+    firstgid: number = 1
+  ): Promise<void> {
+    let configs = Object.values(STATIONARY_OBJECT_REGISTRY);
+    if (mapData && tileMeta) {
+      // Only load spritesheets for stationary objects present in this map
+      const needed = new Set<StationaryObjectConfig>();
+      const scan = (layers: any[]) => {
+        for (const layer of layers || []) {
+          if (Array.isArray(layer.layers)) scan(layer.layers);
+          if (layer.data || layer.chunks) {
+            forEachTileInLayer(layer, (rawGid: number) => {
+              if (rawGid === 0) return;
+              const meta = tileMeta[(rawGid & 0x1fffffff) - firstgid] || {};
+              const cfg = this.matchStationaryConfig(
+                (meta.image || "").toLowerCase(),
+                (meta.type || "").toLowerCase()
+              );
+              if (cfg) needed.add(cfg);
+            });
+          } else if (Array.isArray(layer.objects)) {
+            for (const obj of layer.objects) {
+              const rawGid = obj.gid ?? 0;
+              if (rawGid === 0) continue;
+              const meta = tileMeta[(rawGid & 0x1fffffff) - firstgid] || {};
+              const cfg = this.matchStationaryConfig(
+                (meta.image || "").toLowerCase(),
+                (obj.type || meta.type || "").toLowerCase(),
+                (obj.name || "").toLowerCase()
+              );
+              if (cfg) needed.add(cfg);
+            }
+          }
+        }
+      };
+      scan(mapData.layers);
+      configs = Array.from(needed);
+    }
+    for (const cfg of configs) {
       await this.loadSpritesheet(cfg.spritesheet, cfg.name);
     }
   }
+
 
   private async loadSpritesheet(path: string, alias: string): Promise<void> {
     if (this.spritesheets[alias] || this.spritesheets[path]) return;
@@ -105,16 +145,7 @@ export class RaycastStationaryObjectManager {
         sheet.baseTexture.mipmap = MIPMAP_MODES.OFF;
         sheet.baseTexture.update();
       }
-      if (sheet.textures) {
-        for (const k in sheet.textures) {
-          const fTex = sheet.textures[k];
-          if (fTex && fTex.baseTexture) {
-            fTex.baseTexture.scaleMode = SCALE_MODES.NEAREST;
-            fTex.baseTexture.mipmap = MIPMAP_MODES.OFF;
-            fTex.baseTexture.update();
-          }
-        }
-      }
+      // Frames share the spritesheet baseTexture; it was uploaded once above
       this.spritesheets[alias] = sheet;
       this.spritesheets[path] = sheet;
     }
