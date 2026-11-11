@@ -341,9 +341,9 @@ export class RaycastDebugMenu extends Container {
     // Quick Zoom preset buttons
     const presets = [
       { label: "1.0x (Giant)", val: 1.0 },
+      { label: "1.1x (Default)", val: 1.1 },
       { label: "1.6x", val: 1.6 },
-      { label: "2.2x (Default)", val: 2.2 },
-      { label: "2.8x (Distant)", val: 2.8 },
+      { label: "2.2x", val: 2.2 },
       { label: "3.5x (Colossal)", val: 3.5 },
     ];
     let px = -halfW + 196;

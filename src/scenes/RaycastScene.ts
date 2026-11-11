@@ -197,7 +197,7 @@ export class RaycastScene extends BaseScene {
   private uDirUniform = new Float32Array(2);
   private uPlaneUniform = new Float32Array(2);
   private uSkyboxYawCS = new Float32Array([1.0, 0.0]);
-  private currentSkyboxZoom: number = 2.2;
+  private currentSkyboxZoom: number = 1.10;
   private currentSkyboxYaw: number = 0.0;
   private wallBoundsData = new Uint8Array(gameConfig.width * 4);
   private wallBoundsTexture!: Texture;
@@ -2468,7 +2468,7 @@ export class RaycastScene extends BaseScene {
         uniforms.uSkyboxCube = cubeTexture;
         uniforms.uHasCubeMap = 1.0;
         uniforms.uHasSkybox = 0.0;
-        this.currentSkyboxZoom = resolvedConfig.zoom ?? 2.2;
+        this.currentSkyboxZoom = resolvedConfig.zoom ?? 1.10;
         this.currentSkyboxYaw = ((resolvedConfig.yaw ?? 270.0) % 360 + 360) % 360;
         uniforms.uSkyboxZoom = this.currentSkyboxZoom;
         const vFactor = (0.8 * 2.0) / (gameConfig.width / gameConfig.height);

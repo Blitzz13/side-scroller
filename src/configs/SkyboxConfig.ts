@@ -23,7 +23,7 @@ export const SKYBOX_CONFIGS: Record<string, RaycastSkyboxConfig | null> = {
   level2: null, // Imperial facility - no skybox
   level3: {
     cubeMap: "assets/common/hangerCubemap",
-    zoom: 2.2,
+    zoom: 1.10,
     yaw: 270.0,
     skyboxOnly: false,
   },
