@@ -13,7 +13,10 @@ import { RaycastScene } from "./scenes/RaycastScene";
 import { CutsceneScene } from "./scenes/CutsceneScene";
 import { StarWarsIntroScene } from "./scenes/StarWarsIntroScene";
 import { LevelEndScene } from "./scenes/LevelEndScene";
+import { LevelSelectScene } from "./scenes/LevelSelectScene";
 import { RaycastSaveManager } from "./scenes/raycast/RaycastSaveManager";
+import { allConfigs } from "./configs/PlayerConfigs";
+import { sound } from "@pixi/sound";
 import { Stats } from "pixi-stats";
 
 // Set global nearest-neighbor pixel sampling and disable mipmaps for all loaded textures and spritesheets
@@ -36,8 +39,7 @@ const app = new Application<HTMLCanvasElement>({
   antialias: false,
 });
 
-let showInstructions = true;
-let shipConfig: IPlayerConfig;
+let shipConfig: IPlayerConfig = allConfigs[0];
 let currentScale = 1;
 
 // For pixi debug utils
@@ -81,7 +83,7 @@ window.onload = async (): Promise<void> => {
   if (urlLevel) {
     changeScene(Scene.Raycast, urlLevel, true);
   } else {
-    changeScene(Scene.Raycast);
+    changeScene(Scene.MainMenu);
   }
 
   // Update stats on each frame
@@ -110,16 +112,19 @@ function getTransitionOverlay(): Graphics {
 
 function buildScene(scene: Scene, nextLevel?: string): void {
   currentScene?.dispose();
+
+  if (scene !== Scene.MainMenu && scene !== Scene.LevelSelect) {
+    if (sound.exists("menu_theme")) {
+      sound.stop("menu_theme");
+    }
+  }
+
   switch (scene) {
     case Scene.Endless:
-      showInstructions = false;
       currentScene = new EndlessLevel(app.stage, currentScale, shipConfig);
       break;
     case Scene.MainMenu:
-      currentScene = new MainMenu(app.stage, currentScale, showInstructions);
-      currentScene.on(GameEvent.SELECT_SHIP, (config: IPlayerConfig) => {
-        shipConfig = config;
-      });
+      currentScene = new MainMenu(app.stage, currentScale);
       break;
     case Scene.EndGame:
       currentScene = new EndGame(app.stage, currentScale);
@@ -132,6 +137,12 @@ function buildScene(scene: Scene, nextLevel?: string): void {
       break;
     case Scene.Cutscene:
       currentScene = new CutsceneScene(app.stage, currentScale, nextLevel || "level1");
+      break;
+    case Scene.LevelSelect:
+      currentScene = new LevelSelectScene(app.stage, currentScale);
+      currentScene.on(GameEvent.SELECT_SHIP, (config: IPlayerConfig) => {
+        shipConfig = config;
+      });
       break;
     case Scene.Raycast: {
       const startingLevel = nextLevel || RaycastSaveManager.getCurrentLevel();

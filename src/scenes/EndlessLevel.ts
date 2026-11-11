@@ -1,4 +1,4 @@
-import { Container, Rectangle, Ticker } from "pixi.js";
+import { Container, Graphics, Rectangle, Ticker } from "pixi.js";
 import { Player } from "../characters/Player";
 import { Enemy } from "../characters/Enemy";
 import { enemyConfigs } from "../configs/EnemyConfigs";
@@ -16,17 +16,21 @@ import { PickUpType } from "../enums/PickUpType";
 import { pickUps } from "../configs/PickUpConfigs";
 import { sound } from "@pixi/sound";
 import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
+import { Instructions } from "../ui/Instructions";
+import { gameConfig } from "../configs/GameConfig";
 
 export class EndlessLevel extends BaseScene {
     private _player: Player;
     private _corridor: Environment;
     private _enemies: Enemy[];
     private _pickUps: PickUp[];
-    private _enemySpawnInterval: NodeJS.Timeout;
-    private _pickUpSpawnInterval: NodeJS.Timeout;
+    private _enemySpawnInterval?: NodeJS.Timeout;
+    private _pickUpSpawnInterval?: NodeJS.Timeout;
     private _score: Map<EnemyType, number>;
     private _hud: HUD;
     private _inGameMenu: InGameMenu;
+    private _instructions: Instructions;
+    private _instructionsBackdrop: Graphics;
     private _isPaused: boolean;
     private _gameContainer: Container;
     private _keyboardHandler = this.handleKeyboardEvents.bind(this);
@@ -35,7 +39,7 @@ export class EndlessLevel extends BaseScene {
         super(stage, scale)
         this._enemies = [];
         this._pickUps = [];
-        this._isPaused = false;
+        this._isPaused = true;
         this._score = new Map();
         this._hud = new HUD(shipConfig.icon, shipConfig.projectile, commonHudConfig);
         this._gameContainer = new Container();
@@ -50,11 +54,7 @@ export class EndlessLevel extends BaseScene {
         this._hud.ammo = this._player.ammo;
         this._corridor.y = 0;
         this._corridor.scale.set(0.75);
-        this._corridor.startScrolling(2.9);
         this._hud.health = this._player.health;
-        this._enemySpawnInterval = this.spawnEnemies();
-        this._pickUpSpawnInterval = this.spawnPickUps();
-        this.initTickerOperations();
 
         this._gameContainer.addChild(this._player);
 
@@ -62,15 +62,55 @@ export class EndlessLevel extends BaseScene {
         this.addChild(this._gameContainer);
         this.addChild(this._hud);
         this.addChild(this._inGameMenu);
+
+        // Pause game initially while instructions are displayed
+        Ticker.shared.speed = 0;
+
+        // Modal backdrop behind instructions
+        this._instructionsBackdrop = new Graphics();
+        this._instructionsBackdrop.beginFill(0x000000, 0.55);
+        this._instructionsBackdrop.drawRect(0, 0, gameConfig.width, gameConfig.height);
+        this._instructionsBackdrop.endFill();
+        this._instructionsBackdrop.eventMode = "static";
+        this.addChild(this._instructionsBackdrop);
+
+        // Instructions overlay
+        this._instructions = new Instructions();
+        this._instructions.x = gameConfig.width / 2 - 700 / 2;
+        this._instructions.y = gameConfig.height / 2 - 300 / 2;
+        this.addChild(this._instructions);
+
+        this._instructions.on("confirm", () => {
+            this._instructionsBackdrop.visible = false;
+            this.startLevel();
+        });
+
+        // Ensure any previous menu music is stopped before starting battle theme
+        if (sound.exists("menu_theme")) {
+            sound.stop("menu_theme");
+        }
         sound.play("battle_theme", { loop: true });
         this.addEvents();
     }
 
+    private startLevel(): void {
+        this._isPaused = false;
+        Ticker.shared.speed = 1;
+        this._corridor.startScrolling(2.9);
+        this._enemySpawnInterval = this.spawnEnemies();
+        this._pickUpSpawnInterval = this.spawnPickUps();
+        this.initTickerOperations();
+    }
+
     public dispose(): void {
         sound.stopAll();
-        clearInterval(this._enemySpawnInterval);
-        clearInterval(this._pickUpSpawnInterval);
+        Ticker.shared.speed = 1;
+        if (this._enemySpawnInterval) clearInterval(this._enemySpawnInterval);
+        if (this._pickUpSpawnInterval) clearInterval(this._pickUpSpawnInterval);
         this.removeTickerOperations();
+
+        this._instructions?.dispose();
+        this._instructionsBackdrop?.destroy();
 
         this._enemies.forEach(function (enemy: Enemy) {
             enemy.dispose(true);
@@ -125,6 +165,9 @@ export class EndlessLevel extends BaseScene {
 
     private handleKeyboardEvents(e: KeyboardEvent): void {
         if (e.key === "Escape") {
+            if (this._instructions && this._instructions.visible) {
+                return;
+            }
             this.handlePauseGame();
         }
     }

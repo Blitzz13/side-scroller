@@ -7,4 +7,5 @@ export enum Scene {
     LevelEnd = "LevelEnd",
     Cutscene = "Cutscene",
     Intro = "Intro",
+    LevelSelect = "LevelSelect",
 }

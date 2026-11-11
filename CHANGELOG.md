@@ -2,6 +2,39 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-11-11] - Main Menu Overhaul, Mission Level Select Screen, and Progressive Unlocking
+
+### 1. Main Menu Modernization ([`src/scenes/MainMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/MainMenu.ts))
+- **Dynamic "Continue" Action**:
+  - Automatically queries `RaycastSaveManager.loadProgress()`. When previous gameplay progress is detected, displays a prioritized `Continue` button resuming the player's saved level.
+  - Dynamically hides `Continue` on fresh installations or when no progress exists.
+- **Campaign "New Game" Action**:
+  - Clears prior save data in `RaycastSaveManager` and launches the full narrative campaign starting from Level 1 (triggering the Star Wars crawl and briefing sequence).
+- **Streamlined Menu Layout**:
+  - Replaced legacy disjoint "Play" (Endless) and "Raycast 3D" buttons with a clean hierarchy: `Continue` (conditional), `New Game`, and `Level Select`.
+  - Added Star Wars stylized logo and rebel infiltration subtitle with responsive spacing.
+
+### 2. Dedicated Mission Level Select Screen ([`src/scenes/LevelSelectScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelSelectScene.ts))
+- **Interactive Square Mission Tiles (250 × 250)**:
+  - Formatted mission cards into a 4-card grid: Level 1 (*Detention Block*), Level 2 (*Imperial Facility*), Level 3 (*Imperial Hangar*), and *Endless Space Assault*.
+  - Configured safe asset cache lookup (`Assets.cache.has`) to cleanly render placeholder blueprint screenshot slots without triggering network 404 image fetch errors.
+- **Sector Progression & Lockout System**:
+  - **Level 1 & Endless Mode**: Always unlocked and immediately accessible to players.
+  - **Level 2 & Level 3**: Progressively locked until the preceding sector has been cleared (or player's current save is at/beyond the sector).
+  - **Locked Feedback**: Displays dimmed frame, padlock graphical overlay, `LOCKED` badge, and horizontal vibration / shake animation upon tapping locked sectors.
+- **Mobile Readability & High-DPI Sharpness**:
+  - Enlarged level titles to `20px` bold uppercase (`900` weight) with drop shadows.
+  - Set `resolution: 2` across all canvas text elements for crisp rendering on high-DPI mobile devices.
+
+### 3. Endless Level Instructions Modal & Audio State Cleanup ([`src/scenes/EndlessLevel.ts`](file:///D:/Projects/side-scroller/src/scenes/EndlessLevel.ts), [`src/ui/Instructions.ts`](file:///D:/Projects/side-scroller/src/ui/Instructions.ts), [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts))
+- **Instructions Moved to Endless Level Load**:
+  - Relocated instructions overlay from the title screen directly into the Endless level startup sequence.
+  - Pauses game systems (`Ticker.shared.speed = 0`, background corridor scroll, enemy/pickup spawns) with an input-blocking modal backdrop until the player clicks `OK`.
+- **Audio Overlap Resolution**:
+  - Guaranteed `menu_theme` is cleanly stopped prior to playing `battle_theme` or starting raycast missions.
+
+---
+
 ## [2026-11-10] - Mobile 120 FPS Engine Performance Optimizations
 
 ### 1. Zero-`discard` Fragment Shaders & Hardware TBDR Early-Z Restoration
