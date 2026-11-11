@@ -4,6 +4,7 @@ import {
   Graphics,
   ITextStyle,
   MIPMAP_MODES,
+  Rectangle,
   SCALE_MODES,
   Sprite,
   Text,
@@ -489,13 +490,13 @@ export class CutsceneScene extends BaseScene {
     this.promptContainer.position.set(bannerX, bannerY);
 
     const bgGfx = new Graphics();
-    bgGfx.beginFill(0x020a14, 0.92);
-    bgGfx.lineStyle(2, promptCfg.color, 0.85);
+    bgGfx.beginFill(0x05101e, 0.92);
+    bgGfx.lineStyle(2, 0x00e5ff, 0.9);
     bgGfx.drawRoundedRect(0, 0, bannerW, bannerH, 14);
     bgGfx.endFill();
 
-    // Top glowing edge
-    bgGfx.beginFill(promptCfg.color, 0.95);
+    // Top glowing cyan edge
+    bgGfx.beginFill(0x00e5ff, 0.95);
     bgGfx.drawRoundedRect(20, 4, bannerW - 40, 2.5, 2);
     bgGfx.endFill();
 
@@ -506,9 +507,9 @@ export class CutsceneScene extends BaseScene {
       {
         fontSize: promptCfg.fontSize,
         fontWeight: "900",
-        fill: [promptCfg.color, 0xffffff],
+        fill: ["#00e5ff", "#e0f7fa"],
         dropShadow: true,
-        dropShadowColor: promptCfg.color,
+        dropShadowColor: 0x004466,
         dropShadowBlur: 8,
         dropShadowDistance: 0,
         letterSpacing: 3,
@@ -525,7 +526,7 @@ export class CutsceneScene extends BaseScene {
       {
         fontSize: 12,
         fontWeight: "bold",
-        fill: 0x88ccff,
+        fill: 0x38bdf8,
         letterSpacing: 2,
       },
       bannerW / 2,
@@ -546,28 +547,55 @@ export class CutsceneScene extends BaseScene {
   }
 
   private initSkipButton(): void {
-    const btnW = 150;
-    const btnH = 34;
-    const btnX = gameConfig.width - btnW - 20;
-    const btnY = 20;
+    const isMobile =
+      /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(
+        typeof navigator !== "undefined" ? navigator.userAgent || "" : ""
+      ) ||
+      (typeof window !== "undefined" &&
+        ("ontouchstart" in window || navigator.maxTouchPoints > 0));
+
+    // Place button nicely above the dialogue box on the right, aligned with box right edge (x: 810 + 450 = 1260)
+    // Box starts at y: 70, so positioning button at y: 16 ensures clean clearance above the transmission window
+    const btnW = isMobile ? 150 : 130;
+    const btnH = isMobile ? 42 : 32;
+    const btnX = gameConfig.width - btnW - 24;
+    const btnY = 16;
 
     this.skipBtn = new Container();
     this.skipBtn.position.set(btnX, btnY);
+    this.skipBtn.zIndex = 1000;
+
+    // Generous hitArea to make tapping very forgiving on mobile touchscreens
+    this.skipBtn.hitArea = new Rectangle(
+      isMobile ? -15 : -5,
+      isMobile ? -15 : -5,
+      btnW + (isMobile ? 30 : 10),
+      btnH + (isMobile ? 30 : 10)
+    );
 
     const btnGfx = new Graphics();
-    btnGfx.beginFill(0x061424, 0.75);
-    btnGfx.lineStyle(1.5, 0x38bdf8, 0.6);
-    btnGfx.drawRoundedRect(0, 0, btnW, btnH, 8);
-    btnGfx.endFill();
+    const drawSkipGfx = (pressed: boolean) => {
+      btnGfx.clear();
+      // Theme matching cutscene blue transmission panel (0x05101e fill, 0x00e5ff border)
+      btnGfx.beginFill(pressed ? 0x092636 : 0x05101e, 0.9);
+      btnGfx.lineStyle(2, pressed ? 0x38bdf8 : 0x00e5ff, pressed ? 1.0 : 0.85);
+      btnGfx.drawRoundedRect(0, 0, btnW, btnH, 8);
+      btnGfx.endFill();
+    };
+    drawSkipGfx(false);
     this.skipBtn.addChild(btnGfx);
 
+    const displayText = isMobile ? "SKIP" : this.config.skipButtonText;
     this.createSharpText(
-      this.config.skipButtonText,
+      displayText,
       {
-        fontSize: 12,
+        fontSize: isMobile ? 15 : 12,
         fontWeight: "bold",
-        fill: 0xa0e0ff,
-        letterSpacing: 1,
+        fill: 0x00e5ff,
+        letterSpacing: 2,
+        dropShadow: true,
+        dropShadowColor: 0x002233,
+        dropShadowDistance: 1,
       },
       btnW / 2,
       btnH / 2,
@@ -578,9 +606,28 @@ export class CutsceneScene extends BaseScene {
 
     this.skipBtn.eventMode = "static";
     this.skipBtn.cursor = "pointer";
+
+    const triggerSkip = (e?: any) => {
+      e?.stopPropagation?.();
+      drawSkipGfx(false);
+      this.skipBtn.scale.set(1.0);
+      this.handleSkip();
+    };
+
     this.skipBtn.on("pointerdown", (e) => {
       e?.stopPropagation?.();
-      this.handleSkip();
+      drawSkipGfx(true);
+      this.skipBtn.scale.set(0.94);
+    });
+    this.skipBtn.on("pointerup", triggerSkip);
+    this.skipBtn.on("pointertap", triggerSkip);
+    this.skipBtn.on("pointerupoutside", () => {
+      drawSkipGfx(false);
+      this.skipBtn.scale.set(1.0);
+    });
+    this.skipBtn.on("pointercancel", () => {
+      drawSkipGfx(false);
+      this.skipBtn.scale.set(1.0);
     });
 
     this.addChild(this.skipBtn);
@@ -793,18 +840,21 @@ export class CutsceneScene extends BaseScene {
 
     // Display "CLICK TO START MISSION" prompt
     this.promptContainer.visible = true;
+
+    // Hide skip button once all text is revealed
+    if (this.skipBtn) {
+      this.skipBtn.visible = false;
+    }
   }
 
   private handleSkip(): void {
     if (this.isNavigating) return;
 
     if (!this.isDialogFinished) {
-      // Fast-forward to the end of cutscene
+      // Immediately stop voice audio and reveal all dialogue text
       this.stopAudio();
+      this.playButtonClick();
       this.onAudioFinished();
-    } else {
-      // Start mission immediately
-      this.startMission();
     }
   }
 

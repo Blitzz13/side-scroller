@@ -5,8 +5,11 @@ import { Scene } from "../enums/Scene";
 import { Button } from "../misc/Button";
 import { sound } from "@pixi/sound";
 import { RaycastSaveManager } from "./raycast/RaycastSaveManager";
+import { InGameMenu } from "../ui/InGameMenu";
 
 export class MainMenu extends BaseScene {
+    private optionsModal?: InGameMenu;
+
     constructor(stage: Container, scale: number) {
         super(stage, scale);
 
@@ -63,7 +66,7 @@ export class MainMenu extends BaseScene {
         titleText.position.set(gameConfig.width / 2, 160);
         this.addChild(titleText);
 
-        const subtitleText = new Text("REBEL INFILTRATION", {
+        const subtitleText = new Text("A REBEL STORY", {
             fontFamily: "Segoe UI, Arial, sans-serif",
             fontSize: 22,
             fontWeight: "bold",
@@ -92,8 +95,8 @@ export class MainMenu extends BaseScene {
              save.player)
         );
 
-        let currentY = hasProgress ? 315 : 355;
-        const btnGap = 20;
+        let currentY = hasProgress ? 295 : 340;
+        const btnGap = 16;
 
         // 3A. Continue Button (shown only if progress exists)
         if (hasProgress) {
@@ -145,9 +148,38 @@ export class MainMenu extends BaseScene {
             this.emit(Scene.Change, Scene.LevelSelect);
         });
         this.addChild(levelSelectButton);
+        currentY += btnSize.height + btnGap;
+
+        // 3D. Options Button
+        const optionsButton = new Button(btnSize, "Options");
+        optionsButton.x = btnX;
+        optionsButton.y = currentY;
+        optionsButton.eventMode = "static";
+        optionsButton.cursor = "pointer";
+        optionsButton.on("pointertap", (e) => {
+            e?.stopPropagation?.();
+            playClickSound();
+            if (!this.optionsModal) {
+                this.optionsModal = new InGameMenu({ standaloneOptions: true });
+                this.optionsModal.zIndex = 100;
+                this.optionsModal.on("close", () => {
+                    if (this.optionsModal) {
+                        this.optionsModal.visible = false;
+                    }
+                });
+                this.addChild(this.optionsModal);
+            }
+            this.optionsModal.refreshDisplay();
+            this.optionsModal.visible = true;
+        });
+        this.addChild(optionsButton);
     }
 
     public dispose(): void {
+        if (this.optionsModal) {
+            this.optionsModal.dispose();
+            this.optionsModal = undefined;
+        }
         this.destroy({ children: true });
     }
 }

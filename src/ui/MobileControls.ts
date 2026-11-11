@@ -19,6 +19,7 @@ export class MobileControls extends Container implements IDisposable {
   private btnMap: Container;
   private btnObjectives: Container;
   private btnDebug: Container;
+  private btnPause: Container;
   private buttonTurnSpeed: number = 0.04;
 
   constructor() {
@@ -36,7 +37,7 @@ export class MobileControls extends Container implements IDisposable {
       (this as any).emit("action");
     };
 
-    // 1. Right-side touch look area (swipe anywhere on right half of screen to look, tap to interact)
+    // 1. Right-side touch look area (swipe anywhere on right half of screen to look)
     this.lookArea = new TouchLookArea(screenW / 2, screenH);
     this.lookArea.position.set(screenW / 2, 0);
     this.lookArea.on("tap", (e: any) => {
@@ -48,10 +49,9 @@ export class MobileControls extends Container implements IDisposable {
       const inWeaponView = posX >= screenW * 0.45 && posX <= screenW * 0.85 && posY >= screenH * 0.50;
       if (inWeaponHud || inWeaponView) {
         (this as any).emit("switchWeapon");
-      } else {
-        // Tapping screen directly opens doors or interacts with objects in view
-        triggerAction();
       }
+      // Note: General right-side tapping intentionally does NOT trigger doors/interact;
+      // players must explicitly tap the on-screen [E] action button.
     });
     this.addChild(this.lookArea);
 
@@ -277,6 +277,56 @@ export class MobileControls extends Container implements IDisposable {
       this.btnDebug.scale.set(1.0);
     });
     this.addChild(this.btnDebug);
+
+    // 13. In-Game Pause / Options Menu Button ([||])
+    this.btnPause = new Container();
+    this.btnPause.position.set(screenW - 390, 60);
+    this.btnPause.eventMode = "static";
+    this.btnPause.cursor = "pointer";
+
+    const pauseBg = new Graphics();
+    const drawPauseBtnBg = (pressed: boolean) => {
+      pauseBg.clear();
+      const bgColor = pressed ? 0x004466 : 0x091929;
+      const borderColor = pressed ? 0x00ffff : 0x00e5ff;
+      pauseBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
+      pauseBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
+      pauseBg.drawCircle(0, 0, 36);
+      pauseBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
+      pauseBg.drawCircle(0, 0, 31);
+      pauseBg.endFill();
+    };
+    drawPauseBtnBg(false);
+    this.btnPause.addChild(pauseBg);
+
+    const pauseIcon = new Graphics();
+    pauseIcon.beginFill(0x00ffff);
+    // Draw two pause bars
+    pauseIcon.drawRoundedRect(-10, -11, 6, 22, 2);
+    pauseIcon.drawRoundedRect(4, -11, 6, 22, 2);
+    pauseIcon.endFill();
+    this.btnPause.addChild(pauseIcon);
+
+    this.btnPause.on("pointerdown", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      drawPauseBtnBg(true);
+      this.btnPause.scale.set(0.92);
+    });
+    this.btnPause.on("pointerup", (e: any) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      drawPauseBtnBg(false);
+      this.btnPause.scale.set(1.0);
+      (this as any).emit("togglePause");
+    });
+    this.btnPause.on("pointerupoutside", () => {
+      drawPauseBtnBg(false);
+      this.btnPause.scale.set(1.0);
+    });
+    this.btnPause.on("pointercancel", () => {
+      drawPauseBtnBg(false);
+      this.btnPause.scale.set(1.0);
+    });
+    this.addChild(this.btnPause);
   }
 
   public get moveVector(): JoystickVector {

@@ -6,6 +6,7 @@ import {
   Mesh,
   MeshGeometry,
   MIPMAP_MODES,
+  Rectangle,
   SCALE_MODES,
   Shader,
   Sprite,
@@ -89,8 +90,9 @@ export class StarWarsIntroScene extends BaseScene {
     // Release mouse pointer lock so mouse cursor is available
     this.unlockMouse();
 
-    // Scene itself is NOT clickable to skip (only skip button or Escape key)
-    this.eventMode = "none";
+    // Container must be interactive (static) with interactiveChildren = true so children receive events
+    this.eventMode = "static";
+    this.interactiveChildren = true;
     this.cursor = "default";
 
     // 1. Initialize text data directly from intro.json (no hardcoding)
@@ -576,28 +578,53 @@ export class StarWarsIntroScene extends BaseScene {
   }
 
   private initSkipButton(): void {
-    const btnW = 140;
-    const btnH = 32;
-    const btnX = gameConfig.width - btnW - 24;
-    const btnY = 20;
+    const isMobile =
+      /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(
+        typeof navigator !== "undefined" ? navigator.userAgent || "" : ""
+      ) ||
+      (typeof window !== "undefined" &&
+        ("ontouchstart" in window || navigator.maxTouchPoints > 0));
+
+    const btnW = isMobile ? 160 : 140;
+    const btnH = isMobile ? 48 : 34;
+    const btnX = gameConfig.width - btnW - (isMobile ? 20 : 24);
+    const btnY = isMobile ? 24 : 20;
 
     this.skipBtn = new Container();
     this.skipBtn.position.set(btnX, btnY);
+    this.skipBtn.zIndex = 1000;
+
+    // Generous hitArea to make tapping very forgiving on mobile touchscreens
+    this.skipBtn.hitArea = new Rectangle(
+      isMobile ? -15 : -5,
+      isMobile ? -15 : -5,
+      btnW + (isMobile ? 30 : 10),
+      btnH + (isMobile ? 30 : 10)
+    );
 
     const btnGfx = new Graphics();
-    btnGfx.beginFill(0x040c18, 0.75);
-    btnGfx.lineStyle(1.5, 0xffe81f, 0.6);
-    btnGfx.drawRoundedRect(0, 0, btnW, btnH, 8);
-    btnGfx.endFill();
+    const drawSkipGfx = (pressed: boolean) => {
+      btnGfx.clear();
+      // Theme matching cutscene blue transmission panel (0x05101e fill, 0x00e5ff border)
+      btnGfx.beginFill(pressed ? 0x092636 : 0x05101e, 0.9);
+      btnGfx.lineStyle(2, pressed ? 0x38bdf8 : 0x00e5ff, pressed ? 1.0 : 0.85);
+      btnGfx.drawRoundedRect(0, 0, btnW, btnH, 8);
+      btnGfx.endFill();
+    };
+    drawSkipGfx(false);
     this.skipBtn.addChild(btnGfx);
 
+    const displayText = isMobile ? "SKIP" : this.config.skipText;
     this.createSharpText(
-      this.config.skipText,
+      displayText,
       {
-        fontSize: 12,
+        fontSize: isMobile ? 15 : 12,
         fontWeight: "bold",
-        fill: 0xffe81f,
-        letterSpacing: 1.5,
+        fill: 0x00e5ff,
+        letterSpacing: 2,
+        dropShadow: true,
+        dropShadowColor: 0x002233,
+        dropShadowDistance: 1,
       },
       btnW / 2,
       btnH / 2,
@@ -606,12 +633,35 @@ export class StarWarsIntroScene extends BaseScene {
       this.skipBtn
     );
 
-    // Only the button is interactive for mouse clicking
     this.skipBtn.eventMode = "static";
     this.skipBtn.cursor = "pointer";
+
+    const triggerSkip = (e?: any) => {
+      e?.stopPropagation?.();
+      drawSkipGfx(false);
+      this.skipBtn.scale.set(1.0);
+      try {
+        if (sound.exists("button_click")) {
+          sound.play("button_click", { volume: 0.5 });
+        }
+      } catch {}
+      this.handleSkip();
+    };
+
     this.skipBtn.on("pointerdown", (e) => {
       e?.stopPropagation?.();
-      this.handleSkip();
+      drawSkipGfx(true);
+      this.skipBtn.scale.set(0.94);
+    });
+    this.skipBtn.on("pointerup", triggerSkip);
+    this.skipBtn.on("pointertap", triggerSkip);
+    this.skipBtn.on("pointerupoutside", () => {
+      drawSkipGfx(false);
+      this.skipBtn.scale.set(1.0);
+    });
+    this.skipBtn.on("pointercancel", () => {
+      drawSkipGfx(false);
+      this.skipBtn.scale.set(1.0);
     });
 
     this.addChild(this.skipBtn);

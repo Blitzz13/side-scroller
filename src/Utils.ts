@@ -30,9 +30,7 @@ export function getTextureArrayFromStrings(textureStrings: string[]): Texture[] 
 export function getRandomInt(min: number, max: number) {
   min = Math.ceil(min);
   max = Math.floor(max);
-  const asd = Math.floor(Math.random() * (max - min)) + min;
-  console.log(asd);
-  return asd;
+  return Math.floor(Math.random() * (max - min)) + min;
 }
 
 export function setTintToSprite(container: Sprite | AnimatedSprite, tint: number, timout: number): NodeJS.Timeout {

@@ -52,6 +52,9 @@ import skyboxVert from "./raycast/shaders/skybox.vert";
 import skyboxFrag from "./raycast/shaders/skybox.frag";
 import { RaycastMinimap } from "../plugins/minimap";
 import { RaycastMissionManager, ITriggerZone } from "./raycast/objectives";
+import { InGameMenu } from "../ui/InGameMenu";
+import { SettingsManager } from "../managers/SettingsManager";
+import { GameEvent } from "../enums/GameEvent";
 import {
   calculateMapBounds,
   extractTiledGidAndRotation,
@@ -224,6 +227,8 @@ export class RaycastScene extends BaseScene {
   private minimap!: RaycastMinimap;
   private missionManager!: RaycastMissionManager;
   private debugMenu!: RaycastDebugMenu;
+  private inGameMenu!: InGameMenu;
+  private isPaused: boolean = false;
   private playerController!: RaycastPlayerController;
   private pickupManager!: RaycastPickupManager;
   private breakableManager!: RaycastBreakableManager;
@@ -554,6 +559,7 @@ export class RaycastScene extends BaseScene {
       this.mobileControls.on("toggleMinimap", () => this.minimap.toggle());
       this.mobileControls.on("toggleObjectives", () => this.missionManager.toggleObjectives());
       this.mobileControls.on("toggleDebug", () => this.debugMenu.toggle());
+      this.mobileControls.on("togglePause", () => this.togglePause());
       this.addChild(this.mobileControls);
     }
 
@@ -620,6 +626,17 @@ export class RaycastScene extends BaseScene {
     if (!this.isMobileDevice()) {
       this.addChild(this.debugMenu.getTriggerButton());
     }
+
+    // In-game Pause & Options Menu
+    this.inGameMenu = new InGameMenu();
+    this.inGameMenu.zIndex = 110;
+    this.inGameMenu.on(GameEvent.RESUME_GAME, () => {
+      this.resumeGame();
+    });
+    this.inGameMenu.on(GameEvent.QUIT_GAME, () => {
+      this.quitToMainMenu();
+    });
+    this.addChild(this.inGameMenu);
 
     this.setupControls();
 
@@ -3054,6 +3071,11 @@ export class RaycastScene extends BaseScene {
       this.wallBoundsTexture?.destroy(true);
     } catch {}
     try {
+      if (this.inGameMenu) {
+        this.inGameMenu.dispose();
+      }
+    } catch {}
+    try {
       if (this.mobileControls) {
         this.mobileControls.dispose();
       }
@@ -3235,6 +3257,9 @@ export class RaycastScene extends BaseScene {
   };
 
   private mouseDownHandler = (e: MouseEvent) => {
+    if (this.isPaused) {
+      return;
+    }
     if (e.button === 2) {
       e.preventDefault();
     }
@@ -3286,6 +3311,7 @@ export class RaycastScene extends BaseScene {
   };
 
   private tryShoot(isAutoFire: boolean = false): void {
+    if (this.isPaused) return;
     if (this.debugMenu?.isVisibleOpen) return;
     if (this.stairsManager && this.stairsManager.isTransitioning()) return;
     const currentCfg = this.playerController.weaponConfig;
@@ -3453,7 +3479,8 @@ export class RaycastScene extends BaseScene {
     // Find closest enemy along aiming cone
     let targetEnemy: RaycastEnemy | null = null;
     let closestEnemyDist = maxTargetDist;
-    const hitRadius = 0.55;
+    const isAutoAim = SettingsManager.getInstance().getAutoAim();
+    const hitRadius = isAutoAim ? 0.65 : 0.22;
 
     for (const enemy of this.enemyManager.activeEnemies) {
       if (enemy.isDead) continue;
@@ -3501,27 +3528,33 @@ export class RaycastScene extends BaseScene {
     const { targetEnemy, breakableHit } = this.getAimTarget();
 
     if (targetEnemy) {
-      // Valid enemy that will take damage: turn red and snap crosshair to enemy screen position
-      let snapX = targetEnemy.screenX;
-      let snapY = targetEnemy.screenY;
+      const isAutoAim = SettingsManager.getInstance().getAutoAim();
+      if (isAutoAim) {
+        // Valid enemy that will take damage: turn red and snap crosshair to enemy screen position
+        let snapX = targetEnemy.screenX;
+        let snapY = targetEnemy.screenY;
 
-      // Fallback projection if screen coordinates were not yet rendered or offscreen
-      if (snapX <= 0 || snapY <= 0 || snapX > gameConfig.width) {
-        const invDet = 1.0 / (this.player.planeX * this.player.dirY - this.player.dirX * this.player.planeY);
-        const dx = targetEnemy.x - this.player.x;
-        const dy = targetEnemy.y - this.player.y;
-        const transformX = invDet * (this.player.dirY * dx - this.player.dirX * dy);
-        const transformY = invDet * (-this.player.planeY * dx + this.player.planeX * dy);
-        if (transformY > 0.1) {
-          snapX = (gameConfig.width / 2) * (1 + transformX / transformY);
-          snapY = gameConfig.height / 2;
-        } else {
-          snapX = gameConfig.width / 2;
-          snapY = gameConfig.height / 2;
+        // Fallback projection if screen coordinates were not yet rendered or offscreen
+        if (snapX <= 0 || snapY <= 0 || snapX > gameConfig.width) {
+          const invDet = 1.0 / (this.player.planeX * this.player.dirY - this.player.dirX * this.player.planeY);
+          const dx = targetEnemy.x - this.player.x;
+          const dy = targetEnemy.y - this.player.y;
+          const transformX = invDet * (this.player.dirY * dx - this.player.dirX * dy);
+          const transformY = invDet * (-this.player.planeY * dx + this.player.planeX * dy);
+          if (transformY > 0.1) {
+            snapX = (gameConfig.width / 2) * (1 + transformX / transformY);
+            snapY = gameConfig.height / 2;
+          } else {
+            snapX = gameConfig.width / 2;
+            snapY = gameConfig.height / 2;
+          }
         }
-      }
 
-      this.hud.updateCrosshairTarget(true, snapX, snapY, delta);
+        this.hud.updateCrosshairTarget(true, snapX, snapY, delta);
+      } else {
+        // Manual aim: turn red to indicate target lock, but keep crosshair at center screen
+        this.hud.updateCrosshairTarget(true, gameConfig.width / 2, gameConfig.height / 2, delta);
+      }
     } else if (breakableHit && !breakableHit.breakable.isBroken) {
       // Valid breakable target that will break: turn red at default center position
       this.hud.updateCrosshairTarget(true, gameConfig.width / 2, gameConfig.height / 2, delta);
@@ -3566,10 +3599,27 @@ export class RaycastScene extends BaseScene {
   }
 
   private keyDownHandler = (e: KeyboardEvent) => {
+    const key = e.key.toLowerCase();
+    if (key === "escape") {
+      if (this.inGameMenu?.visible) {
+        this.resumeGame();
+      } else if (this.debugMenu?.isVisibleOpen) {
+        this.debugMenu.hide();
+      } else if (this.missionManager?.isObjectivesOpen) {
+        this.missionManager.hideObjectives();
+      } else if (this.minimap?.isOpen) {
+        this.minimap.hide();
+      } else {
+        this.pauseGame();
+      }
+      return;
+    }
+    if (this.isPaused) {
+      return;
+    }
     if (!this.bgMusicInstance) {
       this.playBackgroundMusic();
     }
-    const key = e.key.toLowerCase();
     if (key in this.keys) {
       this.keys[key] = true;
       // If Shift is already held when starting to move on desktop, immediately sprint
@@ -3646,15 +3696,6 @@ export class RaycastScene extends BaseScene {
     if (key === "`" || key === "~" || e.key === "F2") {
       this.debugMenu?.toggle();
     }
-    if (key === "escape") {
-      if (this.debugMenu?.isVisibleOpen) {
-        this.debugMenu.hide();
-      } else if (this.missionManager?.isObjectivesOpen) {
-        this.missionManager.hideObjectives();
-      } else if (this.minimap?.isOpen) {
-        this.minimap.hide();
-      }
-    }
   };
 
   private keyUpHandler = (e: KeyboardEvent) => {
@@ -3686,13 +3727,71 @@ export class RaycastScene extends BaseScene {
     this.player.planeY = oldPlaneX * sin + this.player.planeY * cos;
   }
 
+  public togglePause(): void {
+    if (this.isPaused) {
+      this.resumeGame();
+    } else {
+      this.pauseGame();
+    }
+  }
+
+  public pauseGame(): void {
+    if (this.isPaused) return;
+    this.isPaused = true;
+    for (const k in this.keys) {
+      this.keys[k] = false;
+    }
+    this.isLeftMouseDown = false;
+    this.isRightMouseDown = false;
+    if (this.playerController) {
+      this.playerController.stopSprint();
+    }
+    try {
+      if (document.exitPointerLock) {
+        document.exitPointerLock();
+      }
+    } catch {}
+    if (this.inGameMenu) {
+      this.inGameMenu.refreshDisplay();
+      this.inGameMenu.visible = true;
+    }
+  }
+
+  public resumeGame(): void {
+    if (!this.isPaused) return;
+    this.isPaused = false;
+    if (this.inGameMenu) {
+      this.inGameMenu.visible = false;
+    }
+    if (!this.isMobileDevice()) {
+      try {
+        const p: any = (document.body as any).requestPointerLock?.();
+        if (p && typeof p.catch === "function") {
+          p.catch(() => {});
+        }
+      } catch {}
+    }
+  }
+
+  public quitToMainMenu(): void {
+    if (this.inGameMenu) {
+      this.inGameMenu.visible = false;
+    }
+    this.isPaused = false;
+    this.emit(Scene.Change, Scene.MainMenu);
+  }
+
   private mouseMoveHandler = (e: MouseEvent) => {
+    if (this.isPaused) return;
     if (document.pointerLockElement !== document.body) return;
     const angle = e.movementX * this.mouseSensitivity;
     this.rotatePlayer(angle);
   };
 
   private tick(delta: number) {
+    if (this.isPaused) {
+      return;
+    }
     // Screen shake update (only shakes the 3D world, keeping HUD and overlays steady)
     if (this.shakeDuration > 0) {
       this.shakeDuration -= delta / 60;

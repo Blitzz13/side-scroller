@@ -173,7 +173,7 @@ export const cutscene1Config: ICutsceneConfig = {
     text: "CLICK ANYWHERE TO START MISSION",
     subText: "[ OR PRESS ENTER / SPACE ]",
     fontSize: 22,
-    color: 0x00ffcc,
+    color: 0x00e5ff,
     pulseSpeed: 3.5,
   },
   skipButtonText: "SKIP [ESC]",

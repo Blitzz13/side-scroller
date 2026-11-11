@@ -2,6 +2,58 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-11-11] - Options Menu, In-Game Pause System, Audio & Auto-Aim Controls, and Mobile UI Enhancements
+
+### 1. Settings & Options Manager ([`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts))
+- **Unified Game Settings Architecture**:
+  - Implemented persistent singleton `SettingsManager` saving user preferences to `localStorage` under `star_wars_game_settings`.
+  - **Game Voices Volume**: Steppable in 10% increments (0% to 100%, default 80%); dynamically updates `enemyVoicelineConfig.volume`.
+  - **Music Volume**: Steppable in 10% increments (0% to 100%, default 50%); updates `gameConfig.musicVolume` and dynamically adjusts all active/registered background music tracks (`menu_theme`, `battle_theme`, `calm_loop`, `base_alarm`, `intro_theme`, `end_theme`) via `@pixi/sound`.
+  - **Auto-Aim Toggle**: Automatically detects mobile devices via user-agent & coarse-pointer checks to enable Auto-Aim by default on touchscreens while keeping manual aim default on desktop; can be toggled on/off at any time.
+  - **Listener Subscriptions**: Dispatches change callbacks so active UI dialogues and menus automatically refresh without polling.
+
+### 2. Modern In-Game Pause & Options Modal ([`src/ui/InGameMenu.ts`](file:///D:/Projects/side-scroller/src/ui/InGameMenu.ts))
+- **Sci-Fi Star Wars Modal Design**:
+  - Semi-transparent backdrop (`0x000000`, 65% alpha) blocking mouse and touch inputs from reaching gameplay elements underneath.
+  - Cybernetic dialog panel with cyan border outlines (`0x00e5ff`) and inner glow accents.
+  - **Interactive Volume Steppers**: `[-] [ XX% ] [+]` pill buttons with hover and click feedback.
+  - **Auto-Aim Status Switch**: Visual `ENABLED` (green) / `DISABLED` (grey) toggle switch.
+  - **Dual Display Modes**:
+    - **In-Game Pause Mode**: Features `GAME PAUSED` title, with `RESUME` and `QUIT` buttons aligned cleanly to the bottom of the dialog panel.
+    - **Main Menu Standalone Mode**: Features `SETTINGS & OPTIONS` title with a single bottom `BACK` button.
+
+### 3. In-Game Pause & Gameplay State Management ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/EndlessLevel.ts`](file:///D:/Projects/side-scroller/src/scenes/EndlessLevel.ts))
+- **State Pause & Unpause Integration**:
+  - Pressing `Escape` or tapping the on-screen mobile pause button pauses the game, halts the ticker loop updates, exits desktop pointer lock, and displays `InGameMenu`.
+  - Pressing `Escape` again or clicking `RESUME` dismisses the pause menu and restores pointer lock.
+  - Clicking `QUIT` quits the level cleanly and transitions back to the main menu.
+  - Priority `Escape` key handling in `keyDownHandler` prevents gameplay movements or actions from registering while paused.
+- **Dynamic Auto-Aim Implementation**:
+  - **Enabled**: Uses a generous targeting cone (`hitRadius = 0.65`) and snaps the HUD crosshair to the targeted enemy's screen coordinates.
+  - **Disabled**: Requires strict aim alignment (`hitRadius = 0.22`), turning the crosshair red on target acquisition while keeping the reticle centered.
+
+### 4. Mobile Controls & Interaction Refinements ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts), [`src/scenes/CutsceneScene.ts`](file:///D:/Projects/side-scroller/src/scenes/CutsceneScene.ts))
+- **Dedicated Circular Mobile Pause Button**:
+  - Added on-screen `[❚❚]` pause button to both `MobileControls` and `EndlessLevel` header, styled identically to the existing circular header buttons (radius 36, dark blue fill `0x091929`, cyan border `0x00e5ff`, inner ring).
+- **Accidental Door Opening Fix**:
+  - Removed door/action trigger on quick taps in `TouchLookArea` on the right side of the screen. Door and terminal interactions on mobile now strictly require pressing the on-screen `[E]` button.
+- **Intro & Cutscene Skip Button Enhancements**:
+  - Fixed mobile touch unresponsiveness by correcting scene container `eventMode` from `"none"` to `"static"` so child touch events cascade properly.
+  - Added generous touch `hitArea` padding and unified `pointerdown`, `pointerup`, and `pointertap` handlers.
+  - Relocated the cutscene dialogue skip button (`y: 16`) to avoid overlapping the dialogue transmission window.
+  - Skipping in the cutscene now stops voice audio and reveals all text immediately, hiding the skip button so players can read at their own pace before tapping the mission banner.
+  - Unified the palette of the skip buttons, dialogue box, and mission prompt banner with matching cyan borders (`0x00e5ff`) and cosmic navy backgrounds (`0x05101e`).
+
+### 5. Main Menu Styling & Theming ([`src/scenes/MainMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/MainMenu.ts), [`src/misc/Button.ts`](file:///D:/Projects/side-scroller/src/misc/Button.ts), [`assets/cutscenes/cutscene1/config.ts`](file:///D:/Projects/side-scroller/assets/cutscenes/cutscene1/config.ts))
+- **Subtitled "A REBEL STORY"**: Renamed subtitle on the title screen to match lore branding.
+- **Button Palette Unification**:
+  - Updated `Button` component styling to match the cyan hue of "A REBEL STORY" (`0x00e5ff` text with subtle drop shadow) and the glowing cyan border (`0x00e5ff`, 2px) on cosmic dark blue fill (`0x05101e`).
+- **Code Cleanliness & Discrepancy Fixes**:
+  - Removed debug logging in `getRandomInt()` in `src/Utils.ts`.
+  - Verified clean subscription disposals and zero-error Webpack compilation.
+
+---
+
 ## [2026-11-11] - Main Menu Overhaul, Mission Level Select Screen, and Progressive Unlocking
 
 ### 1. Main Menu Modernization ([`src/scenes/MainMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/MainMenu.ts))
