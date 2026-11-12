@@ -12,6 +12,7 @@ export class RaycastTriggerManager extends utils.EventEmitter {
   private currentInsideInteractiveTrigger: ITriggerZone | null = null;
   private currentPlayingSoundInstance: any = null;
   private currentHtmlAudio: HTMLAudioElement | null = null;
+  private currentVoiceKey: string | null = null;
 
   constructor(
     objectiveManager: RaycastObjectiveManager,
@@ -500,7 +501,14 @@ export class RaycastTriggerManager extends utils.EventEmitter {
     }
   }
 
+  private finishVoiceline(key: string | null): void {
+    if (!key || this.currentVoiceKey !== key) return;
+    this.currentVoiceKey = null;
+    this.callbacks.onVoicelineEnd?.(key);
+  }
+
   private stopCurrentVoiceline(): void {
+    this.finishVoiceline(this.currentVoiceKey);
     if (this.currentPlayingSoundInstance) {
       try {
         this.currentPlayingSoundInstance.stop?.();
@@ -524,20 +532,53 @@ export class RaycastTriggerManager extends utils.EventEmitter {
 
     this.stopCurrentVoiceline();
 
+    this.currentVoiceKey = cleanName;
+    this.callbacks.onVoicelineStart?.(this.currentLevel, cleanName);
+
     const playWithHtmlAudio = () => {
       try {
         const audio = new Audio(soundUrl);
         audio.volume = 0.9;
         this.currentHtmlAudio = audio;
-        audio.play().catch(() => {});
+        audio.ontimeupdate = () => {
+          if (this.currentHtmlAudio === audio && audio.duration > 0) {
+            this.callbacks.onVoicelineProgress?.(
+              cleanName,
+              audio.currentTime / audio.duration,
+              audio.duration
+            );
+          }
+        };
+        audio.play().catch(() => this.finishVoiceline(cleanName));
         audio.onended = () => {
           if (this.currentHtmlAudio === audio) {
             this.currentHtmlAudio = null;
           }
+          this.finishVoiceline(cleanName);
         };
       } catch (err) {
+        this.finishVoiceline(cleanName);
         console.warn(`[RaycastTriggerManager] HTML5 Audio fallback failed for ${soundUrl}:`, err);
       }
+    };
+
+    const trackInstance = (inst: any) => {
+      // Ignore if another voiceline replaced this one while the sound was loading.
+      if (this.currentVoiceKey !== cleanName || !inst) return;
+      this.currentPlayingSoundInstance = inst;
+      try {
+        inst.on?.("progress", (progress: number, duration?: number) => {
+          if (this.currentVoiceKey === cleanName) {
+            const dur =
+              typeof duration === "number" && duration > 0
+                ? duration
+                : (sound.find(alias)?.duration as number | undefined);
+            this.callbacks.onVoicelineProgress?.(cleanName, progress, dur);
+          }
+        });
+        inst.once?.("end", () => this.finishVoiceline(cleanName));
+        inst.once?.("stop", () => this.finishVoiceline(cleanName));
+      } catch {}
     };
 
     try {
@@ -546,13 +587,9 @@ export class RaycastTriggerManager extends utils.EventEmitter {
         if (s && s.isLoaded) {
           const res = sound.play(alias, { volume: 0.9 });
           if (res && typeof (res as any).then === "function") {
-            (res as any)
-              .then((inst: any) => {
-                this.currentPlayingSoundInstance = inst;
-              })
-              .catch(() => {});
+            (res as any).then(trackInstance).catch(() => this.finishVoiceline(cleanName));
           } else {
-            this.currentPlayingSoundInstance = res;
+            trackInstance(res);
           }
         } else {
           playWithHtmlAudio();

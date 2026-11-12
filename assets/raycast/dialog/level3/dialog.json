@@ -1,0 +1,84 @@
+{
+  "level": 3,
+  "dialogues": {
+    "i_hate_sewers": {
+      "context": "Sewer Internal Monologue",
+      "lines": [
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "Great. Sewers. I swore after that Coruscant job I was done crawling through other people's filth. Sneaking past the inner perimeter on foot is suicide. ...We're gonna need armor. Something with heavy cannons."
+          }
+        }
+      ]
+    },
+    "prisoner_dialog_1": {
+      "context": "Prisoner Conversation 1 (Cell Extraction)",
+      "lines": [
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "You the defector? ...Or am I risking my neck for the wrong Imperial officer?"
+          }
+        },
+        {
+          "speaker": "Prisoner",
+          "isPlayer": false,
+          "text": {
+            "en": "You are cutting it dangerously close! I was beginning to think this Rebellion was all talk."
+          }
+        },
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "Don't pop the champagne just yet, pal. We still have the minor inconvenience of getting you out of here in one piece. When this door breaches, you stay glued to my six, and you do not speak."
+          }
+        },
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "...Right on time. That's the cavalry shaking the front door. Move!"
+          }
+        }
+      ]
+    },
+    "prisoner_dialog_2": {
+      "context": "Prisoner Conversation 2 (Heading to the Hangar)",
+      "lines": [
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "Main hangar's just past this bulkhead. We're borrowing one of their AT-STs."
+          }
+        },
+        {
+          "speaker": "Prisoner",
+          "isPlayer": false,
+          "text": {
+            "en": "Are you completely mad?! We'll never make it past the perimeter!"
+          }
+        },
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "Look, nobody asked for your input! You wanna stay right here and find a better way? Be my guest."
+          }
+        },
+        {
+          "speaker": "Prisoner",
+          "isPlayer": false,
+          "characterState": "Prideful Resignation",
+          "text": {
+            "en": "I do not take orders from mercenaries... Blast it all. Just lead the way."
+          }
+        }
+      ]
+    }
+  }
+}

@@ -52,6 +52,7 @@ import skyboxVert from "./raycast/shaders/skybox.vert";
 import skyboxFrag from "./raycast/shaders/skybox.frag";
 import { RaycastMinimap } from "../plugins/minimap";
 import { RaycastMissionManager, ITriggerZone } from "./raycast/objectives";
+import { SubtitleManager, RaycastSubtitles } from "./raycast/subtitles";
 import { InGameMenu } from "../ui/InGameMenu";
 import { RaycastLoadingOverlay } from "../ui/RaycastLoadingOverlay";
 import { SettingsManager } from "../managers/SettingsManager";
@@ -227,6 +228,8 @@ export class RaycastScene extends BaseScene {
   private hud!: RaycastHUD;
   private minimap!: RaycastMinimap;
   private missionManager!: RaycastMissionManager;
+  private subtitleManager!: SubtitleManager;
+  private subtitles?: RaycastSubtitles;
   private debugMenu!: RaycastDebugMenu;
   private inGameMenu!: InGameMenu;
   private loadingOverlay?: RaycastLoadingOverlay;
@@ -574,7 +577,17 @@ export class RaycastScene extends BaseScene {
       hidePrompt: () => this.hud?.clearPrompt(),
       onTriggerFired: (trigger) => this.handleTriggerFired(trigger),
       onTriggerWaitComplete: (trigger) => this.handleTriggerWaitComplete(trigger),
+      onVoicelineStart: (level, key) => {
+        this.subtitles?.start(this.subtitleManager.getCues(level, key));
+      },
+      onVoicelineProgress: (_key, progress, durationSec) =>
+        this.subtitles?.setProgress(progress, durationSec),
+      onVoicelineEnd: () => this.subtitles?.clear(),
     });
+    this.subtitleManager = new SubtitleManager();
+    this.subtitles = new RaycastSubtitles();
+    this.subtitles.zIndex = 90; // Above HUD & mobile controls, below objectives/minimap/menus
+    this.addChild(this.subtitles);
     const missionUI = this.missionManager.getUIContainer();
     missionUI.zIndex = 95;
     this.hud.on("toggleObjectives", () => this.missionManager.toggleObjectives());
@@ -1449,6 +1462,8 @@ export class RaycastScene extends BaseScene {
     // Initialize mission triggers and objectives
     if (this.missionManager) {
       await this.missionManager.init(mapData, levelName, offsetX, offsetY);
+      this.subtitles?.clear();
+      await this.subtitleManager.load(levelName);
     }
     this.initControlledDoors();
 
@@ -3146,6 +3161,13 @@ export class RaycastScene extends BaseScene {
     try {
       if (this.missionManager) {
         this.missionManager.destroy();
+      }
+    } catch {}
+    try {
+      if (this.subtitles) {
+        const subtitles = this.subtitles;
+        this.subtitles = undefined;
+        subtitles.dispose();
       }
     } catch {}
     try {

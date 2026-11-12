@@ -1,7 +1,6 @@
 { "compressionlevel":-1,
  "height":20,
  "infinite":true,
- "properties":[],
  "layers":[
         {
          "id":20,
@@ -1484,6 +1483,29 @@
                 }, 
                 {
                  "draworder":"topdown",
+                 "id":24,
+                 "name":"LevelFinish",
+                 "objects":[
+                        {
+                         "height":128,
+                         "id":127,
+                         "name":"credits",
+                         "opacity":1,
+                         "rotation":0,
+                         "type":"",
+                         "visible":true,
+                         "width":192,
+                         "x":0,
+                         "y":-640
+                        }],
+                 "opacity":1,
+                 "type":"objectgroup",
+                 "visible":true,
+                 "x":0,
+                 "y":0
+                }, 
+                {
+                 "draworder":"topdown",
                  "id":28,
                  "name":"PositionedEnemies",
                  "objects":[
@@ -1553,29 +1575,6 @@
                          "width":35,
                          "x":268.666666666667,
                          "y":3221.33333333333
-                        }],
-                 "opacity":1,
-                 "type":"objectgroup",
-                 "visible":true,
-                 "x":0,
-                 "y":0
-                }, 
-                {
-                 "draworder":"topdown",
-                 "id":24,
-                 "name":"LevelFinish",
-                 "objects":[
-                        {
-                         "height":128,
-                         "id":127,
-                         "name":"credits",
-                         "opacity":1,
-                         "rotation":0,
-                         "type":"",
-                         "visible":true,
-                         "width":192,
-                         "x":0,
-                         "y":-640
                         }],
                  "opacity":1,
                  "type":"objectgroup",
@@ -1656,6 +1655,16 @@
                                          "type":"object",
                                          "value":81
                                         }]
+                                }, 
+                                {
+                                 "name":"objective",
+                                 "propertytype":"Objective",
+                                 "type":"class",
+                                 "value":
+                                    {
+                                     "isObjective":true,
+                                     "objectiveKey":"free_the_prisoner"
+                                    }
                                 }],
                          "rotation":0,
                          "type":"",
@@ -1718,7 +1727,7 @@
                          "y":3072
                         }, 
                         {
-                         "height":192,
+                         "height":64,
                          "id":68,
                          "name":"",
                          "opacity":1,
@@ -1737,8 +1746,8 @@
                          "type":"Triger",
                          "visible":true,
                          "width":64,
-                         "x":1280,
-                         "y":2944
+                         "x":-704,
+                         "y":2688
                         }, 
                         {
                          "height":128,
@@ -1798,7 +1807,7 @@
                                  "value":
                                     {
                                      "isObjective":true,
-                                     "objectiveKey":"turnOnTheWalker"
+                                     "objectiveKey":"turn_on_the_walker"
                                     }
                                 }, 
                                 {
@@ -1839,7 +1848,8 @@
                                  "value":
                                     {
                                      "displayMessage":"press_e",
-                                     "isObjective":true
+                                     "isObjective":false,
+                                     "objectiveKey":""
                                     }
                                 }, 
                                 {
@@ -1872,6 +1882,139 @@
                          "width":127.666666666667,
                          "x":-1152,
                          "y":2753.33333333333
+                        }, 
+                        {
+                         "height":128,
+                         "id":137,
+                         "name":"",
+                         "opacity":1,
+                         "properties":[
+                                {
+                                 "name":"voicelinesOnTrigger",
+                                 "type":"list",
+                                 "value":[
+                                        {
+                                         "type":"string",
+                                         "value":"prisoner_dialog_1"
+                                        }]
+                                }, 
+                                {
+                                 "name":"wait",
+                                 "propertytype":"Wait",
+                                 "type":"class",
+                                 "value":
+                                    {
+                                     "shouldWait":true,
+                                     "waitTimeInSeconds":0
+                                    }
+                                }],
+                         "rotation":0,
+                         "type":"Triger",
+                         "visible":true,
+                         "width":64,
+                         "x":-64,
+                         "y":3904
+                        }, 
+                        {
+                         "height":64,
+                         "id":141,
+                         "name":"",
+                         "opacity":1,
+                         "properties":[
+                                {
+                                 "name":"sound",
+                                 "propertytype":"Sound",
+                                 "type":"class",
+                                 "value":
+                                    {
+                                     "action":"start",
+                                     "shouldLoop":true,
+                                     "soundName":"sewer_ambience"
+                                    }
+                                }, 
+                                {
+                                 "name":"voicelinesOnTrigger",
+                                 "type":"list",
+                                 "value":[
+                                        {
+                                         "type":"string",
+                                         "value":"i_hate_sewers"
+                                        }]
+                                }],
+                         "rotation":0,
+                         "type":"Triger",
+                         "visible":true,
+                         "width":64,
+                         "x":1920,
+                         "y":2880
+                        }, 
+                        {
+                         "height":64,
+                         "id":143,
+                         "name":"",
+                         "opacity":1,
+                         "properties":[
+                                {
+                                 "name":"sound",
+                                 "propertytype":"Sound",
+                                 "type":"class",
+                                 "value":
+                                    {
+                                     "action":"start",
+                                     "shouldLoop":true,
+                                     "soundName":"sewer_ambiance"
+                                    }
+                                }],
+                         "rotation":0,
+                         "type":"Triger",
+                         "visible":true,
+                         "width":64,
+                         "x":-704,
+                         "y":2496
+                        }, 
+                        {
+                         "height":64,
+                         "id":144,
+                         "name":"",
+                         "opacity":1,
+                         "properties":[
+                                {
+                                 "name":"sound",
+                                 "propertytype":"Sound",
+                                 "type":"class",
+                                 "value":
+                                    {
+                                     "soundName":"sewer_ambiance"
+                                    }
+                                }],
+                         "rotation":0,
+                         "type":"Triger",
+                         "visible":true,
+                         "width":64,
+                         "x":-704,
+                         "y":2624
+                        }, 
+                        {
+                         "height":64,
+                         "id":146,
+                         "name":"",
+                         "opacity":1,
+                         "properties":[
+                                {
+                                 "name":"voicelinesOnTrigger",
+                                 "type":"list",
+                                 "value":[
+                                        {
+                                         "type":"string",
+                                         "value":"prisoner_dialog_2"
+                                        }]
+                                }],
+                         "rotation":0,
+                         "type":"Triger",
+                         "visible":true,
+                         "width":192,
+                         "x":-1472,
+                         "y":1856
                         }],
                  "opacity":1,
                  "type":"objectgroup",
@@ -1903,12 +2046,12 @@
                          "x":-16,
                          "y":64
                         }],
-                 "height":16,
+                 "height":80,
                  "id":29,
                  "name":"Allies",
                  "opacity":1,
                  "startx":-16,
-                 "starty":64,
+                 "starty":0,
                  "type":"tilelayer",
                  "visible":true,
                  "width":16,
@@ -2275,15 +2418,15 @@
                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2684354588, 0,
                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3221225500, 0, 0, 0, 0],
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                          "height":16,
                          "width":16,
-                         "x":-16,
-                         "y":0
+                         "x":16,
+                         "y":32
                         }],
-                 "height":16,
+                 "height":48,
                  "id":23,
                  "name":"Spawns",
                  "opacity":1,
@@ -2291,7 +2434,7 @@
                  "starty":0,
                  "type":"tilelayer",
                  "visible":true,
-                 "width":16,
+                 "width":48,
                  "x":0,
                  "y":0
                 }, 
@@ -3303,7 +3446,7 @@
          "y":0
         }],
  "nextlayerid":30,
- "nextobjectid":136,
+ "nextobjectid":147,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",

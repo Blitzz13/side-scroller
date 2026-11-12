@@ -351,6 +351,53 @@
     {
         "color": "#ffa0a0a4",
         "drawFill": true,
+        "id": 24,
+        "members": [
+            {
+                "name": "action",
+                "propertyType": "SoundAction",
+                "type": "string",
+                "value": "stop"
+            },
+            {
+                "name": "shouldLoop",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "soundName",
+                "type": "string",
+                "value": ""
+            }
+        ],
+        "name": "Sound",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 23,
+        "name": "SoundAction",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "stop",
+            "start"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
         "id": 13,
         "members": [
             {
@@ -414,6 +461,11 @@
                 }
             },
             {
+                "name": "loopSoundOnTrigger",
+                "type": "bool",
+                "value": false
+            },
+            {
                 "name": "objective",
                 "propertyType": "Objective",
                 "type": "class",
@@ -426,10 +478,11 @@
                 "value": false
             },
             {
-                "name": "soundOnTrigger",
-                "type": "list",
-                "value": [
-                ]
+                "name": "sound",
+                "propertyType": "Sound",
+                "type": "class",
+                "value": {
+                }
             },
             {
                 "name": "trigerEvent",

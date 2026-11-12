@@ -1,0 +1,53 @@
+{
+  "level": 2,
+  "dialogues": {
+    "vent_shaft": {
+      "context": "Spotting the Vent Shaft",
+      "lines": [
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "Vent shaft should be just through that bulkhead. ...Right where Mothma's schematics marked it. Lock that route in your head, Tuk. You're gonna need an exit."
+          }
+        }
+      ]
+    },
+    "command_hub_here": {
+      "context": "Approaching the Command Center",
+      "lines": [
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "Command hub's gotta be just past this bulkhead. Keep your head down."
+          }
+        }
+      ]
+    },
+    "find_the_defector": {
+      "context": "Accessing the Console",
+      "lines": [
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "Bingo. Let's see which cell block they're stashing our defector in..."
+          }
+        }
+      ]
+    },
+    "sirens_sounded": {
+      "context": "Alarms Triggered",
+      "lines": [
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "Drek. There go the sirens. Right—back to the vent. Just don't let it lead to waste disposal. I hate waste disposal."
+          }
+        }
+      ]
+    }
+  }
+}

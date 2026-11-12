@@ -1,0 +1,17 @@
+{
+  "level": 1,
+  "dialogues": {
+    "dont_mind_if_i_do": {
+      "context": "Blue Keycard",
+      "lines": [
+        {
+          "speaker": "Tuk",
+          "isPlayer": true,
+          "text": {
+            "en": "Blue clearance. ...Careless. Don't. Mind. If. I. Do."
+          }
+        }
+      ]
+    }
+  }
+}
