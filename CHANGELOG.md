@@ -2,9 +2,30 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
-## [2026-11-12] - Raycast Level Loading Overlay & Progress Indicator
+## [2026-11-12] - Subtitle System, Dialogue Localization & Level Loading Overlay
 
-### Raycast Loading Overlay ([`src/ui/RaycastLoadingOverlay.ts`](file:///D:/Projects/side-scroller/src/ui/RaycastLoadingOverlay.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+### 1. In-Game Subtitle System & Audio Synchronization ([`src/scenes/raycast/subtitles/RaycastSubtitles.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/subtitles/RaycastSubtitles.ts), [`src/scenes/raycast/subtitles/SubtitleManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/subtitles/SubtitleManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Dynamic Subtitle Display**:
+  - Implemented `RaycastSubtitles` container positioned at the bottom center of the viewport, rendered above HUD elements and below modal menus (`zIndex: 90`).
+  - Distinct speaker color coding (`0x00e5ff` cyan for the player character Tuk, `0xffb347` amber for NPCs/allies like the Prisoner).
+  - Displays speaker badges and optional character states (e.g. `PRISONER · PRIDEFUL RESIGNATION`) with text shadow and drop shadow effects.
+- **Audio Timeline Synchronization**:
+  - Connected `onVoicelineStart`, `onVoicelineProgress`, and `onVoicelineEnd` callbacks in `RaycastTriggerManager` and `ObjectiveTypes`.
+  - Driven by real playback fraction/seconds, ensuring subtitles stay strictly in sync during playback and freeze/pause correctly with the game.
+  - Automatically cleans up and hides when voicelines stop or are replaced.
+- **Custom Line Timing & Fallback Estimation**:
+  - Supports optional manual `start` and `end` timestamps (in seconds) per dialogue line in `dialog.json` for precise audio synchronization.
+  - Gracefully falls back to text-length proportional duration weighting if manual timestamps are omitted.
+
+### 2. Dialogue Data Localization Pipeline ([`assets/raycast/dialog/`](file:///D:/Projects/side-scroller/assets/raycast/dialog/))
+- **Structured Per-Level Dialogue JSON**:
+  - Organized localization-ready files under `assets/raycast/dialog/level{1,2,3}/dialog.json`.
+  - Level 1: `dont_mind_if_i_do` (Blue Keycard clearance line).
+  - Level 2: `vent_shaft`, `command_hub_here`, `find_the_defector`, and `sirens_sounded`.
+  - Level 3: `i_hate_sewers`, `prisoner_dialog_1` (multi-line extraction sequence), and `prisoner_dialog_2` (AT-ST banter).
+  - Structured with `speaker`, `isPlayer`, `characterState`, and multi-language text maps (`{ "en": "..." }`).
+
+### 3. Raycast Loading Overlay ([`src/ui/RaycastLoadingOverlay.ts`](file:///D:/Projects/side-scroller/src/ui/RaycastLoadingOverlay.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
 - **Dedicated Loading Screen UI**:
   - Implemented `RaycastLoadingOverlay` matching the sci-fi theme (`0x05101e` cosmic navy track with glowing `0x00e5ff` cyan borders, rounded progress bar, and glow effect).
   - Displays dynamic level sector title, status text cues, and percentage bar during map setup.
