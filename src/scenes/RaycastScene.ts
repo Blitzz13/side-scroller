@@ -53,6 +53,7 @@ import skyboxFrag from "./raycast/shaders/skybox.frag";
 import { RaycastMinimap } from "../plugins/minimap";
 import { RaycastMissionManager, ITriggerZone } from "./raycast/objectives";
 import { InGameMenu } from "../ui/InGameMenu";
+import { RaycastLoadingOverlay } from "../ui/RaycastLoadingOverlay";
 import { SettingsManager } from "../managers/SettingsManager";
 import { GameEvent } from "../enums/GameEvent";
 import {
@@ -228,6 +229,8 @@ export class RaycastScene extends BaseScene {
   private missionManager!: RaycastMissionManager;
   private debugMenu!: RaycastDebugMenu;
   private inGameMenu!: InGameMenu;
+  private loadingOverlay?: RaycastLoadingOverlay;
+  private isLevelLoading: boolean = false;
   private isPaused: boolean = false;
   private playerController!: RaycastPlayerController;
   private pickupManager!: RaycastPickupManager;
@@ -649,8 +652,8 @@ export class RaycastScene extends BaseScene {
       return this.getSkyboxSettings();
     };
     (window as any).getSkybox = () => this.getSkyboxSettings();
+    Ticker.shared.add(this.tick, this);
     this.loadLevel(startLevel).then(() => {
-      Ticker.shared.add(this.tick, this);
       this.playBackgroundMusic();
     });
   }
@@ -1035,7 +1038,46 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  private showLoadingOverlay(levelName: string): void {
+    if (!this.loadingOverlay) {
+      this.loadingOverlay = new RaycastLoadingOverlay();
+      this.loadingOverlay.zIndex = 200; // Above HUD, minimap, mobile controls and debug menu
+      this.addChild(this.loadingOverlay);
+    }
+    this.loadingOverlay.setLevelTitle(levelName);
+    this.loadingOverlay.setProgress(0.05, "Reading sector blueprints...");
+    this.loadingOverlay.visible = true;
+    this.loadingOverlay.alpha = 1;
+    this.isLevelLoading = true;
+  }
+
+  private hideLoadingOverlay(): void {
+    if (!this.loadingOverlay) {
+      this.isLevelLoading = false;
+      return;
+    }
+    this.loadingOverlay.setProgress(1.0, "System ready");
+    let fadeElapsed = 0;
+    const fadeDuration = 0.25;
+    const overlay = this.loadingOverlay;
+    const onFade = (delta: number) => {
+      fadeElapsed += delta / 60;
+      overlay.alpha = Math.max(0, 1 - fadeElapsed / fadeDuration);
+      if (overlay.alpha <= 0) {
+        Ticker.shared.remove(onFade);
+        overlay.visible = false;
+        overlay.alpha = 0;
+        this.isLevelLoading = false;
+      }
+    };
+    Ticker.shared.add(onFade);
+  }
+
   private async loadLevel(levelName: string) {
+    this.showLoadingOverlay(levelName);
+    // Yield a frame so Pixi renders the loading overlay immediately before blocking texture extraction/slicing
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
     this.currentLevel = levelName;
     this.thinWalls = [];
     this.doorStates = {};
@@ -1063,6 +1105,7 @@ export class RaycastScene extends BaseScene {
     this.animatedWallFrameIndex = 0;
     this.mapObjectsById.clear();
 
+    this.loadingOverlay?.setProgress(0.2, "Building sector geometry...");
     let mapData: any;
     try {
       mapData = await Assets.load(`assets/raycast/levels/${levelName}.json`);
@@ -1133,6 +1176,7 @@ export class RaycastScene extends BaseScene {
       }
     }
 
+    this.loadingOverlay?.setProgress(0.4, "Loading texture banks...");
     const texturePromises = Object.entries(textureMap).map(
       ([tileId, fileName]) => {
         if (fileName.includes("sewer_waterfall")) {
@@ -1265,6 +1309,7 @@ export class RaycastScene extends BaseScene {
     await Promise.all(texturePromises);
     this.enforceNearestScaleMode();
 
+    this.loadingOverlay?.setProgress(0.65, "Generating raycast slices & floor atlas...");
     // Pre-slice 1px column textures with texel-centered UVs
     for (const [tileIdStr, texture] of Object.entries(this.textures)) {
       const tileId = parseInt(tileIdStr);
@@ -1318,6 +1363,7 @@ export class RaycastScene extends BaseScene {
     }
 
     this.parseTiledMap(mapData);
+    this.loadingOverlay?.setProgress(0.85, "Spawning entities & tactical systems...");
     await this.pickupManager.initTextures();
     await this.breakableManager.initTextures();
     this.firstgid = mapData.tilesets?.[0]?.firstgid ?? 1;
@@ -1474,6 +1520,8 @@ export class RaycastScene extends BaseScene {
 
     // Apply 360 panoramic skybox if configured for this level
     await this.applyLevelSkybox(levelName, mapData);
+
+    this.hideLoadingOverlay();
   }
 
   private parseTiledMap(mapData: any) {
@@ -3141,6 +3189,12 @@ export class RaycastScene extends BaseScene {
       }
     } catch {}
     try {
+      if (this.loadingOverlay) {
+        this.loadingOverlay.dispose();
+        this.loadingOverlay = undefined;
+      }
+    } catch {}
+    try {
       if (this.detonatorManager) {
         this.detonatorManager.dispose();
       }
@@ -3782,14 +3836,14 @@ export class RaycastScene extends BaseScene {
   }
 
   private mouseMoveHandler = (e: MouseEvent) => {
-    if (this.isPaused) return;
+    if (this.isPaused || this.isLevelLoading) return;
     if (document.pointerLockElement !== document.body) return;
     const angle = e.movementX * this.mouseSensitivity;
     this.rotatePlayer(angle);
   };
 
   private tick(delta: number) {
-    if (this.isPaused) {
+    if (this.isPaused || this.isLevelLoading) {
       return;
     }
     // Screen shake update (only shakes the 3D world, keeping HUD and overlays steady)

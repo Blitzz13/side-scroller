@@ -2,6 +2,18 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-11-12] - Raycast Level Loading Overlay & Progress Indicator
+
+### Raycast Loading Overlay ([`src/ui/RaycastLoadingOverlay.ts`](file:///D:/Projects/side-scroller/src/ui/RaycastLoadingOverlay.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Dedicated Loading Screen UI**:
+  - Implemented `RaycastLoadingOverlay` matching the sci-fi theme (`0x05101e` cosmic navy track with glowing `0x00e5ff` cyan borders, rounded progress bar, and glow effect).
+  - Displays dynamic level sector title, status text cues, and percentage bar during map setup.
+- **Level Initialization Progress Tracking**:
+  - Incremental progress indicators during level loading: reading blueprints, parsing sector geometry, loading texture banks, pre-slicing raycast column textures, and spawning entities.
+  - Added smooth alpha fade-out transition once loading completes.
+- **Input & Update Guarding**:
+  - Suspended tick execution and mouse movement handling (`isLevelLoading`) during level asset extraction and construction to prevent camera drift or interaction hiccups.
+
 ## [2026-11-11] - Options Menu, In-Game Pause System, Audio & Auto-Aim Controls, and Mobile UI Enhancements
 
 ### 1. Settings & Options Manager ([`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts))
