@@ -1006,6 +1006,41 @@ export class RaycastScene extends BaseScene {
     return used;
   }
 
+  /**
+   * Collects tile IDs referenced outside of pure "floor" / "ceiling" layers
+   * so floor/ceiling textures are only sliced into 1px columns when also used on walls/objects.
+   */
+  private collectWallSliceTileIds(mapData: any): Set<number> {
+    const used = new Set<number>();
+    const fgid = mapData.tilesets?.[0]?.firstgid ?? 1;
+    const addGid = (raw: number) => {
+      const gid = raw & 0x1fffffff;
+      if (gid > 0) used.add(gid - fgid);
+    };
+    const scan = (layers: any[]) => {
+      if (!Array.isArray(layers)) return;
+      for (const layer of layers) {
+        if (!layer) continue;
+        const lname = (layer.name || "").trim().toLowerCase();
+        if (lname === "floor" || lname === "ceiling") continue;
+        if (Array.isArray(layer.data)) layer.data.forEach(addGid);
+        if (Array.isArray(layer.chunks)) {
+          for (const chunk of layer.chunks) {
+            if (Array.isArray(chunk?.data)) chunk.data.forEach(addGid);
+          }
+        }
+        if (Array.isArray(layer.objects)) {
+          for (const obj of layer.objects) {
+            if (obj?.gid) addGid(obj.gid);
+          }
+        }
+        if (Array.isArray(layer.layers)) scan(layer.layers);
+      }
+    };
+    scan(mapData.layers);
+    return used;
+  }
+
   private handleWallBlockDestroyed(broken: RaycastBreakable): void {
     const gx = broken.gridX !== undefined ? broken.gridX : Math.floor(broken.x);
     const gy = broken.gridY !== undefined ? broken.gridY : Math.floor(broken.y);
@@ -1334,6 +1369,7 @@ export class RaycastScene extends BaseScene {
     this.enforceNearestScaleMode();
 
     this.loadingOverlay?.setProgress(0.65, "Generating raycast slices & floor atlas...");
+    const wallSliceTileIds = this.collectWallSliceTileIds(mapData);
     // Pre-slice 1px column textures with texel-centered UVs
     for (const [tileIdStr, texture] of Object.entries(this.textures)) {
       const tileId = parseInt(tileIdStr);
@@ -1348,9 +1384,9 @@ export class RaycastScene extends BaseScene {
       texture.baseTexture.update();
 
       const imgPath = (textureMap[tileId] || "").toLowerCase();
-      if (imgPath.includes("ceiling") || imgPath.includes("dirty_water")) {
-        // Floor and ceiling textures are rendered exclusively by the GPU GLSL shader atlas.
-        // Slicing them into 6,000+ 1px textures wastes CPU & RAM.
+      if ((imgPath.includes("ceiling") || imgPath.includes("dirty_water")) && !wallSliceTileIds.has(tileId)) {
+        // Floor and ceiling textures are rendered exclusively by the GPU GLSL shader atlas
+        // unless also placed on a wall/door/object layer.
         continue;
       }
 
@@ -5751,10 +5787,6 @@ export class RaycastScene extends BaseScene {
                 doorDist = ray.distance;
                 doorBottom = doorPanelBottom;
               }
-              
-              // Only push draw bounds for the visible top portion of the sliding door
-              minDrawStart = Math.min(minDrawStart, dTop);
-              maxDrawEnd = Math.max(maxDrawEnd, doorPanelBottom);
             } else {
               // Door is fully closed, it acts exactly like a solid wall
               const lineHeight = screenH / Math.max(0.2, ray.distance);

@@ -2415,10 +2415,9 @@ export class RaycastEnemyManager {
       const isAlreadyEngaged = enemy.state === "chase" || enemy.hasTarget;
       const distToShooter = Math.hypot(enemy.x - shooterX, enemy.y - shooterY);
 
-      // Line-of-fire check: unalerted distant enemies only hear gunfire if line-of-fire is clear or within acoustic proximity (<= 6.0)
+      // Line-of-fire check: unalerted enemies cannot hear gunfire through solid walls, closed doors, or thin walls
       if (
         !isAlreadyEngaged &&
-        distToShooter > 6.0 &&
         this.cachedMapFlat &&
         this.cachedMapWidth &&
         this.cachedMapHeight &&
@@ -2436,7 +2435,7 @@ export class RaycastEnemyManager {
           this.cachedThinWalls
         );
         if (!hasClearLine) {
-          continue; // Blocked by solid wall, closed door, or thin wall: distant enemy in another room cannot detect player
+          continue; // Blocked by solid wall, closed door, or thin wall: enemy in another room cannot hear player
         }
       }
       const distToImpact = Math.hypot(enemy.x - targetX, enemy.y - targetY);
