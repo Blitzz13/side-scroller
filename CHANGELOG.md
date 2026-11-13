@@ -2,6 +2,31 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-11-13] - Trigger Sound System, Lever Mechanics, Level 3 Audio & Mobile Control Fixes
+
+### 1. Tiled Trigger Sound System & Background Music Override ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts), [`src/configs/SoundConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SoundConfig.ts))
+- **Structured `Sound` Class Support**:
+  - Added `ITriggerSoundConfig` (`action`: `"start" | "stop"`, `delay`, `overrideBackgroundMusic`, `shouldLoop`, `soundName`) to `ITriggerZone` and parsed Tiled `Sound` class properties in `RaycastTriggerManager`.
+  - Added `preloadSoundAsset` and `ensureTriggerSoundLoaded` / `waitForSoundLoaded` to probe `.mp3`/`.wav` assets across `assets/raycast/sfx/` and `assets/sounds/` and await decode completion before playback, avoiding `@pixi/sound` `AudioBufferSourceNode` buffer races.
+  - Added `overrideBackgroundMusic` handling in `RaycastScene` to stop `calm_loop` (or prior overridden tracks) and prevent input handlers from restarting `calm_loop` until level reload/reset.
+  - Added `SoundConfig.ts` (`DEFAULT_SFX_VOLUME`, `SOUND_VOLUME_OVERRIDES`, `getSoundBaseVolume`) with a `water_drain` volume boost (`1.8`) scaled by the Options menu volume.
+
+### 2. Lever Texture Swapping & Sound Isolation ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts), [`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts))
+- **Lever Texture Toggle**:
+  - Added `getLeverGids` and `toggleNearbyLeverTextures` to swap adjacent `lever_on` <-> `lever_off` wall tiles when interactive triggers fire, and ensured both lever textures are preloaded in `getUsedTextureIds`.
+- **Trigger Sound Isolation & Cleanup**:
+  - Removed the hardcoded `"elevator"` fallback in `playPropSounds`.
+  - Suppressed default `door_1` playback in `openDoorAt`, `closeDoorAt`, `applyLinkAction`, `updateLevelFinishZonesStatus`, and `DestructableWallManager.onWallDeactivated` when the firing trigger already has a custom sound configured.
+  - Removed unused `onDoorProtectorDisabled` and `isFreed` barrier-gating logic from `RaycastAlly`, `RaycastAllyManager`, and `RaycastScene`.
+
+### 3. Level 3 Dialogue, Objectives & Audio Assets ([`assets/raycast/dialog/level3/dialog.json`](file:///D:/Projects/side-scroller/assets/raycast/dialog/level3/dialog.json), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json), [`assets/raycast/levels/objectives/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/objectives/level3.json))
+- Updated Level 3 dialogue lines in `prisoner_dialog_1` and `prisoner_dialog_2` to match voiceover audio.
+- Added new Level 3 audio assets (`sewer_ambiance.mp3`, `switch.mp3`, `water_drain.mp3`, `intense_background.mp3`) and updated `propertytypes.json`, `level3.json`, and `objectives/level3.json`.
+
+### 4. Mobile Touch Controls Reliability ([`src/ui/VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts), [`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts), [`src/ui/TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts), [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts))
+- Added `window` `pointerup`, `pointercancel`, and `blur` cleanup listeners to `VirtualJoystick`, `VirtualButton`, and `TouchLookArea` so pointers cannot lock or get stuck when leaving the canvas or losing focus.
+- Updated `btnWeapon` (`WPN`) in `MobileControls` to trigger on both `press` and `tap` (with a 200ms debounce) and expanded its hit area (`Circle(0, 0, 50)`) for reliable mobile weapon switching.
+
 ## [2026-11-12] - Subtitle System, Dialogue Localization & Level Loading Overlay
 
 ### 1. In-Game Subtitle System & Audio Synchronization ([`src/scenes/raycast/subtitles/RaycastSubtitles.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/subtitles/RaycastSubtitles.ts), [`src/scenes/raycast/subtitles/SubtitleManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/subtitles/SubtitleManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))

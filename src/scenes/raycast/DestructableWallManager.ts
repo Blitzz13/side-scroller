@@ -3,7 +3,7 @@ import { RaycastBreakable, ThinWallDescriptor } from "./types";
 
 export class DestructableWallManager {
   private walls: DestructableWall[] = [];
-  public onWallDeactivated?: (wall: DestructableWall) => void;
+  public onWallDeactivated?: (wall: DestructableWall, playSound?: boolean) => void;
 
   /**
    * Parses all DestructableWall objects from the DoorProtectors layer or any object layers in Tiled mapData.
@@ -286,13 +286,17 @@ export class DestructableWallManager {
     return this.walls.find((w) => String(w.id) === sId || (w.name && w.name === sId));
   }
 
-  public setWallActiveById(wallId: number | string, active: boolean): DestructableWall | undefined {
+  public setWallActiveById(
+    wallId: number | string,
+    active: boolean,
+    playSound: boolean = true
+  ): DestructableWall | undefined {
     const wall = this.getWallById(wallId);
     if (wall) {
       const wasActive = wall.isActive();
       wall.setActive(active);
       if (wasActive && !active) {
-        this.onWallDeactivated?.(wall);
+        this.onWallDeactivated?.(wall, playSound);
       }
     }
     return wall;

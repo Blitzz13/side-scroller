@@ -20,29 +20,34 @@
           "speaker": "Tuk",
           "isPlayer": true,
           "text": {
-            "en": "You the defector? ...Or am I risking my neck for the wrong Imperial officer?"
-          }
+            "en": "You the defector? ...Or am I risking my neck for the wrong imp?"
+          },
+          "end": 3.8
         },
         {
           "speaker": "Prisoner",
           "isPlayer": false,
           "text": {
             "en": "You are cutting it dangerously close! I was beginning to think this Rebellion was all talk."
-          }
+          },
+          "start": 3.81,
+          "end": 9.28
         },
         {
           "speaker": "Tuk",
           "isPlayer": true,
           "text": {
             "en": "Don't pop the champagne just yet, pal. We still have the minor inconvenience of getting you out of here in one piece. When this door breaches, you stay glued to my six, and you do not speak."
-          }
+          },
+          "start": 9.29
         },
         {
           "speaker": "Tuk",
           "isPlayer": true,
           "text": {
             "en": "...Right on time. That's the cavalry shaking the front door. Move!"
-          }
+          },
+          "start": 23
         }
       ]
     },
@@ -54,29 +59,35 @@
           "isPlayer": true,
           "text": {
             "en": "Main hangar's just past this bulkhead. We're borrowing one of their AT-STs."
-          }
+          },
+          "end": 5.28
         },
         {
           "speaker": "Prisoner",
           "isPlayer": false,
           "text": {
             "en": "Are you completely mad?! We'll never make it past the perimeter!"
-          }
+          },
+          "start": 5.29,
+          "end": 9.07
         },
         {
           "speaker": "Tuk",
           "isPlayer": true,
           "text": {
-            "en": "Look, nobody asked for your input! You wanna stay right here and find a better way? Be my guest."
-          }
+            "en": "Hey—I'm the one keeping you breathing right now! If you think you've got a better plan, stay put and try it yourself."
+          },
+          "start": 9.08,
+          "end": 15.65
         },
         {
           "speaker": "Prisoner",
           "isPlayer": false,
           "characterState": "Prideful Resignation",
           "text": {
-            "en": "I do not take orders from mercenaries... Blast it all. Just lead the way."
-          }
+            "en": "Unbelievable. Leaving my survival to a reckless bounty hunter... Fine. Lead the way."
+          },
+          "start": 15.66
         }
       ]
     }

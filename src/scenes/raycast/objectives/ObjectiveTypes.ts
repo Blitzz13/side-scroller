@@ -7,6 +7,14 @@ export interface ILevelObjective {
   isOptional?: boolean;
 }
 
+export interface ITriggerSoundConfig {
+  action: "start" | "stop";
+  delay: number;
+  overrideBackgroundMusic: boolean;
+  shouldLoop: boolean;
+  soundName: string;
+}
+
 export interface ITriggerZone {
   id: number;
   name: string;
@@ -30,6 +38,7 @@ export interface ITriggerZone {
   };
   displayMessage?: string;
   soundOnTrigger?: string[];
+  sound?: ITriggerSoundConfig;
   isWaitRunning?: boolean;
   waitEndTime?: number;
 }

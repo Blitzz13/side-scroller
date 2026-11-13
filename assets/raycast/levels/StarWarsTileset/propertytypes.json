@@ -360,6 +360,16 @@
                 "value": "stop"
             },
             {
+                "name": "delay",
+                "type": "float",
+                "value": 0
+            },
+            {
+                "name": "overrideBackgroundMusic",
+                "type": "bool",
+                "value": false
+            },
+            {
                 "name": "shouldLoop",
                 "type": "bool",
                 "value": false

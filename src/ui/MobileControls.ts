@@ -87,11 +87,18 @@ export class MobileControls extends Container implements IDisposable {
     this.addChild(this.btnAction);
 
     // 7. Weapon Switch Button ([WPN])
+    let lastSwitchWeaponTime = 0;
+    const triggerSwitchWeapon = () => {
+      const now = Date.now();
+      if (now - lastSwitchWeaponTime < 200) return;
+      lastSwitchWeaponTime = now;
+      (this as any).emit("switchWeapon");
+    };
     this.btnWeapon = new VirtualButton(42, "WPN", 0x224466);
     this.btnWeapon.position.set(screenW - 180, screenH - 230);
-    this.btnWeapon.on("tap", () => {
-      (this as any).emit("switchWeapon");
-    });
+    this.btnWeapon.hitArea = new Circle(0, 0, 50);
+    this.btnWeapon.on("press", triggerSwitchWeapon);
+    this.btnWeapon.on("tap", triggerSwitchWeapon);
     this.addChild(this.btnWeapon);
 
     // 8. Fullscreen Button ([FS])

@@ -50,6 +50,12 @@ export class VirtualButton extends Container implements IDisposable {
     this.on("pointerup", this.onPointerUp, this);
     this.on("pointerupoutside", this.onPointerUp, this);
     this.on("pointercancel", this.onPointerCancel, this);
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("pointerup", this.onWindowPointerEnd);
+      window.addEventListener("pointercancel", this.onWindowPointerEnd);
+      window.addEventListener("blur", this.onWindowBlur);
+    }
   }
 
   public get isPressed(): boolean {
@@ -152,7 +158,32 @@ export class VirtualButton extends Container implements IDisposable {
     }
   }
 
+  private resetPressedState(): void {
+    this.activePointerId = null;
+    this._isPressed = false;
+    this.drawButton(this._isToggled);
+    this.scale.set(1.0);
+  }
+
+  private onWindowPointerEnd = (e: PointerEvent): void => {
+    if (this.activePointerId === e.pointerId) {
+      this.resetPressedState();
+      (this as any).emit("release", e);
+    }
+  };
+
+  private onWindowBlur = (): void => {
+    if (this.activePointerId !== null) {
+      this.resetPressedState();
+    }
+  };
+
   public dispose(): void {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pointerup", this.onWindowPointerEnd);
+      window.removeEventListener("pointercancel", this.onWindowPointerEnd);
+      window.removeEventListener("blur", this.onWindowBlur);
+    }
     this.off("pointerdown", this.onPointerDown, this);
     this.off("pointerup", this.onPointerUp, this);
     this.off("pointerupoutside", this.onPointerUp, this);

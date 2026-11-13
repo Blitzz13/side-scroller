@@ -1,6 +1,6 @@
 import { utils } from "pixi.js";
 import { sound } from "@pixi/sound";
-import { ITriggerZone, IMissionManagerCallbacks } from "./ObjectiveTypes";
+import { ITriggerZone, ITriggerSoundConfig, IMissionManagerCallbacks } from "./ObjectiveTypes";
 import { RaycastObjectiveManager } from "./RaycastObjectiveManager";
 import { extractLinkIds } from "../DestructableWall";
 
@@ -80,6 +80,7 @@ export class RaycastTriggerManager extends utils.EventEmitter {
         let linkIds: string[] = [];
         let wait: { shouldWait: boolean; waitTimeInSeconds: number } | undefined = undefined;
         let soundOnTrigger: string[] = [];
+        let triggerSound: ITriggerSoundConfig | undefined = undefined;
 
         if (obj.properties && Array.isArray(obj.properties)) {
           for (const prop of obj.properties) {
@@ -113,7 +114,25 @@ export class RaycastTriggerManager extends utils.EventEmitter {
               pName === "sfx" ||
               pName === "audio"
             ) {
-              if (Array.isArray(prop.value)) {
+              if (
+                pName === "sound" &&
+                prop.value &&
+                typeof prop.value === "object" &&
+                !Array.isArray(prop.value)
+              ) {
+                const rawAction = String(prop.value.action ?? "stop").trim().toLowerCase();
+                const action: "start" | "stop" = rawAction === "start" ? "start" : "stop";
+                const soundName = String(prop.value.soundName ?? "").trim();
+                if (soundName || action === "stop") {
+                  triggerSound = {
+                    action,
+                    delay: Number(prop.value.delay) || 0,
+                    overrideBackgroundMusic: Boolean(prop.value.overrideBackgroundMusic),
+                    shouldLoop: Boolean(prop.value.shouldLoop),
+                    soundName,
+                  };
+                }
+              } else if (Array.isArray(prop.value)) {
                 for (const item of prop.value) {
                   if (typeof item === "string" && item.trim()) {
                     soundOnTrigger.push(item.trim());
@@ -218,6 +237,7 @@ export class RaycastTriggerManager extends utils.EventEmitter {
           wait,
           displayMessage,
           soundOnTrigger,
+          sound: triggerSound,
         };
 
         this.triggers.push(triggerZone);
@@ -240,23 +260,35 @@ export class RaycastTriggerManager extends utils.EventEmitter {
       }
       if (trigger.soundOnTrigger && trigger.soundOnTrigger.length > 0) {
         for (const sName of trigger.soundOnTrigger) {
-          const clean = sName.replace(/\.(wav|mp3|ogg)$/i, "").trim();
-          if (!sound.exists(clean)) {
-            const candidateUrls = [
-              `./assets/raycast/sfx/${clean}.wav`,
-              `./assets/raycast/sfx/${clean}.mp3`,
-              `./assets/sounds/${clean}.wav`,
-              `./assets/sounds/${clean}.mp3`,
-            ];
-            for (const url of candidateUrls) {
-              try {
-                sound.add(clean, { url, preload: true });
-                break;
-              } catch {}
-            }
-          }
+          void this.preloadSoundAsset(sName);
         }
       }
+      if (trigger.sound?.soundName && trigger.sound.action === "start") {
+        void this.preloadSoundAsset(trigger.sound.soundName);
+      }
+    }
+  }
+
+  private async preloadSoundAsset(rawName: string): Promise<void> {
+    const clean = rawName.replace(/\.(wav|mp3|ogg)$/i, "").trim();
+    if (!clean || sound.exists(clean)) return;
+
+    const candidateUrls = [
+      `./assets/raycast/sfx/${clean}.mp3`,
+      `./assets/raycast/sfx/${clean}.wav`,
+      `./assets/sounds/${clean}.mp3`,
+      `./assets/sounds/${clean}.wav`,
+    ];
+    for (const url of candidateUrls) {
+      try {
+        const res = await fetch(url, { method: "HEAD" });
+        if (res.ok) {
+          if (!sound.exists(clean)) {
+            sound.add(clean, { url, preload: true });
+          }
+          return;
+        }
+      } catch {}
     }
   }
 

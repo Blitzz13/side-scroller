@@ -1718,6 +1718,16 @@
                                  "name":"shouldBePressed",
                                  "type":"bool",
                                  "value":true
+                                }, 
+                                {
+                                 "name":"sound",
+                                 "propertytype":"Sound",
+                                 "type":"class",
+                                 "value":
+                                    {
+                                     "action":"start",
+                                     "soundName":"water_drain"
+                                    }
                                 }],
                          "rotation":0,
                          "type":"Triger",
@@ -1890,6 +1900,24 @@
                          "opacity":1,
                          "properties":[
                                 {
+                                 "name":"shouldBePressed",
+                                 "type":"bool",
+                                 "value":true
+                                }, 
+                                {
+                                 "name":"sound",
+                                 "propertytype":"Sound",
+                                 "type":"class",
+                                 "value":
+                                    {
+                                     "action":"start",
+                                     "delay":22.8,
+                                     "overrideBackgroundMusic":true,
+                                     "shouldLoop":true,
+                                     "soundName":"intense_background"
+                                    }
+                                }, 
+                                {
                                  "name":"voicelinesOnTrigger",
                                  "type":"list",
                                  "value":[
@@ -1929,7 +1957,7 @@
                                     {
                                      "action":"start",
                                      "shouldLoop":true,
-                                     "soundName":"sewer_ambience"
+                                     "soundName":"sewer_ambiance"
                                     }
                                 }, 
                                 {
@@ -2046,12 +2074,12 @@
                          "x":-16,
                          "y":64
                         }],
-                 "height":80,
+                 "height":16,
                  "id":29,
                  "name":"Allies",
                  "opacity":1,
                  "startx":-16,
-                 "starty":0,
+                 "starty":64,
                  "type":"tilelayer",
                  "visible":true,
                  "width":16,
@@ -2426,15 +2454,15 @@
                          "x":16,
                          "y":32
                         }],
-                 "height":48,
+                 "height":16,
                  "id":23,
                  "name":"Spawns",
                  "opacity":1,
-                 "startx":-16,
-                 "starty":0,
+                 "startx":16,
+                 "starty":32,
                  "type":"tilelayer",
                  "visible":true,
-                 "width":48,
+                 "width":16,
                  "x":0,
                  "y":0
                 }, 
@@ -2690,7 +2718,7 @@
                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                            0, 0, 0, 0, 0, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                          "height":16,
                          "width":16,
                          "x":16,
@@ -2967,7 +2995,7 @@
                         }],
                  "opacity":1,
                  "type":"objectgroup",
-                 "visible":true,
+                 "visible":false,
                  "x":0,
                  "y":0
                 }, 

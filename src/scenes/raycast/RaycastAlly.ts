@@ -20,7 +20,6 @@ export class RaycastAlly extends RaycastDirectionalObject {
   public tileId: number;
 
   // State flags
-  public isFreed: boolean = false;
   public isFollowing: boolean = false;
   public isMoving: boolean = false;
 
@@ -121,12 +120,6 @@ export class RaycastAlly extends RaycastDirectionalObject {
     this.currentAnimKey = "standing_towards";
   }
 
-  public setFreed(freed: boolean): void {
-    this.isFreed = freed;
-    // By default, liberated allies do NOT auto-follow; the player must command them via "e/E"
-    this.isFollowing = false;
-  }
-
   public setFollowing(following: boolean): void {
     this.isFollowing = following;
     if (!following) {
@@ -185,18 +178,7 @@ export class RaycastAlly extends RaycastDirectionalObject {
       this.pathCooldown -= dt;
     }
 
-    // 1. Not freed yet: stay in holding cell, look toward player if near
-    if (!this.isFreed) {
-      this.isMoving = false;
-      this.pathFollower.clear();
-      if (distToPlayer < 4.0 && distToPlayer > 0.01) {
-        this.dirX = (playerX - this.x) / distToPlayer;
-        this.dirY = (playerY - this.y) / distToPlayer;
-      }
-      return;
-    }
-
-    // 2. Commanded to wait: hold position and face player
+    // Commanded to wait: hold position and face player
     if (!this.isFollowing) {
       this.isMoving = false;
       this.pathFollower.clear();

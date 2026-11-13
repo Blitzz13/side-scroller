@@ -229,29 +229,6 @@ export class RaycastAllyManager {
   }
 
   /**
-   * Invoked when door protectors or security barriers are disabled (e.g. power generator destroyed).
-   * Liberates the prisoner; by default he does NOT auto-follow until commanded via [E].
-   */
-  public onDoorProtectorDisabled(_wallId?: string | number): void {
-    let newlyFreed = false;
-
-    for (const ally of this.allies) {
-      if (!ally.isFreed) {
-        ally.setFreed(true);
-        ally.setFollowing(false); // By default, does NOT follow until player commands via [E]
-        newlyFreed = true;
-      }
-    }
-
-    if (newlyFreed) {
-      this.onToast?.("[+] Prisoner: 'The cell barrier is down! Press [E] when you want me to follow.'", 0x44ff44, 4.0);
-      try {
-        sound.play("button_click", { volume: 0.65 });
-      } catch {}
-    }
-  }
-
-  /**
    * Teleports following allies with the player when stairs are used.
    */
   public teleportFollowingAllies(
@@ -264,7 +241,7 @@ export class RaycastAllyManager {
     mapHeight: number
   ): void {
     for (const ally of this.allies) {
-      if (!ally.isFreed || !ally.isFollowing) continue;
+      if (!ally.isFollowing) continue;
 
       const candidates = [
         { x: playerX - dirX * 1.4, y: playerY - dirY * 1.4 },
@@ -356,14 +333,6 @@ export class RaycastAllyManager {
 
       if (!this.hasLineOfSight(playerX, playerY, ally.x, ally.y)) continue;
 
-      if (!ally.isFreed) {
-        this.onToast?.("[!] Prisoner: 'Disable the security barrier first! The generator is in the control room!'", 0xffaa00, 3.0);
-        try {
-          sound.play("button_click", { volume: 0.5 });
-        } catch {}
-        return true;
-      }
-
       const isNowFollowing = ally.toggleFollowing();
       try {
         sound.play("button_click", { volume: 0.5 });
@@ -403,10 +372,6 @@ export class RaycastAllyManager {
       if (dot < MIN_LOOK_DOT) continue;
 
       if (!this.hasLineOfSight(playerX, playerY, ally.x, ally.y)) continue;
-
-      if (!ally.isFreed) {
-        return { text: "[!] SECURITY BARRIER ACTIVE - DISABLE FIRST", color: 0xffaa00 };
-      }
 
       if (ally.isFollowing) {
         return { text: "[E] COMMAND: WAIT HERE", color: 0x00e5ff };

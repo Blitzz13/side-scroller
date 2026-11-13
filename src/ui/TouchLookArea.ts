@@ -37,7 +37,23 @@ export class TouchLookArea extends Container implements IDisposable {
     this.on("pointerup", this.onPointerUp, this);
     this.on("pointerupoutside", this.onPointerUp, this);
     this.on("pointercancel", this.onPointerUp, this);
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("pointerup", this.onWindowPointerEnd);
+      window.addEventListener("pointercancel", this.onWindowPointerEnd);
+      window.addEventListener("blur", this.onWindowBlur);
+    }
   }
+
+  private onWindowPointerEnd = (e: PointerEvent): void => {
+    if (this.activePointerId === e.pointerId) {
+      this.activePointerId = null;
+    }
+  };
+
+  private onWindowBlur = (): void => {
+    this.activePointerId = null;
+  };
 
   public consumeDelta(): number {
     const delta = this.accumulatedDelta;
@@ -83,6 +99,11 @@ export class TouchLookArea extends Container implements IDisposable {
   }
 
   public dispose(): void {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pointerup", this.onWindowPointerEnd);
+      window.removeEventListener("pointercancel", this.onWindowPointerEnd);
+      window.removeEventListener("blur", this.onWindowBlur);
+    }
     this.off("pointerdown", this.onPointerDown, this);
     this.off("globalpointermove", this.onPointerMove, this);
     this.off("pointerup", this.onPointerUp, this);

@@ -21,6 +21,7 @@ import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
 import { Scene } from "../enums/Scene";
 import { gameConfig } from "../configs/GameConfig";
+import { getSoundBaseVolume } from "../configs/SoundConfig";
 import { MobileControls } from "../ui/MobileControls";
 import { MapObject, RaycastBreakable, TileMeta } from "./raycast/types";
 import { RaycastSaveManager } from "./raycast/RaycastSaveManager";
@@ -51,7 +52,7 @@ import floorCeilingFrag from "./raycast/shaders/floorCeiling.frag";
 import skyboxVert from "./raycast/shaders/skybox.vert";
 import skyboxFrag from "./raycast/shaders/skybox.frag";
 import { RaycastMinimap } from "../plugins/minimap";
-import { RaycastMissionManager, ITriggerZone } from "./raycast/objectives";
+import { RaycastMissionManager, ITriggerZone, ITriggerSoundConfig } from "./raycast/objectives";
 import { SubtitleManager, RaycastSubtitles } from "./raycast/subtitles";
 import { InGameMenu } from "../ui/InGameMenu";
 import { RaycastLoadingOverlay } from "../ui/RaycastLoadingOverlay";
@@ -255,9 +256,12 @@ export class RaycastScene extends BaseScene {
   private unlockedKeycardDoors: Set<string> = new Set();
   private disabledDoors: Set<string> = new Set();
   private activePropSounds: Map<string, any> = new Map();
+  private triggerSoundTimeouts: Set<number> = new Set();
   private isLeftMouseDown: boolean = false;
   private isRightMouseDown: boolean = false;
   private bgMusicInstance: any = null;
+  private currentBgMusicAlias: string | null = null;
+  private isBgMusicOverridden: boolean = false;
   private battleMusicInstance: any = null;
   private baseAlarmInstance: any = null;
   private isAlertActive: boolean = false;
@@ -993,6 +997,10 @@ export class RaycastScene extends BaseScene {
       for (const base of baseNames) {
         if (base && t.img.includes(`${base}_destroyed`)) used.add(t.id);
       }
+      if ((baseNames.has("lever_on") && t.img.includes("lever_off")) ||
+          (baseNames.has("lever_off") && t.img.includes("lever_on"))) {
+        used.add(t.id);
+      }
     }
     used.add(39);
     return used;
@@ -1099,6 +1107,9 @@ export class RaycastScene extends BaseScene {
     this.lockedDoors = {};
     this.unlockedKeycardDoors.clear();
     this.disabledDoors.clear();
+    this.clearTriggerSoundTimeouts();
+    this.isBgMusicOverridden = false;
+    this.stopBackgroundMusic();
     for (const [_, inst] of this.activePropSounds) {
       try { inst?.stop?.(); } catch {}
     }
@@ -1399,17 +1410,19 @@ export class RaycastScene extends BaseScene {
       firstgid
     );
     this.updateLevelFinishZonesStatus();
-    this.destructableWallManager.onWallDeactivated = (wall) => {
+    this.destructableWallManager.onWallDeactivated = (wall, playSound = true) => {
       this.hud.showToast(`[!] Security Barrier Deactivated!`, 0x00ffcc);
       if (wall.isObjective && wall.objectiveKey) {
         this.missionManager?.completeObjective(wall.objectiveKey);
       }
-      try {
-        sound.play("door_1", { volume: 0.4 });
-      } catch (e) {
-        console.warn("Failed to play barrier deactivated sound:", e);
+      if (playSound) {
+        try {
+          sound.play("door_1", { volume: 0.4 });
+        } catch (e) {
+          console.warn("Failed to play barrier deactivated sound:", e);
+        }
       }
-      this.updateLevelFinishZonesStatus();
+      this.updateLevelFinishZonesStatus(playSound);
     };
     await this.enemyManager.initSpritesheets();
     this.enemyManager.parseMapEnemies(mapData, firstgid, this.tileMeta, offsetX, offsetY);
@@ -2837,11 +2850,12 @@ export class RaycastScene extends BaseScene {
   }
 
   public playBackgroundMusic(): void {
-    if (this.bgMusicInstance || this.isAlertActive) return;
+    if (this.bgMusicInstance || this.isAlertActive || this.isBgMusicOverridden) return;
     try {
       if (!sound.exists("calm_loop")) {
         sound.add("calm_loop", { url: "./assets/sounds/calm_loop.mp3", preload: true });
       }
+      this.currentBgMusicAlias = "calm_loop";
       const res = sound.play("calm_loop", {
         loop: true,
         volume: gameConfig.musicVolume ?? 0.35,
@@ -2860,6 +2874,28 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  private stopBackgroundMusic(): void {
+    if (this.bgMusicInstance) {
+      try {
+        this.bgMusicInstance.stop?.();
+      } catch {}
+      this.bgMusicInstance = null;
+    }
+    if (sound.exists("calm_loop")) {
+      try {
+        sound.stop("calm_loop");
+      } catch {}
+    }
+    if (this.currentBgMusicAlias && this.currentBgMusicAlias !== "calm_loop") {
+      try {
+        if (sound.exists(this.currentBgMusicAlias)) {
+          sound.stop(this.currentBgMusicAlias);
+        }
+      } catch {}
+    }
+    this.currentBgMusicAlias = null;
+  }
+
   public triggerAlert(): void {
     if (this.isAlertActive) return;
     this.triggerAlertAudio();
@@ -2872,18 +2908,8 @@ export class RaycastScene extends BaseScene {
     this.isAlertActive = true;
     this.enemyManager?.setAlertActive(true, this.player?.x, this.player?.y);
 
-    // Stop calm background music if running
-    if (this.bgMusicInstance) {
-      try {
-        this.bgMusicInstance.stop?.();
-      } catch {}
-      this.bgMusicInstance = null;
-    }
-    if (sound.exists("calm_loop")) {
-      try {
-        sound.stop("calm_loop");
-      } catch {}
-    }
+    // Stop calm or overridden background music if running
+    this.stopBackgroundMusic();
 
     // Play battle_theme on loop
     try {
@@ -3092,18 +3118,10 @@ export class RaycastScene extends BaseScene {
       this.parent.removeChild(this);
     }
     Ticker.shared.remove(this.tick, this);
+    this.clearTriggerSoundTimeouts();
     this.stopAlertAudio();
-    if (this.bgMusicInstance) {
-      try {
-        this.bgMusicInstance.stop?.();
-      } catch {}
-      this.bgMusicInstance = null;
-    }
-    if (sound.exists("calm_loop")) {
-      try {
-        sound.stop("calm_loop");
-      } catch {}
-    }
+    this.isBgMusicOverridden = false;
+    this.stopBackgroundMusic();
     for (const [_, inst] of this.activePropSounds) {
       try { inst?.stop?.(); } catch {}
     }
@@ -4148,7 +4166,7 @@ export class RaycastScene extends BaseScene {
     return null;
   }
 
-  private updateLevelFinishZonesStatus(): void {
+  private updateLevelFinishZonesStatus(playSound: boolean = true): void {
     const breakables = this.breakableManager ? this.breakableManager.getBreakables() : [];
     const walls = this.destructableWallManager ? this.destructableWallManager.getWalls() : [];
 
@@ -4185,9 +4203,11 @@ export class RaycastScene extends BaseScene {
         zone.enabled = true;
         if (wasDisabled) {
           this.hud?.showToast("[★] Exit Sector Unlocked!", 0x00ffcc);
-          try {
-            sound.play("door_1", { volume: 0.5 });
-          } catch {}
+          if (playSound) {
+            try {
+              sound.play("door_1", { volume: 0.5 });
+            } catch {}
+          }
         }
       }
     }
@@ -4628,7 +4648,7 @@ export class RaycastScene extends BaseScene {
     return false;
   }
 
-  public openDoorAt(x: number, y: number): boolean {
+  public openDoorAt(x: number, y: number, playSound: boolean = true): boolean {
     if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) return false;
     const flatIdx = y * this.mapWidth + x;
     if (this.tileTypeFlags[flatIdx] !== RaycastScene.TILE_DOOR) return false;
@@ -4639,15 +4659,17 @@ export class RaycastScene extends BaseScene {
       const startOpen = currentState < 0 ? Math.max(0.05, Math.abs(currentState)) : 0.01;
       this.doorStates[key] = startOpen;
       this.doorStatesFlat[flatIdx] = startOpen;
-      try {
-        sound.play("door_1", { volume: 0.5 });
-      } catch (e) {}
+      if (playSound) {
+        try {
+          sound.play("door_1", { volume: 0.5 });
+        } catch (e) {}
+      }
       return true;
     }
     return false;
   }
 
-  public closeDoorAt(x: number, y: number): boolean {
+  public closeDoorAt(x: number, y: number, playSound: boolean = true): boolean {
     if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) return false;
     const flatIdx = y * this.mapWidth + x;
     if (this.tileTypeFlags[flatIdx] !== RaycastScene.TILE_DOOR) return false;
@@ -4658,11 +4680,20 @@ export class RaycastScene extends BaseScene {
       const startClose = -Math.max(0.05, currentState);
       this.doorStates[key] = startClose;
       this.doorStatesFlat[flatIdx] = startClose;
-      try {
-        sound.play("door_1", { volume: 0.4 });
-      } catch (e) {}
+      if (playSound) {
+        try {
+          sound.play("door_1", { volume: 0.4 });
+        } catch (e) {}
+      }
       return true;
     }
+    return false;
+  }
+
+  private hasTriggerSound(trigger?: ITriggerZone): boolean {
+    if (!trigger) return false;
+    if (trigger.sound && trigger.sound.soundName) return true;
+    if (trigger.soundOnTrigger && trigger.soundOnTrigger.length > 0) return true;
     return false;
   }
 
@@ -4672,14 +4703,21 @@ export class RaycastScene extends BaseScene {
       for (const p of props) {
         const name = (p.name || "").toLowerCase();
         if (name === "sound" || name === "soundontrigger" || name === "sfx" || name === "audio") {
-          if (p.value) return String(p.value).trim();
+          if (typeof p.value === "string") return p.value.trim();
+          if (p.value && typeof p.value === "object" && typeof p.value.soundName === "string") {
+            return p.value.soundName.trim() || null;
+          }
         }
       }
     } else if (typeof props === "object") {
       for (const k of Object.keys(props)) {
         const lk = k.toLowerCase();
         if (lk === "sound" || lk === "soundontrigger" || lk === "sfx" || lk === "audio") {
-          if (props[k]) return String(props[k]).trim();
+          const val = props[k];
+          if (typeof val === "string") return val.trim();
+          if (val && typeof val === "object" && typeof val.soundName === "string") {
+            return val.soundName.trim() || null;
+          }
         }
       }
     }
@@ -4713,16 +4751,12 @@ export class RaycastScene extends BaseScene {
     if (!soundName && sourceTrigger) {
       if (sourceTrigger.soundOnTrigger && sourceTrigger.soundOnTrigger.length > 0) {
         soundName = sourceTrigger.soundOnTrigger[0];
-      } else if ((sourceTrigger as any).sound) {
+      } else if (typeof (sourceTrigger as any).sound === "string") {
         soundName = (sourceTrigger as any).sound;
       } else {
         soundName = this.extractSoundName((sourceTrigger as any).properties);
       }
     }
-    if (!soundName && sourceTrigger?.wait?.shouldWait) {
-      soundName = "elevator";
-    }
-
     if (!soundName) return;
 
     const normName = this.normalizeSoundName(soundName);
@@ -4809,21 +4843,18 @@ export class RaycastScene extends BaseScene {
 
       // 1. Check DestructableWallManager (door protectors / security barriers by ID)
       let isDoorProtector = false;
+      const shouldPlayDoorSound = !this.hasTriggerSound(sourceTrigger);
       if (this.destructableWallManager) {
         const wall = this.destructableWallManager.getWallById(strId);
         if (wall) {
           isDoorProtector = true;
           if (normAction === "enable") {
-            this.destructableWallManager.setWallActiveById(wall.id, true);
+            this.destructableWallManager.setWallActiveById(wall.id, true, shouldPlayDoorSound);
           } else if (normAction === "disable") {
-            this.destructableWallManager.setWallActiveById(wall.id, false);
-            this.allyManager?.onDoorProtectorDisabled(wall.id);
+            this.destructableWallManager.setWallActiveById(wall.id, false, shouldPlayDoorSound);
           } else {
             const nextActive = !wall.isActive();
-            this.destructableWallManager.setWallActiveById(wall.id, nextActive);
-            if (!nextActive) {
-              this.allyManager?.onDoorProtectorDisabled(wall.id);
-            }
+            this.destructableWallManager.setWallActiveById(wall.id, nextActive, shouldPlayDoorSound);
           }
         }
       }
@@ -4865,35 +4896,35 @@ export class RaycastScene extends BaseScene {
 
             if (isDoorTile) {
               const doorKey = `${gx},${gy}`;
+              const shouldPlayDoorSound = !this.hasTriggerSound(sourceTrigger);
               if (isDoorProtector) {
                 // When acting on a door protector / security barrier:
                 // "disable" deactivates the barrier and OPENS/ENABLES the door!
                 // It should NEVER lock the door shut or mark it offline!
                 if (normAction === "disable") {
                   this.disabledDoors.delete(doorKey);
-                  this.openDoorAt(gx, gy);
-                  this.allyManager?.onDoorProtectorDisabled(numId);
+                  this.openDoorAt(gx, gy, shouldPlayDoorSound);
                 } else if (normAction === "enable") {
-                  this.closeDoorAt(gx, gy);
+                  this.closeDoorAt(gx, gy, shouldPlayDoorSound);
                 }
               } else {
                 // Non-protector controlled doors (elevators / mechanisms)
                 if (normAction === "enable") {
                   // Enabling a door unlocks it and opens it
                   this.disabledDoors.delete(doorKey);
-                  this.openDoorAt(gx, gy);
+                  this.openDoorAt(gx, gy, shouldPlayDoorSound);
                 } else if (normAction === "disable") {
                   // Disabling a door locks it shut
                   this.disabledDoors.add(doorKey);
-                  this.closeDoorAt(gx, gy);
+                  this.closeDoorAt(gx, gy, shouldPlayDoorSound);
                 } else {
                   // Toggle
                   if (this.disabledDoors.has(doorKey)) {
                     this.disabledDoors.delete(doorKey);
-                    this.openDoorAt(gx, gy);
+                    this.openDoorAt(gx, gy, shouldPlayDoorSound);
                   } else {
                     this.disabledDoors.add(doorKey);
-                    this.closeDoorAt(gx, gy);
+                    this.closeDoorAt(gx, gy, shouldPlayDoorSound);
                   }
                 }
               }
@@ -4927,15 +4958,17 @@ export class RaycastScene extends BaseScene {
             zone.enabled = true;
             if (wasDisabled) {
               this.hud.showToast("[★] Exit Sector Unlocked!", 0x00ffcc);
-              try {
-                sound.play("door_1", { volume: 0.5 });
-              } catch {}
+              if (!this.hasTriggerSound(sourceTrigger)) {
+                try {
+                  sound.play("door_1", { volume: 0.5 });
+                } catch {}
+              }
             }
           }
         }
       }
     }
-    this.updateLevelFinishZonesStatus();
+    this.updateLevelFinishZonesStatus(!this.hasTriggerSound(sourceTrigger));
   }
 
   private initControlledDoors(): void {
@@ -4995,10 +5028,199 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  private clearTriggerSoundTimeouts(): void {
+    for (const timerId of this.triggerSoundTimeouts) {
+      window.clearTimeout(timerId);
+    }
+    this.triggerSoundTimeouts.clear();
+  }
+
+  private async waitForSoundLoaded(normName: string, timeoutMs: number = 5000): Promise<boolean> {
+    const start = Date.now();
+    while (!this.destroyed && Date.now() - start < timeoutMs) {
+      const s = sound.find(normName);
+      if (!s) return false;
+      if (s.isLoaded) return true;
+      await new Promise((resolve) => window.setTimeout(resolve, 20));
+    }
+    return Boolean(sound.find(normName)?.isLoaded);
+  }
+
+  private async ensureTriggerSoundLoaded(normName: string): Promise<boolean> {
+    if (!normName) return false;
+    if (sound.exists(normName)) {
+      return this.waitForSoundLoaded(normName);
+    }
+
+    const candidateUrls = [
+      `./assets/raycast/sfx/${normName}.mp3`,
+      `./assets/raycast/sfx/${normName}.wav`,
+      `./assets/sounds/${normName}.mp3`,
+      `./assets/sounds/${normName}.wav`,
+    ];
+
+    for (const url of candidateUrls) {
+      try {
+        const res = await fetch(url, { method: "HEAD" });
+        if (res.ok) {
+          if (sound.exists(normName)) {
+            return this.waitForSoundLoaded(normName);
+          }
+          return await new Promise<boolean>((resolve) => {
+            sound.add(normName, {
+              url,
+              preload: true,
+              loaded: (err) => resolve(!err),
+            });
+          });
+        }
+      } catch {}
+    }
+
+    return false;
+  }
+
+  private handleTriggerSound(trigger: ITriggerZone): void {
+    const config = trigger.sound;
+    if (!config) return;
+
+    const delayMs = Math.max(0, (config.delay || 0) * 1000);
+    if (delayMs > 0) {
+      const timerId = window.setTimeout(() => {
+        this.triggerSoundTimeouts.delete(timerId);
+        if (this.destroyed) return;
+        void this.executeTriggerSound(trigger, config);
+      }, delayMs);
+      this.triggerSoundTimeouts.add(timerId);
+    } else {
+      void this.executeTriggerSound(trigger, config);
+    }
+  }
+
+  private async executeTriggerSound(
+    trigger: ITriggerZone,
+    config: ITriggerSoundConfig
+  ): Promise<void> {
+    const normName = config.soundName ? this.normalizeSoundName(config.soundName) : "";
+
+    if (config.action === "stop") {
+      if (config.overrideBackgroundMusic || normName === "calm_loop" || (normName && normName === this.currentBgMusicAlias)) {
+        this.isBgMusicOverridden = true;
+        this.stopBackgroundMusic();
+      }
+      if (normName) {
+        this.stopTriggerPropSounds(trigger.id, normName);
+      }
+      return;
+    }
+
+    if (!normName) return;
+
+    if (config.overrideBackgroundMusic) {
+      this.isBgMusicOverridden = true;
+      this.stopBackgroundMusic();
+    }
+
+    const loaded = await this.ensureTriggerSoundLoaded(normName);
+    if (!loaded || this.destroyed) {
+      if (!loaded) {
+        console.warn(`Trigger sound '${normName}' could not be found or loaded.`);
+      }
+      return;
+    }
+
+    const optionsMusicVol = SettingsManager.getInstance().getMusicVolume();
+    const sfxBaseVolume = getSoundBaseVolume(normName);
+    const volume = config.overrideBackgroundMusic
+      ? (gameConfig.musicVolume ?? optionsMusicVol)
+      : sfxBaseVolume * optionsMusicVol;
+    const loop = Boolean(config.shouldLoop);
+
+    try {
+      if (!config.overrideBackgroundMusic) {
+        this.stopTriggerPropSounds(trigger.id, normName);
+      }
+
+      const res = sound.play(normName, { loop, volume });
+      const handleInstance = (inst: any) => {
+        if (!inst || this.destroyed) {
+          try {
+            inst?.stop?.();
+          } catch {}
+          return;
+        }
+        if (config.overrideBackgroundMusic) {
+          this.bgMusicInstance = inst;
+          this.currentBgMusicAlias = normName;
+        } else {
+          this.activePropSounds.set(String(trigger.id), inst);
+          this.activePropSounds.set(normName, inst);
+        }
+      };
+
+      if (res && typeof (res as any).then === "function") {
+        (res as any).then(handleInstance).catch(() => {});
+      } else {
+        handleInstance(res);
+      }
+    } catch (e) {
+      console.warn(`Failed to execute trigger sound '${normName}':`, e);
+    }
+  }
+
+  private getLeverGids(): { leverOffGid: number; leverOnGid: number } {
+    let leverOffId = 40;
+    let leverOnId = 41;
+    for (const idStr of Object.keys(this.tileMeta)) {
+      const id = Number(idStr);
+      const img = (this.tileMeta[id]?.image || "").toLowerCase();
+      if (img.includes("lever_off")) {
+        leverOffId = id;
+      } else if (img.includes("lever_on")) {
+        leverOnId = id;
+      }
+    }
+    return {
+      leverOffGid: leverOffId + this.firstgid,
+      leverOnGid: leverOnId + this.firstgid,
+    };
+  }
+
+  private toggleNearbyLeverTextures(trigger: ITriggerZone): void {
+    const { leverOffGid, leverOnGid } = this.getLeverGids();
+    const minGx = Math.max(0, Math.floor(trigger.minX) - 1);
+    const maxGx = Math.min(this.mapWidth - 1, Math.floor(trigger.maxX) + 1);
+    const minGy = Math.max(0, Math.floor(trigger.minY) - 1);
+    const maxGy = Math.min(this.mapHeight - 1, Math.floor(trigger.maxY) + 1);
+
+    for (let gy = minGy; gy <= maxGy; gy++) {
+      for (let gx = minGx; gx <= maxGx; gx++) {
+        const flatIdx = gy * this.mapWidth + gx;
+        const currentGid = this.mapFlat[flatIdx];
+        if (currentGid === leverOnGid) {
+          this.map[gy][gx] = leverOffGid;
+          this.mapFlat[flatIdx] = leverOffGid;
+          this.tileTypes[leverOffGid] = TileType.THICK_WALL;
+        } else if (currentGid === leverOffGid) {
+          this.map[gy][gx] = leverOnGid;
+          this.mapFlat[flatIdx] = leverOnGid;
+          this.tileTypes[leverOnGid] = TileType.THICK_WALL;
+        }
+      }
+    }
+  }
+
   private handleTriggerFired(trigger: ITriggerZone): void {
     const triggerCenterX = (trigger.minX + trigger.maxX) / 2;
     const triggerCenterY = (trigger.minY + trigger.maxY) / 2;
     const isWaitable = Boolean(trigger.wait && trigger.wait.shouldWait && trigger.wait.waitTimeInSeconds > 0);
+
+    if (trigger.sound) {
+      this.handleTriggerSound(trigger);
+    }
+    if (trigger.shouldBePressed) {
+      this.toggleNearbyLeverTextures(trigger);
+    }
 
     if (isWaitable) {
       // Waitable operation: play looping spatial sound from prop / trigger during wait countdown.
@@ -5056,12 +5278,14 @@ export class RaycastScene extends BaseScene {
       }
     } catch {}
 
-    // 2. Play completion chime / door sound
-    try {
-      if (sound.exists("door_1")) {
-        sound.play("door_1", { volume: 0.5 });
-      }
-    } catch {}
+    // 2. Play completion chime / door sound only if trigger has no custom sound attached
+    if (!this.hasTriggerSound(trigger)) {
+      try {
+        if (sound.exists("door_1")) {
+          sound.play("door_1", { volume: 0.5 });
+        }
+      } catch {}
+    }
 
     // 3. Execute completion action on linked objects (enable/open doors after wait finishes)
     if (trigger.linkIds && trigger.linkIds.length > 0) {

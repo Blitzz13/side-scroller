@@ -52,14 +52,42 @@ export class VirtualJoystick extends Container implements IDisposable {
     this.on("pointerup", this.onPointerUp, this);
     this.on("pointerupoutside", this.onPointerUp, this);
     this.on("pointercancel", this.onPointerUp, this);
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("pointerup", this.onWindowPointerEnd);
+      window.addEventListener("pointercancel", this.onWindowPointerEnd);
+      window.addEventListener("blur", this.onWindowBlur);
+    }
   }
 
   public get vector(): JoystickVector {
     return this._vector;
   }
 
+  private resetJoystick(): void {
+    this.activePointerId = null;
+    this.knobGraphic.position.set(0, 0);
+    this._vector.x = 0;
+    this._vector.y = 0;
+  }
+
+  private onWindowPointerEnd = (e: PointerEvent): void => {
+    if (this.activePointerId === e.pointerId) {
+      this.resetJoystick();
+    }
+  };
+
+  private onWindowBlur = (): void => {
+    if (this.activePointerId !== null) {
+      this.resetJoystick();
+    }
+  };
+
   private onPointerDown(e: FederatedPointerEvent): void {
     if (this.activePointerId !== null) return;
+    if (e && typeof e.stopPropagation === "function") {
+      e.stopPropagation();
+    }
     this.activePointerId = e.pointerId;
     this.updatePosition(e);
   }
@@ -71,10 +99,7 @@ export class VirtualJoystick extends Container implements IDisposable {
 
   private onPointerUp(e: FederatedPointerEvent): void {
     if (this.activePointerId === e.pointerId) {
-      this.activePointerId = null;
-      this.knobGraphic.position.set(0, 0);
-      this._vector.x = 0;
-      this._vector.y = 0;
+      this.resetJoystick();
     }
   }
 
@@ -94,6 +119,11 @@ export class VirtualJoystick extends Container implements IDisposable {
   }
 
   public dispose(): void {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pointerup", this.onWindowPointerEnd);
+      window.removeEventListener("pointercancel", this.onWindowPointerEnd);
+      window.removeEventListener("blur", this.onWindowBlur);
+    }
     this.off("pointerdown", this.onPointerDown, this);
     this.off("globalpointermove", this.onPointerMove, this);
     this.off("pointerup", this.onPointerUp, this);
