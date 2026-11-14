@@ -3,7 +3,7 @@ import { sound } from "@pixi/sound";
 import { IDisposable } from "../characters/interfaces/IDisposable";
 import { GameEvent } from "../enums/GameEvent";
 import { gameConfig } from "../configs/GameConfig";
-import { SettingsManager } from "../managers/SettingsManager";
+import { SettingsManager, SUBTITLE_SCALE_STEP } from "../managers/SettingsManager";
 
 export interface IInGameMenuOptions {
   /** If true, shown as standalone settings menu (Title: SETTINGS, Back button). If false, pause menu (Title: PAUSED, Resume, Quit). */
@@ -18,6 +18,7 @@ export class InGameMenu extends Container implements IDisposable {
 
   private voicesValueText!: Text;
   private musicValueText!: Text;
+  private subtitleSizeValueText!: Text;
   private autoAimStatusText!: Text;
   private autoAimBtnGraphic!: Graphics;
 
@@ -82,8 +83,8 @@ export class InGameMenu extends Container implements IDisposable {
     this.panel.addChild(divider);
 
     // Content rows starting coordinate
-    let currentY = 100;
-    const rowSpacing = 68;
+    let currentY = 96;
+    const rowSpacing = 62;
 
     // --- ROW 1: GAME VOICES VOLUME ---
     this.createStepperRow(
@@ -125,9 +126,29 @@ export class InGameMenu extends Container implements IDisposable {
     );
     currentY += rowSpacing;
 
-    // --- ROW 3: AUTO AIM TOGGLE ---
+    // --- ROW 3: SUBTITLE SIZE ---
+    this.createStepperRow(
+      currentY,
+      panelW,
+      "SUBTITLE SIZE",
+      () => Math.round(this.settingsManager.getSubtitleScale() * 100) + "%",
+      (lbl) => { this.subtitleSizeValueText = lbl; },
+      () => {
+        const cur = this.settingsManager.getSubtitleScale();
+        this.settingsManager.setSubtitleScale(cur - SUBTITLE_SCALE_STEP);
+        this.playClick();
+      },
+      () => {
+        const cur = this.settingsManager.getSubtitleScale();
+        this.settingsManager.setSubtitleScale(cur + SUBTITLE_SCALE_STEP);
+        this.playClick();
+      }
+    );
+    currentY += rowSpacing;
+
+    // --- ROW 4: AUTO AIM TOGGLE ---
     this.createAutoAimRow(currentY, panelW);
-    currentY += rowSpacing + 20;
+    currentY += rowSpacing + 16;
 
     // --- ACTION BUTTONS (Aligned cleanly to the bottom of the panel) ---
     const btnH = 50;
@@ -403,6 +424,9 @@ export class InGameMenu extends Container implements IDisposable {
     }
     if (this.musicValueText) {
       this.musicValueText.text = Math.round(this.settingsManager.getMusicVolume() * 100) + "%";
+    }
+    if (this.subtitleSizeValueText) {
+      this.subtitleSizeValueText.text = Math.round(this.settingsManager.getSubtitleScale() * 100) + "%";
     }
     if (this.autoAimStatusText && this.autoAimBtnGraphic) {
       const isEnabled = this.settingsManager.getAutoAim();

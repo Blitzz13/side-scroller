@@ -2,10 +2,15 @@ import { sound } from "@pixi/sound";
 import { enemyVoicelineConfig } from "../configs/EnemyVoicelineConfig";
 import { gameConfig } from "../configs/GameConfig";
 
+export const SUBTITLE_SCALE_MIN = 0.7;
+export const SUBTITLE_SCALE_MAX = 1.8;
+export const SUBTITLE_SCALE_STEP = 0.1;
+
 export interface IGameSettings {
   voicesVolume: number; // 0.0 - 1.0 (steps of 0.1)
   musicVolume: number;  // 0.0 - 1.0 (steps of 0.1)
   autoAim: boolean;
+  subtitleScale: number; // SUBTITLE_SCALE_MIN - SUBTITLE_SCALE_MAX
 }
 
 const SETTINGS_STORAGE_KEY = "star_wars_game_settings";
@@ -50,6 +55,7 @@ export class SettingsManager {
       voicesVolume: 0.8,
       musicVolume: 0.5,
       autoAim: isMobile,
+      subtitleScale: 1.0,
     };
 
     try {
@@ -64,6 +70,9 @@ export class SettingsManager {
         }
         if (typeof parsed.autoAim === "boolean") {
           defaults.autoAim = parsed.autoAim;
+        }
+        if (typeof parsed.subtitleScale === "number" && !Number.isNaN(parsed.subtitleScale)) {
+          defaults.subtitleScale = this.clampSubtitleScale(parsed.subtitleScale);
         }
       }
     } catch {
@@ -143,6 +152,24 @@ export class SettingsManager {
   public toggleAutoAim(): boolean {
     this.setAutoAim(!this.settings.autoAim);
     return this.settings.autoAim;
+  }
+
+  private clampSubtitleScale(scale: number): number {
+    const rounded = Math.round(scale * 10) / 10;
+    return Math.max(SUBTITLE_SCALE_MIN, Math.min(SUBTITLE_SCALE_MAX, rounded));
+  }
+
+  public getSubtitleScale(): number {
+    return this.settings.subtitleScale;
+  }
+
+  public setSubtitleScale(scale: number): void {
+    const clamped = this.clampSubtitleScale(scale);
+    if (this.settings.subtitleScale !== clamped) {
+      this.settings.subtitleScale = clamped;
+      this.saveSettings();
+      this.notifyListeners();
+    }
   }
 
   public subscribe(listener: (settings: IGameSettings) => void): () => void {

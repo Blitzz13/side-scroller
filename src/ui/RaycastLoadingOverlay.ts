@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { gameConfig } from "../configs/GameConfig";
+import { getRaycastUIConfig } from "../configs/RaycastUIConfig";
 import { IDisposable } from "../characters/interfaces/IDisposable";
 
 export class RaycastLoadingOverlay extends Container implements IDisposable {
@@ -11,13 +12,23 @@ export class RaycastLoadingOverlay extends Container implements IDisposable {
   private titleText: Text;
   private statusText: Text;
 
-  private barWidth: number = 360;
-  private barHeight: number = 18;
-  private barRadius: number = 9;
+  private barWidth: number;
+  private barHeight: number;
+  private barRadius: number;
   private currentProgress: number = 0;
 
   constructor() {
     super();
+
+    const loadingCfg = getRaycastUIConfig().loading;
+    this.barWidth = loadingCfg.barWidth;
+    this.barHeight = loadingCfg.barHeight;
+    this.barRadius = loadingCfg.barRadius;
+
+    const dpr = Math.max(
+      1,
+      Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3)
+    );
 
     // Ensure this container handles its own sorting if needed
     this.sortableChildren = true;
@@ -34,24 +45,25 @@ export class RaycastLoadingOverlay extends Container implements IDisposable {
     // 2. Bar Container centered horizontally
     this.barContainer = new Container();
     const startX = Math.round((gameConfig.width - this.barWidth) / 2);
-    const startY = Math.round(gameConfig.height / 2 + 30);
+    const startY = Math.round(gameConfig.height / 2 + loadingCfg.barCenterOffsetY);
     this.barContainer.position.set(startX, startY);
     this.addChild(this.barContainer);
 
     // 3. Title text above loading bar
     this.titleText = new Text("INITIALIZING SECTOR", {
       fontFamily: "Segoe UI, Arial, sans-serif",
-      fontSize: 22,
+      fontSize: loadingCfg.titleFontSize,
       fontWeight: "bold",
       fill: 0x00e5ff, // Same cyan as MainMenu subtitle & buttons
-      letterSpacing: 4,
+      letterSpacing: loadingCfg.titleLetterSpacing,
       dropShadow: true,
       dropShadowColor: 0x002233,
       dropShadowDistance: 2,
       align: "center",
     });
+    this.titleText.resolution = dpr;
     this.titleText.anchor.set(0.5, 0.5);
-    this.titleText.position.set(gameConfig.width / 2, startY - 50);
+    this.titleText.position.set(gameConfig.width / 2, startY - loadingCfg.titleOffsetY);
     this.addChild(this.titleText);
 
     // 4. Background Track matching MainMenu Button aesthetic (0x05101e fill, 0x00e5ff stroke)
@@ -70,14 +82,15 @@ export class RaycastLoadingOverlay extends Container implements IDisposable {
     // 6. Status details text below loading bar
     this.statusText = new Text("Loading assets...", {
       fontFamily: "Segoe UI, Arial, sans-serif",
-      fontSize: 14,
+      fontSize: loadingCfg.statusFontSize,
       fontWeight: "normal",
       fill: 0x7be5ff,
-      letterSpacing: 1,
+      letterSpacing: loadingCfg.statusLetterSpacing,
       align: "center",
     });
+    this.statusText.resolution = dpr;
     this.statusText.anchor.set(0.5, 0);
-    this.statusText.position.set(gameConfig.width / 2, startY + this.barHeight + 14);
+    this.statusText.position.set(gameConfig.width / 2, startY + this.barHeight + loadingCfg.statusOffsetY);
     this.addChild(this.statusText);
 
     this.setProgress(0);

@@ -1,5 +1,6 @@
 import { Container, Graphics, Sprite, Text, TextStyle, Texture } from "pixi.js";
 import { gameConfig } from "../../configs/GameConfig";
+import { getRaycastUIConfig, IRaycastUIConfig } from "../../configs/RaycastUIConfig";
 
 export class RaycastHUD extends Container {
   // Health components
@@ -68,9 +69,12 @@ export class RaycastHUD extends Container {
   private objectivesButton: Container;
   private objectivesButtonBg: Graphics;
 
+  private readonly uiCfg: IRaycastUIConfig["hud"];
+
   constructor() {
     super();
 
+    this.uiCfg = getRaycastUIConfig().hud;
     const screenW = gameConfig.width;
     const screenH = gameConfig.height;
     const dpr = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));
@@ -110,7 +114,7 @@ export class RaycastHUD extends Container {
     // Health text - vertically centered at row1CenterY
     this.healthText = new Text("100 HP", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 14,
+      fontSize: this.uiCfg.healthFontSize,
       fontWeight: "bold",
       fill: 0xffffff,
       letterSpacing: 0.5,
@@ -153,7 +157,7 @@ export class RaycastHUD extends Container {
     // Shield text - vertically centered at row2CenterY
     this.shieldText = new Text("0 SHD", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 14,
+      fontSize: this.uiCfg.shieldFontSize,
       fontWeight: "bold",
       fill: 0x00ff66,
       letterSpacing: 0.5,
@@ -198,7 +202,7 @@ export class RaycastHUD extends Container {
 
     this.weaponNameText = new Text("UNARMED", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 14,
+      fontSize: this.uiCfg.weaponNameFontSize,
       fontWeight: "bold",
       fill: 0xffaa00,
       letterSpacing: 0.5,
@@ -209,7 +213,7 @@ export class RaycastHUD extends Container {
 
     this.ammoText = new Text("--", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 20,
+      fontSize: this.uiCfg.ammoFontSize,
       fontWeight: "bold",
       fill: 0xffffff,
       letterSpacing: 0.5,
@@ -221,7 +225,7 @@ export class RaycastHUD extends Container {
     // Small weapon switch hotkey / tap indicator
     this.switchHint = new Text("[1-3 / TAP]", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 10,
+      fontSize: this.uiCfg.switchHintFontSize,
       fontWeight: "bold",
       fill: 0x88bbdd,
       letterSpacing: 0.5,
@@ -235,7 +239,7 @@ export class RaycastHUD extends Container {
 
     // 4. Toast notification (Top-Center)
     this.toastContainer = new Container();
-    this.toastContainer.position.set(screenW / 2, 45);
+    this.toastContainer.position.set(screenW / 2, this.uiCfg.toastY);
     this.toastContainer.visible = false;
 
     this.toastBg = new Graphics();
@@ -243,7 +247,7 @@ export class RaycastHUD extends Container {
 
     this.toastText = new Text("", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 18,
+      fontSize: this.uiCfg.toastFontSize,
       fontWeight: "bold",
       fill: 0xffffff,
       align: "center",
@@ -259,7 +263,7 @@ export class RaycastHUD extends Container {
 
     // 5. Keycards HUD (Top-Left)
     this.keycardContainer = new Container();
-    this.keycardContainer.position.set(24, 24);
+    this.keycardContainer.position.set(this.uiCfg.keycardBoxX, this.uiCfg.keycardBoxY);
     this.keycardContainer.visible = false;
 
     this.keycardBg = new Graphics();
@@ -267,13 +271,13 @@ export class RaycastHUD extends Container {
 
     const keycardLabel = new Text("KEYS", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 11,
+      fontSize: this.uiCfg.keycardLabelFontSize,
       fontWeight: "bold",
       fill: 0x00e5ff,
-      letterSpacing: 1,
+      letterSpacing: this.uiCfg.keycardLabelLetterSpacing,
     });
     keycardLabel.resolution = dpr;
-    keycardLabel.position.set(8, 6);
+    keycardLabel.position.set(this.uiCfg.keycardLabelX, this.uiCfg.keycardLabelY);
     this.keycardContainer.addChild(keycardLabel);
 
     this.addChild(this.keycardContainer);
@@ -305,20 +309,20 @@ export class RaycastHUD extends Container {
 
     this.sprintText = new Text("SPRINT", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 11,
+      fontSize: this.uiCfg.sprintFontSize,
       fontWeight: "bold",
       fill: 0x00e5ff,
       letterSpacing: 1,
     });
     this.sprintText.resolution = dpr;
-    this.sprintText.position.set(24, 5);
+    this.sprintText.position.set(24, Math.max(3, 5 - Math.floor((this.uiCfg.sprintFontSize - 11) / 2)));
     this.sprintContainer.addChild(this.sprintText);
 
     this.addChild(this.sprintContainer);
 
     // 7. Interaction Prompt (Center, just below crosshair)
     this.promptContainer = new Container();
-    this.promptContainer.position.set(screenW / 2, screenH / 2 + 70);
+    this.promptContainer.position.set(screenW / 2, screenH / 2 + this.uiCfg.promptOffsetY);
     this.promptContainer.visible = false;
 
     this.promptBg = new Graphics();
@@ -326,7 +330,7 @@ export class RaycastHUD extends Container {
 
     this.promptText = new Text("", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 14,
+      fontSize: this.uiCfg.promptFontSize,
       fontWeight: "bold",
       fill: 0x00e5ff,
       letterSpacing: 1,
@@ -459,7 +463,7 @@ export class RaycastHUD extends Container {
     }
 
     const sprite = new Sprite(texture);
-    sprite.scale.set(0.6);
+    sprite.scale.set(this.uiCfg.keycardIconScale);
     sprite.roundPixels = true;
 
     this.keycardIcons.set(key, sprite);
@@ -482,17 +486,20 @@ export class RaycastHUD extends Container {
   }
 
   private layoutKeycards(): void {
-    let currentX = 48;
+    let currentX = this.uiCfg.keycardIconStartX;
     for (const [_, sprite] of this.keycardIcons) {
-      sprite.position.set(currentX, 4);
-      currentX += 20;
+      sprite.position.set(currentX, this.uiCfg.keycardIconY);
+      currentX += this.uiCfg.keycardIconSpacing;
     }
 
-    const totalWidth = Math.max(70, currentX + 6);
+    const totalWidth = Math.max(
+      this.uiCfg.keycardBoxMinWidth,
+      currentX + this.uiCfg.keycardBoxPaddingRight
+    );
     this.keycardBg.clear();
     this.keycardBg.beginFill(0x0a1018, 0.75);
     this.keycardBg.lineStyle(1.5, 0x00e5ff, 0.5);
-    this.keycardBg.drawRoundedRect(0, 0, totalWidth, 26, 6);
+    this.keycardBg.drawRoundedRect(0, 0, totalWidth, this.uiCfg.keycardBoxHeight, 6);
     this.keycardBg.endFill();
   }
 
@@ -550,15 +557,15 @@ export class RaycastHUD extends Container {
       this.weaponNameText.text = weaponName.toUpperCase();
       if (weaponName.toLowerCase().includes("detonator")) {
         this.ammoText.text = `${ammo} REMAINING`;
-        (this.ammoText.style as TextStyle).fontSize = 16;
+        (this.ammoText.style as TextStyle).fontSize = this.uiCfg.ammoDetonatorFontSize;
       } else {
         this.ammoText.text = `${ammo} AMMO`;
-        (this.ammoText.style as TextStyle).fontSize = 20;
+        (this.ammoText.style as TextStyle).fontSize = this.uiCfg.ammoFontSize;
       }
     } else {
       this.weaponNameText.text = "UNARMED";
       this.ammoText.text = "--";
-      (this.ammoText.style as TextStyle).fontSize = 20;
+      (this.ammoText.style as TextStyle).fontSize = this.uiCfg.ammoFontSize;
     }
   }
 
@@ -616,8 +623,8 @@ export class RaycastHUD extends Container {
     durationSeconds: number = 2.5
   ): void {
     this.toastText.text = message;
-    const paddingX = 20;
-    const paddingY = 8;
+    const paddingX = this.uiCfg.toastPadX;
+    const paddingY = this.uiCfg.toastPadY;
     const textW = this.toastText.width;
     const textH = this.toastText.height;
 
@@ -708,8 +715,8 @@ export class RaycastHUD extends Container {
 
     const textW = this.promptText.width;
     const textH = this.promptText.height;
-    const padX = 18;
-    const padY = 7;
+    const padX = this.uiCfg.promptPadX;
+    const padY = this.uiCfg.promptPadY;
 
     this.promptBg.clear();
     this.promptBg.beginFill(0x060f18, 0.85);

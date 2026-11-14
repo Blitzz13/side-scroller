@@ -1,5 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { gameConfig } from "../../../configs/GameConfig";
+import { getRaycastUIConfig, IRaycastUIConfig } from "../../../configs/RaycastUIConfig";
+import { SettingsManager } from "../../../managers/SettingsManager";
 import { IDisposable } from "../../../characters/interfaces/IDisposable";
 import { ISubtitleCue } from "./SubtitleTypes";
 
@@ -15,38 +17,48 @@ export class RaycastSubtitles extends Container implements IDisposable {
   private cues: ISubtitleCue[] = [];
   private activeCue: ISubtitleCue | null = null;
 
+  private readonly uiCfg: IRaycastUIConfig["subtitles"];
   private readonly maxWidth: number;
-  private readonly paddingX = 18;
-  private readonly paddingY = 10;
+  private readonly paddingX: number;
+  private readonly paddingY: number;
+  private readonly speakerBodyGap: number;
+  private readonly cornerRadius: number;
+  private unsubscribeSettings?: () => void;
 
   constructor() {
     super();
     this.eventMode = "none";
     this.visible = false;
 
+    this.uiCfg = getRaycastUIConfig().subtitles;
+    this.paddingX = this.uiCfg.paddingX;
+    this.paddingY = this.uiCfg.paddingY;
+    this.speakerBodyGap = this.uiCfg.speakerBodyGap;
+    this.cornerRadius = this.uiCfg.cornerRadius;
+
     const screenW = gameConfig.width;
     const screenH = gameConfig.height;
     const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
 
-    this.maxWidth = Math.min(screenW * 0.7, 820);
-    this.position.set(screenW / 2, screenH - 70);
+    this.maxWidth = Math.min(screenW * this.uiCfg.maxWidthRatio, this.uiCfg.maxWidthCap);
+    this.position.set(screenW / 2, screenH - this.uiCfg.bottomOffset);
 
     this.bg = new Graphics();
     this.addChild(this.bg);
 
     this.speakerText = new Text("", {
       fontFamily: "Segoe UI, Arial, sans-serif",
-      fontSize: 13,
+      fontSize: this.uiCfg.speakerFontSize,
       fontWeight: "bold",
       fill: 0x00e5ff,
-      letterSpacing: 2,
+      letterSpacing: this.uiCfg.speakerLetterSpacing,
     });
     this.speakerText.resolution = dpr;
     this.addChild(this.speakerText);
 
     this.bodyText = new Text("", {
       fontFamily: "Segoe UI, Arial, sans-serif",
-      fontSize: 18,
+      fontSize: this.uiCfg.bodyFontSize,
       fill: 0xffffff,
       align: "center",
       wordWrap: true,
@@ -58,6 +70,21 @@ export class RaycastSubtitles extends Container implements IDisposable {
     });
     this.bodyText.resolution = dpr;
     this.addChild(this.bodyText);
+
+    this.applySubtitleScale();
+    this.unsubscribeSettings = SettingsManager.getInstance().subscribe(() => {
+      this.applySubtitleScale();
+    });
+  }
+
+  private applySubtitleScale(): void {
+    const scale = SettingsManager.getInstance().getSubtitleScale();
+    this.speakerText.style.fontSize = Math.round(this.uiCfg.speakerFontSize * scale);
+    this.bodyText.style.fontSize = Math.round(this.uiCfg.bodyFontSize * scale);
+    this.bodyText.style.wordWrapWidth = this.maxWidth - this.paddingX * 2;
+    if (this.activeCue && this.visible) {
+      this.renderCue(this.activeCue);
+    }
   }
 
   /** Starts showing a dialogue; call `setProgress` as the audio plays. */
@@ -126,24 +153,28 @@ export class RaycastSubtitles extends Container implements IDisposable {
 
     const contentW = Math.max(this.speakerText.width, this.bodyText.width);
     const boxW = Math.min(this.maxWidth, contentW + this.paddingX * 2);
-    const boxH = this.paddingY * 2 + this.speakerText.height + 4 + this.bodyText.height;
+    const boxH = this.paddingY * 2 + this.speakerText.height + this.speakerBodyGap + this.bodyText.height;
 
     // Anchor the box's bottom edge at the container origin so it grows upwards.
     this.bg.clear();
     this.bg.beginFill(0x05101e, 0.82);
     this.bg.lineStyle(1.5, cue.isPlayer ? 0x00e5ff : 0xffb347, 0.7);
-    this.bg.drawRoundedRect(-boxW / 2, -boxH, boxW, boxH, 8);
+    this.bg.drawRoundedRect(-boxW / 2, -boxH, boxW, boxH, this.cornerRadius);
     this.bg.endFill();
 
     this.speakerText.position.set(-this.speakerText.width / 2, -boxH + this.paddingY);
     this.bodyText.position.set(
       -this.bodyText.width / 2,
-      -boxH + this.paddingY + this.speakerText.height + 4
+      -boxH + this.paddingY + this.speakerText.height + this.speakerBodyGap
     );
     this.visible = true;
   }
 
   public dispose(): void {
+    if (this.unsubscribeSettings) {
+      this.unsubscribeSettings();
+      this.unsubscribeSettings = undefined;
+    }
     this.clear();
     this.destroy({ children: true });
   }

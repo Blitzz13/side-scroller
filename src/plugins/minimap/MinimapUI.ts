@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import { getRaycastUIConfig, IRaycastUIConfig } from "../../configs/RaycastUIConfig";
 
 export interface IMinimapUIOptions {
   screenWidth: number;
@@ -36,9 +37,11 @@ export class MinimapUI {
   public readonly viewportY: number = 56;
   public readonly viewportW: number;
   public readonly viewportH: number;
+  private readonly uiCfg: IRaycastUIConfig["minimap"];
 
   constructor(options: IMinimapUIOptions) {
     const { screenWidth, screenHeight, modalWidth, modalHeight, onClose } = options;
+    this.uiCfg = getRaycastUIConfig().minimap;
     const devicePixelRatio = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));
 
     this.rootContainer = new Container();
@@ -74,9 +77,11 @@ export class MinimapUI {
     this.headerContainer.position.set(24, 14);
     this.modalContainer.addChild(this.headerContainer);
 
+    const headerScale = this.uiCfg.titleFontSize / 15;
+
     this.titleText = new Text("TACTICAL DATAPAD // AUTOMAP", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 15,
+      fontSize: this.uiCfg.titleFontSize,
       fontWeight: "bold",
       fill: 0x00e5ff,
       letterSpacing: 1.5,
@@ -86,35 +91,35 @@ export class MinimapUI {
 
     this.sectorText = new Text("SECTOR: LEVEL 1", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 11,
+      fontSize: this.uiCfg.headerInfoFontSize,
       fontWeight: "bold",
       fill: 0x88bbdd,
       letterSpacing: 1.0,
     });
     this.sectorText.resolution = devicePixelRatio;
-    this.sectorText.position.set(310, 3);
+    this.sectorText.position.set(Math.round(310 * headerScale), 3);
     this.headerContainer.addChild(this.sectorText);
 
     this.exploredText = new Text("EXPLORED: 0%", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 11,
+      fontSize: this.uiCfg.headerInfoFontSize,
       fontWeight: "bold",
       fill: 0x00ff88,
       letterSpacing: 1.0,
     });
     this.exploredText.resolution = devicePixelRatio;
-    this.exploredText.position.set(470, 3);
+    this.exploredText.position.set(Math.round(470 * headerScale), 3);
     this.headerContainer.addChild(this.exploredText);
 
     this.enemyCountText = new Text("HOSTILES: 0", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 11,
+      fontSize: this.uiCfg.headerInfoFontSize,
       fontWeight: "bold",
       fill: 0xff5555,
       letterSpacing: 1.0,
     });
     this.enemyCountText.resolution = devicePixelRatio;
-    this.enemyCountText.position.set(620, 3);
+    this.enemyCountText.position.set(Math.round(620 * headerScale), 3);
     this.headerContainer.addChild(this.enemyCountText);
 
     // Close Button [X] in top-right
@@ -235,6 +240,20 @@ export class MinimapUI {
     const legendGraphics = new Graphics();
     this.legendContainer.addChild(legendGraphics);
 
+    const legendFontSize = this.uiCfg.legendFontSize;
+    const stepScale = legendFontSize / 10;
+    const addLegendLabel = (text: string, color: number, x: number): void => {
+      const label = new Text(text, {
+        fontFamily: "Arial, sans-serif",
+        fontSize: legendFontSize,
+        fontWeight: "bold",
+        fill: color,
+      });
+      label.resolution = devicePixelRatio;
+      label.position.set(x, 2);
+      this.legendContainer.addChild(label);
+    };
+
     let cursorX = 0;
 
     // 1. Player: Cyan Chevron
@@ -242,32 +261,16 @@ export class MinimapUI {
     legendGraphics.beginFill(0x00e5ff, 0.6);
     legendGraphics.drawCircle(cursorX + 6, 8, 5);
     legendGraphics.endFill();
-    const playerLabel = new Text("YOU", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 10,
-      fontWeight: "bold",
-      fill: 0x00e5ff,
-    });
-    playerLabel.resolution = devicePixelRatio;
-    playerLabel.position.set(cursorX + 16, 2);
-    this.legendContainer.addChild(playerLabel);
-    cursorX += 56;
+    addLegendLabel("YOU", 0x00e5ff, cursorX + 16);
+    cursorX += Math.round(56 * stepScale);
 
     // 2. Door: Yellow Bar
     legendGraphics.lineStyle(1.5, 0xffaa00, 1);
     legendGraphics.beginFill(0xffaa00, 0.85);
     legendGraphics.drawRect(cursorX, 4, 12, 8);
     legendGraphics.endFill();
-    const doorLabel = new Text("DOOR", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 10,
-      fontWeight: "bold",
-      fill: 0xffaa00,
-    });
-    doorLabel.resolution = devicePixelRatio;
-    doorLabel.position.set(cursorX + 16, 2);
-    this.legendContainer.addChild(doorLabel);
-    cursorX += 64;
+    addLegendLabel("DOOR", 0xffaa00, cursorX + 16);
+    cursorX += Math.round(64 * stepScale);
 
     // 3. Keycard: Multi-color square
     legendGraphics.lineStyle(1, 0x0088ff, 1);
@@ -282,16 +285,8 @@ export class MinimapUI {
     legendGraphics.beginFill(0xffcc00, 1);
     legendGraphics.drawRect(cursorX + 10, 4, 4, 8);
     legendGraphics.endFill();
-    const keycardLabel = new Text("KEYCARD", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 10,
-      fontWeight: "bold",
-      fill: 0x88bbdd,
-    });
-    keycardLabel.resolution = devicePixelRatio;
-    keycardLabel.position.set(cursorX + 18, 2);
-    this.legendContainer.addChild(keycardLabel);
-    cursorX += 84;
+    addLegendLabel("KEYCARD", 0x88bbdd, cursorX + 18);
+    cursorX += Math.round(84 * stepScale);
 
     // 4. Discovered Items / Objects: Medical cross + Diamond
     legendGraphics.lineStyle(1.5, 0x00ff88, 1);
@@ -300,32 +295,16 @@ export class MinimapUI {
     legendGraphics.endFill();
     legendGraphics.lineStyle(1.5, 0x00e5ff, 1);
     legendGraphics.drawRect(cursorX + 12, 5, 6, 6);
-    const itemsLabel = new Text("ITEMS", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 10,
-      fontWeight: "bold",
-      fill: 0x00ffcc,
-    });
-    itemsLabel.resolution = devicePixelRatio;
-    itemsLabel.position.set(cursorX + 22, 2);
-    this.legendContainer.addChild(itemsLabel);
-    cursorX += 74;
+    addLegendLabel("ITEMS", 0x00ffcc, cursorX + 22);
+    cursorX += Math.round(74 * stepScale);
 
     // 5. Exit: Emerald Green
     legendGraphics.lineStyle(1.5, 0x00ff88, 1);
     legendGraphics.beginFill(0x00ff88, 0.8);
     legendGraphics.drawRoundedRect(cursorX, 3, 10, 10, 2);
     legendGraphics.endFill();
-    const exitLabel = new Text("EXIT", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 10,
-      fontWeight: "bold",
-      fill: 0x00ff88,
-    });
-    exitLabel.resolution = devicePixelRatio;
-    exitLabel.position.set(cursorX + 14, 2);
-    this.legendContainer.addChild(exitLabel);
-    cursorX += 52;
+    addLegendLabel("EXIT", 0x00ff88, cursorX + 14);
+    cursorX += Math.round(52 * stepScale);
 
     // 6. Stairs: Distinct step treads with arrows (▲/▼)
     legendGraphics.lineStyle(1.5, 0x00e5ff, 1);
@@ -337,32 +316,16 @@ export class MinimapUI {
     legendGraphics.lineTo(cursorX + 10, 6);
     legendGraphics.moveTo(cursorX + 1, 9);
     legendGraphics.lineTo(cursorX + 10, 9);
-    const stairsLabel = new Text("STAIRS", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 10,
-      fontWeight: "bold",
-      fill: 0x00e5ff,
-    });
-    stairsLabel.resolution = devicePixelRatio;
-    stairsLabel.position.set(cursorX + 15, 2);
-    this.legendContainer.addChild(stairsLabel);
-    cursorX += 66;
+    addLegendLabel("STAIRS", 0x00e5ff, cursorX + 15);
+    cursorX += Math.round(66 * stepScale);
 
     // 7. Hostiles: Red Dot
     legendGraphics.lineStyle(1.5, 0xff2222, 1);
     legendGraphics.beginFill(0xff3333, 0.9);
     legendGraphics.drawCircle(cursorX + 5, 8, 4);
     legendGraphics.endFill();
-    const hostileLabel = new Text("HOSTILE", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 10,
-      fontWeight: "bold",
-      fill: 0xff4444,
-    });
-    hostileLabel.resolution = devicePixelRatio;
-    hostileLabel.position.set(cursorX + 14, 2);
-    this.legendContainer.addChild(hostileLabel);
-    cursorX += 66;
+    addLegendLabel("HOSTILE", 0xff4444, cursorX + 14);
+    cursorX += Math.round(66 * stepScale);
 
     // 8. Objective: Gold Diamond
     const objX = cursorX + 5;
@@ -376,20 +339,12 @@ export class MinimapUI {
     legendGraphics.lineTo(objX - objR, objY);
     legendGraphics.closePath();
     legendGraphics.endFill();
-    const objLabel = new Text("OBJ", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 10,
-      fontWeight: "bold",
-      fill: 0xffcc00,
-    });
-    objLabel.resolution = devicePixelRatio;
-    objLabel.position.set(cursorX + 14, 2);
-    this.legendContainer.addChild(objLabel);
+    addLegendLabel("OBJ", 0xffcc00, cursorX + 14);
 
     // Right-aligned hotkey hint
     const hintLabel = new Text("[M] / [ESC] / TAP [X] TO CLOSE", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 10,
+      fontSize: legendFontSize,
       fontWeight: "bold",
       fill: 0x5588aa,
       letterSpacing: 0.5,

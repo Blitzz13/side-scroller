@@ -2,7 +2,7 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
-## [2026-11-14] - Minimap Objective Waypoints, Generic Trigger Linking, Door Protector Fix & Level 2/3 Updates
+## [2026-11-14] - Mobile/Desktop UI Config, Subtitle Size Settings, Minimap Waypoints & Level 2/3 Updates
 
 ### 1. Minimap Active Objective Waypoints ([`src/plugins/minimap/`](file:///D:/Projects/side-scroller/src/plugins/minimap/), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
 - **Fog-Independent Objective Markers**:
@@ -27,6 +27,17 @@ This document logs recent development changes and enhancements made to the Rayca
 ### 4. Weapon Config, Level Maps & Asset Updates ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`assets/raycast/levels/level2.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level2.json), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
 - Adjusted `dh17Config.muzzleFlash.offsetX` from `-420` to `-315` in `RaycastWeaponConfigs.ts`.
 - Updated `level2.json`, `level3.json`, `objectives/level3.json`, `StarWarsTileset.tsx`, Level 3 dialog/audio (`dialog.json`, `prisoner_dialog_1.mp3`), weapon sprites (`dh_17_equiped.png`, `thermal_detonator.png`), and textures (`elevator_pad.jpg`, `lever_off.png`, `lever_on.jpg`, `shield.png`).
+
+### 5. Mobile & Desktop UI Config & Subtitle Size Settings ([`src/configs/RaycastUIConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastUIConfig.ts), [`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts), [`src/ui/InGameMenu.ts`](file:///D:/Projects/side-scroller/src/ui/InGameMenu.ts), [`src/ui/RaycastLoadingOverlay.ts`](file:///D:/Projects/side-scroller/src/ui/RaycastLoadingOverlay.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/raycast/subtitles/RaycastSubtitles.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/subtitles/RaycastSubtitles.ts), [`src/scenes/raycast/objectives/ObjectivesUI.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectivesUI.ts), [`src/plugins/minimap/MinimapUI.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapUI.ts))
+- **Environment-Specific UI Configuration (`RaycastUIConfig.ts`)**:
+  - Added `IRaycastUIConfig`, `DESKTOP_RAYCAST_UI_CONFIG`, `MOBILE_RAYCAST_UI_CONFIG`, and `getRaycastUIConfig()` (preserving desktop sizing while enlarging mobile UI elements without altering `MobileControls` touch buttons).
+  - Updated `RaycastLoadingOverlay`, `RaycastHUD` (keycards `"KEYS"` badge/icons, interaction prompts, toasts, health/shield/weapon/sprint text), `RaycastSubtitles`, `ObjectivesUI`, and `MinimapUI` to consume `getRaycastUIConfig()`.
+- **Adjustable Subtitle Size Setting**:
+  - Added `subtitleScale` (`0.7`–`1.8`, step `0.1`, persisted in `localStorage`) to `SettingsManager` and a **SUBTITLE SIZE** stepper row in `InGameMenu` (both standalone Options and in-game pause menu).
+  - Subscribed `RaycastSubtitles` to `SettingsManager` for live subtitle resizing during playback.
+- **Mobile Objectives Modal Readability**:
+  - Enlarged the mobile objectives modal (`960x580`), fonts, and close button (`closeButtonRadius: 22`) in `MOBILE_RAYCAST_UI_CONFIG.objectives` with dynamic card heights in `ObjectivesUI`.
+  - Added config-driven `fontFamily`, `maxTextDpr`, `linearTextScaling` (`SCALE_MODES.LINEAR` to avoid `NEAREST` downsampling artifacts on high-DPR mobile screens), `descriptionColor`, and `descriptionDropShadow`.
 
 ## [2026-11-13] - Trigger Sound System, Lever Mechanics, Level 3 Audio & Mobile Control Fixes
 

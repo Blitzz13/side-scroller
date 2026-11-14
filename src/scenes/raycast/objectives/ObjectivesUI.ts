@@ -1,5 +1,6 @@
-import { Container, Graphics, Text, TextStyle } from "pixi.js";
+import { Container, Graphics, SCALE_MODES, Text, TextStyle } from "pixi.js";
 import { gameConfig } from "../../../configs/GameConfig";
+import { getRaycastUIConfig, IRaycastUIConfig } from "../../../configs/RaycastUIConfig";
 import { RaycastObjectiveManager } from "./RaycastObjectiveManager";
 
 export class ObjectivesUI extends Container {
@@ -10,16 +11,21 @@ export class ObjectivesUI extends Container {
   private contentContainer: Container;
   private isOpen: boolean = false;
   private dpr: number = 2;
+  private readonly uiCfg: IRaycastUIConfig["objectives"];
 
   constructor(objectiveManager: RaycastObjectiveManager) {
     super();
     this.objectiveManager = objectiveManager;
+    this.uiCfg = getRaycastUIConfig().objectives;
     this.visible = false;
     this.eventMode = "static";
 
     this.dpr = Math.max(
       2,
-      Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3)
+      Math.min(
+        typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
+        this.uiCfg.maxTextDpr
+      )
     );
 
     const screenW = gameConfig.width;
@@ -60,6 +66,18 @@ export class ObjectivesUI extends Container {
         this.renderContent();
       }
     });
+  }
+
+  private createCrispText(content: string, style: ConstructorParameters<typeof Text>[1]): Text {
+    const txt = new Text(content, {
+      fontFamily: this.uiCfg.fontFamily,
+      ...style,
+    });
+    txt.resolution = this.dpr;
+    if (this.uiCfg.linearTextScaling) {
+      txt.texture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+    }
+    return txt;
   }
 
   public get isVisibleOpen(): boolean {
@@ -116,8 +134,8 @@ export class ObjectivesUI extends Container {
     const screenH = gameConfig.height;
 
     // Responsive panel sizing
-    const panelW = Math.min(680, screenW - 60);
-    const panelH = Math.min(480, screenH - 80);
+    const panelW = Math.min(this.uiCfg.panelMaxWidth, screenW - 60);
+    const panelH = Math.min(this.uiCfg.panelMaxHeight, screenH - 80);
     const halfW = panelW / 2;
     const halfH = panelH / 2;
 
@@ -169,9 +187,9 @@ export class ObjectivesUI extends Container {
     this.modalBg.lineTo(halfW - 20, halfH - 42);
 
     // Header Title
-    const titleText = new Text("TACTICAL DATAPAD // MISSION OBJECTIVES", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 18,
+    const titleText = this.createCrispText("TACTICAL DATAPAD // MISSION OBJECTIVES", {
+      fontFamily: "Segoe UI, Arial, sans-serif",
+      fontSize: this.uiCfg.headerFontSize,
       fontWeight: "bold",
       fill: 0x00ffff,
       letterSpacing: 2,
@@ -179,30 +197,31 @@ export class ObjectivesUI extends Container {
       dropShadowColor: 0x003344,
       dropShadowDistance: 1,
     });
-    titleText.resolution = this.dpr;
     titleText.anchor.set(0, 0.5);
     titleText.position.set(-halfW + 28, -halfH + 32);
     this.contentContainer.addChild(titleText);
 
     // Close button in top-right [X]
     const closeBtn = new Container();
-    closeBtn.position.set(halfW - 22, -halfH + 20);
+    closeBtn.position.set(
+      halfW - this.uiCfg.closeButtonOffsetX,
+      -halfH + this.uiCfg.closeButtonOffsetY
+    );
     closeBtn.eventMode = "static";
     closeBtn.cursor = "pointer";
     const closeBg = new Graphics();
     closeBg.beginFill(0x1a2838, 0.8);
     closeBg.lineStyle(1.5, 0x00e5ff, 0.8);
-    closeBg.drawCircle(0, 0, 14);
+    closeBg.drawCircle(0, 0, this.uiCfg.closeButtonRadius);
     closeBg.endFill();
     closeBtn.addChild(closeBg);
 
-    const closeIcon = new Text("✕", {
+    const closeIcon = this.createCrispText("✕", {
       fontFamily: "Arial, sans-serif",
-      fontSize: 13,
+      fontSize: this.uiCfg.closeButtonFontSize,
       fontWeight: "bold",
       fill: 0x00e5ff,
     });
-    closeIcon.resolution = this.dpr;
     closeIcon.anchor.set(0.5);
     closeBtn.addChild(closeIcon);
 
@@ -218,14 +237,13 @@ export class ObjectivesUI extends Container {
     const contentW = panelW - 56;
 
     if (visibleObjectives.length === 0) {
-      const emptyText = new Text("NO ACTIVE MISSION OBJECTIVES RECORDED", {
-        fontFamily: "Arial, sans-serif",
-        fontSize: 15,
+      const emptyText = this.createCrispText("NO ACTIVE MISSION OBJECTIVES RECORDED", {
+        fontFamily: "Segoe UI, Arial, sans-serif",
+        fontSize: this.uiCfg.emptyFontSize,
         fontStyle: "italic",
         fill: 0x8899aa,
         align: "center",
       });
-      emptyText.resolution = this.dpr;
       emptyText.anchor.set(0.5);
       emptyText.position.set(0, 0);
       this.contentContainer.addChild(emptyText);
@@ -236,22 +254,46 @@ export class ObjectivesUI extends Container {
 
         const isCurrentActive = !obj.isCompleted;
 
-        // Background box for active objective
+        // Description if active (measure first so card height fits enlarged fonts)
+        let descText: Text | null = null;
+        if (isCurrentActive && obj.description) {
+          descText = this.createCrispText(obj.description, {
+            fontSize: this.uiCfg.descriptionFontSize,
+            fill: this.uiCfg.descriptionColor,
+            wordWrap: true,
+            wordWrapWidth: contentW - 56,
+            lineHeight: this.uiCfg.descriptionLineHeight,
+            ...(this.uiCfg.descriptionDropShadow
+              ? {
+                  dropShadow: true,
+                  dropShadowColor: 0x000000,
+                  dropShadowDistance: 1,
+                  dropShadowBlur: 2,
+                }
+              : {}),
+          });
+          descText.position.set(42, 38);
+        }
+
+        const boxH = isCurrentActive
+          ? descText
+            ? Math.max(72, Math.ceil(38 + descText.height + 12))
+            : Math.max(46, Math.round(this.uiCfg.titleActiveFontSize * 2.4))
+          : Math.max(40, Math.round(this.uiCfg.titleCompletedFontSize * 2.5));
+
+        // Background box for objective
+        const itemBg = new Graphics();
         if (isCurrentActive) {
-          const itemBg = new Graphics();
           itemBg.beginFill(0x002844, 0.6);
           itemBg.lineStyle(1.5, 0x00e5ff, 0.9);
-          itemBg.drawRoundedRect(0, 0, contentW, obj.description ? 72 : 46, 8);
-          itemBg.endFill();
-          itemContainer.addChild(itemBg);
+          itemBg.drawRoundedRect(0, 0, contentW, boxH, 8);
         } else {
-          const itemBg = new Graphics();
           itemBg.beginFill(0x0a1622, 0.4);
           itemBg.lineStyle(1, 0x008855, 0.4);
-          itemBg.drawRoundedRect(0, 0, contentW, 40, 6);
-          itemBg.endFill();
-          itemContainer.addChild(itemBg);
+          itemBg.drawRoundedRect(0, 0, contentW, boxH, 6);
         }
+        itemBg.endFill();
+        itemContainer.addChild(itemBg);
 
         // Icon badge
         const badgeG = new Graphics();
@@ -291,16 +333,17 @@ export class ObjectivesUI extends Container {
         }
 
         // Objective Title
-        const objTitle = new Text(obj.title, {
-          fontFamily: "Arial, sans-serif",
-          fontSize: isCurrentActive ? 16 : 14,
+        const objTitle = this.createCrispText(obj.title, {
+          fontFamily: "Segoe UI, Arial, sans-serif",
+          fontSize: isCurrentActive
+            ? this.uiCfg.titleActiveFontSize
+            : this.uiCfg.titleCompletedFontSize,
           fontWeight: "bold",
           fill: obj.isCompleted ? 0x77aa88 : 0xffffff,
           dropShadow: isCurrentActive,
           dropShadowColor: 0x003344,
           dropShadowDistance: 1,
         });
-        objTitle.resolution = this.dpr;
         objTitle.anchor.set(0, 0.5);
         objTitle.position.set(42, 20);
         itemContainer.addChild(objTitle);
@@ -318,34 +361,22 @@ export class ObjectivesUI extends Container {
           ? 0x00e5ff
           : 0xffaa00;
 
-        const tagText = new Text(tagLabel, {
-          fontFamily: "Arial, sans-serif",
-          fontSize: 11,
+        const tagText = this.createCrispText(tagLabel, {
+          fontFamily: "Segoe UI, Arial, sans-serif",
+          fontSize: this.uiCfg.tagFontSize,
           fontWeight: "bold",
           fill: tagColor,
           letterSpacing: 1,
         });
-        tagText.resolution = this.dpr;
         tagText.anchor.set(1, 0.5);
         tagText.position.set(contentW - 16, 20);
         itemContainer.addChild(tagText);
 
-        // Description if active
-        if (isCurrentActive && obj.description) {
-          const descText = new Text(obj.description, {
-            fontFamily: "Arial, sans-serif",
-            fontSize: 12.5,
-            fill: 0xbbddee,
-            wordWrap: true,
-            wordWrapWidth: contentW - 56,
-            lineHeight: 16,
-          });
-          descText.resolution = this.dpr;
-          descText.position.set(42, 38);
+        if (descText) {
           itemContainer.addChild(descText);
-          startY += 82;
+          startY += boxH + 10;
         } else {
-          startY += 48;
+          startY += boxH + 8;
         }
 
         this.contentContainer.addChild(itemContainer);
@@ -353,15 +384,14 @@ export class ObjectivesUI extends Container {
 
       // If all completed celebration note
       if (this.objectiveManager.isAllCompleted()) {
-        const allDoneText = new Text("★ ALL PRIMARY OBJECTIVES ACCOMPLISHED // PROCEED TO EXIT ★", {
-          fontFamily: "Arial, sans-serif",
-          fontSize: 13,
+        const allDoneText = this.createCrispText("★ ALL PRIMARY OBJECTIVES ACCOMPLISHED // PROCEED TO EXIT ★", {
+          fontFamily: "Segoe UI, Arial, sans-serif",
+          fontSize: this.uiCfg.allDoneFontSize,
           fontWeight: "bold",
           fill: 0x00ff88,
           letterSpacing: 1,
           align: "center",
         });
-        allDoneText.resolution = this.dpr;
         allDoneText.anchor.set(0.5);
         allDoneText.position.set(0, startY + 14);
         this.contentContainer.addChild(allDoneText);
@@ -369,17 +399,16 @@ export class ObjectivesUI extends Container {
     }
 
     // Footer Help Text
-    const footerHint = new Text(
+    const footerHint = this.createCrispText(
       "Desktop: Press [TAB] or [ESC] to toggle | Mobile: Tap anywhere to close",
       {
-        fontFamily: "Arial, sans-serif",
-        fontSize: 12,
+        fontFamily: "Segoe UI, Arial, sans-serif",
+        fontSize: this.uiCfg.footerFontSize,
         fill: 0x00aacc,
         letterSpacing: 1,
         align: "center",
       }
     );
-    footerHint.resolution = this.dpr;
     footerHint.anchor.set(0.5);
     footerHint.position.set(0, halfH - 22);
     this.contentContainer.addChild(footerHint);
