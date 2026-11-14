@@ -6,6 +6,7 @@ import {
 import { enemyVoicelineConfig } from "../../configs/EnemyVoicelineConfig";
 import { RaycastEnemy } from "./RaycastEnemy";
 import { VoicelineCategory } from "../../enums/VoicelineCategory";
+import { SettingsManager } from "../../managers/SettingsManager";
 
 export { VoicelineCategory };
 
@@ -15,6 +16,28 @@ function stopMediaInstance(inst: IMediaInstance | HTMLAudioElement): void {
   } else if ("pause" in inst && typeof inst.pause === "function") {
     inst.pause();
     inst.currentTime = 0;
+  }
+}
+
+function pauseMediaInstance(inst: IMediaInstance | HTMLAudioElement): void {
+  if ("stop" in inst && typeof inst.stop === "function") {
+    (inst as IMediaInstance).paused = true;
+  } else if ("pause" in inst && typeof inst.pause === "function") {
+    inst.pause();
+  }
+}
+
+function resumeMediaInstance(inst: IMediaInstance | HTMLAudioElement): void {
+  if ("stop" in inst && typeof inst.stop === "function") {
+    (inst as IMediaInstance).paused = false;
+  } else {
+    const htmlAudio = inst as HTMLAudioElement;
+    if (typeof htmlAudio.play === "function") {
+      const p = htmlAudio.play();
+      if (p && typeof p.catch === "function") {
+        p.catch(() => {});
+      }
+    }
   }
 }
 
@@ -34,6 +57,10 @@ interface ActiveSoundHandle {
   enemyId?: number;
   alias: string;
   category?: VoicelineCategory;
+  spatialScale: number;
+  remainingMs: number;
+  lastStartedAt: number;
+  onFinish?: () => void;
   mediaInstance?: IMediaInstance | HTMLAudioElement;
   timeoutId?: ReturnType<typeof setTimeout>;
 }
@@ -44,6 +71,8 @@ export class EnemyVoicelineManager {
   private activeHandles: Map<number, ActiveSoundHandle> = new Map();
   private deadEnemyIds: Set<number> = new Set();
   private nextInstanceId: number = 1;
+  private isPaused: boolean = false;
+  private settingsUnsubscribe?: () => void;
 
   private lastVoicelineStartTime: number = 0;
   private lastVoicelineEndTime: number = 0;
@@ -79,7 +108,12 @@ export class EnemyVoicelineManager {
       ...enemyVoicelineConfig,
       ...(customConfig || {}),
     };
+    this.config.volume = SettingsManager.getInstance().getVoicesVolume();
     this.ensureSoundsRegistered();
+    this.settingsUnsubscribe = SettingsManager.getInstance().subscribe((settings) => {
+      this.config.volume = settings.voicesVolume;
+      this.updateActiveVolumes();
+    });
   }
 
   /**
@@ -528,9 +562,10 @@ export class EnemyVoicelineManager {
 
     const now = Date.now();
     this.lastVoicelineStartTime = now;
+    this.config.volume = SettingsManager.getInstance().getVoicesVolume();
 
-    // Calculate volume based on distance if spatial audio is enabled
-    let effectiveVolume = this.config.volume;
+    // Calculate spatial attenuation separately so volume slider updates scale cleanly
+    let spatialScale = 1.0;
     if (this.config.enableSpatialAudio) {
       const dx = item.sourceX - playerX;
       const dy = item.sourceY - playerY;
@@ -541,25 +576,12 @@ export class EnemyVoicelineManager {
           : Math.max(10, this.config.hearingRange * 2);
       const falloff = Math.max(0, 1 - distance / maxDist);
       const minVol = this.config.minSpatialVolume ?? 0.5;
-      const baseVol =
-        item.category === VoicelineCategory.GRENADE
-          ? Math.max(0.85, this.config.volume)
-          : this.config.volume;
-      effectiveVolume = baseVol * (minVol + (1 - minVol) * falloff);
-    } else if (item.category === VoicelineCategory.GRENADE) {
-      // Emergency shout is always clearly audible (at least 0.85) when spatial audio disabled
-      effectiveVolume = Math.max(0.85, this.config.volume);
+      spatialScale = minVol + (1 - minVol) * falloff;
     }
 
-    const instanceId = this.nextInstanceId++;
-    const handle: ActiveSoundHandle = {
-      id: instanceId,
-      enemyId: item.enemyId,
-      alias: item.alias,
-      category: item.category,
-    };
-    this.activeHandles.set(instanceId, handle);
+    const effectiveVolume = this.computeVolume(spatialScale, item.category);
 
+    const instanceId = this.nextInstanceId++;
     const onFinish = () => {
       const h = this.activeHandles.get(instanceId);
       if (h?.timeoutId) {
@@ -568,6 +590,18 @@ export class EnemyVoicelineManager {
       this.activeHandles.delete(instanceId);
       this.lastVoicelineEndTime = Date.now();
     };
+
+    const handle: ActiveSoundHandle = {
+      id: instanceId,
+      enemyId: item.enemyId,
+      alias: item.alias,
+      category: item.category,
+      spatialScale,
+      remainingMs: 3500,
+      lastStartedAt: now,
+      onFinish,
+    };
+    this.activeHandles.set(instanceId, handle);
 
     try {
       // Resume audioContext if browser suspended it before first gesture
@@ -592,6 +626,12 @@ export class EnemyVoicelineManager {
         if (res instanceof Promise) {
           res
             .then((inst: IMediaInstance) => {
+              if (!this.activeHandles.has(instanceId)) {
+                try {
+                  inst?.stop?.();
+                } catch {}
+                return;
+              }
               if (
                 item.category !== VoicelineCategory.GRENADE &&
                 item.enemyId !== undefined &&
@@ -603,6 +643,10 @@ export class EnemyVoicelineManager {
                 onFinish();
               } else {
                 handle.mediaInstance = inst;
+                inst.volume = this.computeVolume(handle.spatialScale, handle.category);
+                if (this.isPaused) {
+                  pauseMediaInstance(inst);
+                }
               }
             })
             .catch(() => {
@@ -621,12 +665,17 @@ export class EnemyVoicelineManager {
             onFinish();
             return;
           }
+          if (this.isPaused) {
+            pauseMediaInstance(res);
+          }
         }
       }
 
-      handle.timeoutId = setTimeout(() => {
-        onFinish();
-      }, 3500);
+      if (!this.isPaused) {
+        handle.timeoutId = setTimeout(() => {
+          onFinish();
+        }, handle.remainingMs);
+      }
     } catch (err) {
       console.warn(`Error playing voiceline "${item.alias}":`, err);
       // Fallback to HTML5 Audio if Pixi sound encounters an issue
@@ -637,11 +686,83 @@ export class EnemyVoicelineManager {
         if (audioSrc && typeof Audio !== "undefined") {
           const audio = new Audio(audioSrc);
           audio.volume = effectiveVolume;
-          audio.play().catch(() => {});
+          audio.onended = () => onFinish();
           handle.mediaInstance = audio;
+          if (!this.isPaused) {
+            audio.play().catch(() => onFinish());
+            handle.timeoutId = setTimeout(() => {
+              onFinish();
+            }, handle.remainingMs);
+          }
+          return;
         }
       } catch {}
       onFinish();
+    }
+  }
+
+  private computeVolume(spatialScale: number, category?: VoicelineCategory): number {
+    if (this.config.volume <= 0) return 0;
+    const baseVol =
+      category === VoicelineCategory.GRENADE
+        ? Math.min(1, this.config.volume * 1.15)
+        : this.config.volume;
+    return Math.max(0, Math.min(1, baseVol * spatialScale));
+  }
+
+  private updateActiveVolumes(): void {
+    for (const handle of this.activeHandles.values()) {
+      const vol = this.computeVolume(handle.spatialScale, handle.category);
+      const inst = handle.mediaInstance;
+      if (!inst) continue;
+      try {
+        if ("stop" in inst && typeof inst.stop === "function") {
+          (inst as IMediaInstance).volume = vol;
+        } else if ("volume" in inst) {
+          (inst as HTMLAudioElement).volume = vol;
+        }
+      } catch {}
+    }
+  }
+
+  public pauseAll(): void {
+    if (this.isPaused) return;
+    this.isPaused = true;
+    const now = Date.now();
+    for (const handle of this.activeHandles.values()) {
+      if (handle.timeoutId) {
+        clearTimeout(handle.timeoutId);
+        handle.timeoutId = undefined;
+        const elapsed = Math.max(0, now - handle.lastStartedAt);
+        handle.remainingMs = Math.max(150, handle.remainingMs - elapsed);
+      }
+      if (handle.mediaInstance) {
+        try {
+          pauseMediaInstance(handle.mediaInstance);
+        } catch {}
+      }
+    }
+  }
+
+  public resumeAll(): void {
+    if (!this.isPaused) return;
+    this.isPaused = false;
+    this.config.volume = SettingsManager.getInstance().getVoicesVolume();
+    this.updateActiveVolumes();
+    const now = Date.now();
+    for (const handle of this.activeHandles.values()) {
+      if (handle.mediaInstance) {
+        try {
+          resumeMediaInstance(handle.mediaInstance);
+        } catch {}
+      }
+      handle.lastStartedAt = now;
+      if (!handle.timeoutId && handle.onFinish) {
+        const finishCb = handle.onFinish;
+        handle.timeoutId = setTimeout(() => {
+          finishCb();
+        }, handle.remainingMs);
+      }
     }
   }
 
@@ -649,6 +770,7 @@ export class EnemyVoicelineManager {
    * Called every frame to manage queue and spaced playback.
    */
   public update(delta: number, playerX: number, playerY: number): void {
+    if (this.isPaused) return;
     const now = Date.now();
 
     // 1. Remove expired items or dead enemy items from the queue
@@ -680,6 +802,8 @@ export class EnemyVoicelineManager {
   }
 
   public dispose(): void {
+    this.settingsUnsubscribe?.();
+    this.settingsUnsubscribe = undefined;
     this.queue = [];
     for (const handle of this.activeHandles.values()) {
       if (handle.timeoutId) {

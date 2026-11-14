@@ -3,6 +3,7 @@ import { sound } from "@pixi/sound";
 import { ITriggerZone, ITriggerSoundConfig, IMissionManagerCallbacks } from "./ObjectiveTypes";
 import { RaycastObjectiveManager } from "./RaycastObjectiveManager";
 import { extractLinkIds } from "../DestructableWall";
+import { SettingsManager } from "../../../managers/SettingsManager";
 
 export class RaycastTriggerManager extends utils.EventEmitter {
   private triggers: ITriggerZone[] = [];
@@ -13,6 +14,9 @@ export class RaycastTriggerManager extends utils.EventEmitter {
   private currentPlayingSoundInstance: any = null;
   private currentHtmlAudio: HTMLAudioElement | null = null;
   private currentVoiceKey: string | null = null;
+  private currentVoiceAlias: string | null = null;
+  private isPaused: boolean = false;
+  private settingsUnsubscribe?: () => void;
 
   constructor(
     objectiveManager: RaycastObjectiveManager,
@@ -21,6 +25,9 @@ export class RaycastTriggerManager extends utils.EventEmitter {
     super();
     this.objectiveManager = objectiveManager;
     this.callbacks = callbacks;
+    this.settingsUnsubscribe = SettingsManager.getInstance().subscribe((settings) => {
+      this.updateActiveVoiceVolume(settings.voicesVolume);
+    });
   }
 
   public parseMapTriggers(
@@ -538,9 +545,11 @@ export class RaycastTriggerManager extends utils.EventEmitter {
   private playTriggerSound(name: string): void {
     if (!name) return;
     const cleanName = name.replace(/\.(wav|mp3|ogg)$/i, "").trim();
+    const volume = Math.max(0, Math.min(1, 1.2 * SettingsManager.getInstance().getEffectiveMusicVolume()));
+    SettingsManager.getInstance().registerDynamicMusic(cleanName, 1.2);
     if (sound.exists(cleanName)) {
       try {
-        sound.play(cleanName, { volume: 0.6 });
+        sound.play(cleanName, { volume });
         return;
       } catch {}
     }
@@ -554,7 +563,7 @@ export class RaycastTriggerManager extends utils.EventEmitter {
     for (const url of candidateUrls) {
       try {
         sound.add(cleanName, { url, preload: true });
-        sound.play(cleanName, { volume: 0.6 });
+        sound.play(cleanName, { volume });
         loaded = true;
         break;
       } catch {}
@@ -562,8 +571,60 @@ export class RaycastTriggerManager extends utils.EventEmitter {
     if (!loaded) {
       try {
         const audio = new Audio(`./assets/raycast/sfx/${cleanName}.wav`);
-        audio.volume = 0.6;
+        audio.volume = volume;
         audio.play().catch(() => {});
+      } catch {}
+    }
+  }
+
+  private updateActiveVoiceVolume(volume: number): void {
+    const clamped = Math.max(0, Math.min(1, volume));
+    if (this.currentHtmlAudio) {
+      try {
+        this.currentHtmlAudio.volume = clamped;
+      } catch {}
+    }
+    if (this.currentPlayingSoundInstance) {
+      try {
+        this.currentPlayingSoundInstance.volume = clamped;
+      } catch {}
+    }
+    if (this.currentVoiceAlias && sound.exists(this.currentVoiceAlias)) {
+      try {
+        sound.volume(this.currentVoiceAlias, clamped);
+      } catch {}
+    }
+  }
+
+  public pauseVoicelines(): void {
+    this.isPaused = true;
+    if (this.currentHtmlAudio && !this.currentHtmlAudio.paused) {
+      try {
+        this.currentHtmlAudio.pause();
+      } catch {}
+    }
+    if (this.currentPlayingSoundInstance) {
+      try {
+        this.currentPlayingSoundInstance.paused = true;
+      } catch {}
+    }
+  }
+
+  public resumeVoicelines(): void {
+    this.isPaused = false;
+    const targetVol = Math.max(0, Math.min(1, SettingsManager.getInstance().getVoicesVolume()));
+    if (this.currentHtmlAudio) {
+      try {
+        this.currentHtmlAudio.volume = targetVol;
+        this.currentHtmlAudio.play().catch(() => {
+          this.finishVoiceline(this.currentVoiceKey);
+        });
+      } catch {}
+    }
+    if (this.currentPlayingSoundInstance) {
+      try {
+        this.currentPlayingSoundInstance.volume = targetVol;
+        this.currentPlayingSoundInstance.paused = false;
       } catch {}
     }
   }
@@ -571,11 +632,13 @@ export class RaycastTriggerManager extends utils.EventEmitter {
   private finishVoiceline(key: string | null): void {
     if (!key || this.currentVoiceKey !== key) return;
     this.currentVoiceKey = null;
+    this.currentVoiceAlias = null;
     this.callbacks.onVoicelineEnd?.(key);
   }
 
   private stopCurrentVoiceline(): void {
     this.finishVoiceline(this.currentVoiceKey);
+    this.currentVoiceAlias = null;
     if (this.currentPlayingSoundInstance) {
       try {
         this.currentPlayingSoundInstance.stop?.();
@@ -600,12 +663,13 @@ export class RaycastTriggerManager extends utils.EventEmitter {
     this.stopCurrentVoiceline();
 
     this.currentVoiceKey = cleanName;
+    this.currentVoiceAlias = alias;
     this.callbacks.onVoicelineStart?.(this.currentLevel, cleanName);
 
     const playWithHtmlAudio = () => {
       try {
         const audio = new Audio(soundUrl);
-        audio.volume = 0.9;
+        audio.volume = Math.max(0, Math.min(1, SettingsManager.getInstance().getVoicesVolume()));
         this.currentHtmlAudio = audio;
         audio.ontimeupdate = () => {
           if (this.currentHtmlAudio === audio && audio.duration > 0) {
@@ -616,7 +680,9 @@ export class RaycastTriggerManager extends utils.EventEmitter {
             );
           }
         };
-        audio.play().catch(() => this.finishVoiceline(cleanName));
+        if (!this.isPaused) {
+          audio.play().catch(() => this.finishVoiceline(cleanName));
+        }
         audio.onended = () => {
           if (this.currentHtmlAudio === audio) {
             this.currentHtmlAudio = null;
@@ -633,6 +699,13 @@ export class RaycastTriggerManager extends utils.EventEmitter {
       // Ignore if another voiceline replaced this one while the sound was loading.
       if (this.currentVoiceKey !== cleanName || !inst) return;
       this.currentPlayingSoundInstance = inst;
+      const currentVol = Math.max(0, Math.min(1, SettingsManager.getInstance().getVoicesVolume()));
+      try {
+        inst.volume = currentVol;
+        if (this.isPaused) {
+          inst.paused = true;
+        }
+      } catch {}
       try {
         inst.on?.("progress", (progress: number, duration?: number) => {
           if (this.currentVoiceKey === cleanName) {
@@ -644,15 +717,20 @@ export class RaycastTriggerManager extends utils.EventEmitter {
           }
         });
         inst.once?.("end", () => this.finishVoiceline(cleanName));
-        inst.once?.("stop", () => this.finishVoiceline(cleanName));
+        inst.on?.("stop", () => {
+          if (!this.isPaused) {
+            this.finishVoiceline(cleanName);
+          }
+        });
       } catch {}
     };
 
     try {
+      const voiceVol = Math.max(0, Math.min(1, SettingsManager.getInstance().getVoicesVolume()));
       if (sound.exists(alias)) {
         const s = sound.find(alias);
         if (s && s.isLoaded) {
-          const res = sound.play(alias, { volume: 0.9 });
+          const res = sound.play(alias, { volume: voiceVol });
           if (res && typeof (res as any).then === "function") {
             (res as any).then(trackInstance).catch(() => this.finishVoiceline(cleanName));
           } else {
@@ -693,6 +771,8 @@ export class RaycastTriggerManager extends utils.EventEmitter {
   }
 
   public dispose(): void {
+    this.settingsUnsubscribe?.();
+    this.settingsUnsubscribe = undefined;
     this.stopCurrentVoiceline();
     this.triggers = [];
     this.currentInsideInteractiveTrigger = null;

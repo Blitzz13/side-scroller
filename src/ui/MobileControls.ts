@@ -4,7 +4,7 @@ import { VirtualJoystick, JoystickVector } from "./VirtualJoystick";
 import { VirtualButton, IVirtualButtonTheme } from "./VirtualButton";
 import { TouchLookArea } from "./TouchLookArea";
 import { gameConfig } from "../configs/GameConfig";
-import { toggleFullscreen } from "../Utils";
+import { isDebugEnabled, toggleFullscreen } from "../Utils";
 
 const BLUE_BUTTON_THEME: IVirtualButtonTheme = {
   bgColor: 0x091929,
@@ -29,7 +29,7 @@ export class MobileControls extends Container implements IDisposable {
   private btnSprint: VirtualButton;
   private btnMap: Container;
   private btnObjectives: Container;
-  private btnDebug: Container;
+  private btnDebug?: Container;
   private btnPause: Container;
   private onFullscreenChange?: () => void;
 
@@ -257,64 +257,67 @@ export class MobileControls extends Container implements IDisposable {
     });
     this.addChild(this.btnObjectives);
 
-    // 11. In-Game Debug / Dev Menu Button ([DEV])
-    this.btnDebug = new Container();
-    this.btnDebug.position.set(screenW - 330, 60);
-    this.btnDebug.eventMode = "static";
-    this.btnDebug.cursor = "pointer";
+    // 11. In-Game Debug / Dev Menu Button ([DEV]) - only shown when ?debug is in URL
+    const debugEnabled = isDebugEnabled();
+    if (debugEnabled) {
+      this.btnDebug = new Container();
+      this.btnDebug.position.set(screenW - 330, 60);
+      this.btnDebug.eventMode = "static";
+      this.btnDebug.cursor = "pointer";
 
-    const debugBg = new Graphics();
-    const drawDebugBtnBg = (pressed: boolean) => {
-      debugBg.clear();
-      const bgColor = pressed ? 0x004466 : 0x091929;
-      const borderColor = pressed ? 0x00ffff : 0x00e5ff;
-      debugBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
-      debugBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
-      debugBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS);
-      debugBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
-      debugBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS - 5);
-      debugBg.endFill();
-    };
-    drawDebugBtnBg(false);
-    this.btnDebug.addChild(debugBg);
+      const debugBg = new Graphics();
+      const drawDebugBtnBg = (pressed: boolean) => {
+        debugBg.clear();
+        const bgColor = pressed ? 0x004466 : 0x091929;
+        const borderColor = pressed ? 0x00ffff : 0x00e5ff;
+        debugBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
+        debugBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
+        debugBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS);
+        debugBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
+        debugBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS - 5);
+        debugBg.endFill();
+      };
+      drawDebugBtnBg(false);
+      this.btnDebug.addChild(debugBg);
 
-    const devLabel = new Text("DEV", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: 16,
-      fontWeight: "bold",
-      fill: 0x00ffff,
-      dropShadow: true,
-      dropShadowColor: 0x002233,
-      dropShadowDistance: 1,
-    });
-    devLabel.anchor.set(0.5);
-    devLabel.position.set(0, 0);
-    this.btnDebug.addChild(devLabel);
+      const devLabel = new Text("DEV", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: 16,
+        fontWeight: "bold",
+        fill: 0x00ffff,
+        dropShadow: true,
+        dropShadowColor: 0x002233,
+        dropShadowDistance: 1,
+      });
+      devLabel.anchor.set(0.5);
+      devLabel.position.set(0, 0);
+      this.btnDebug.addChild(devLabel);
 
-    this.btnDebug.on("pointerdown", (e: any) => {
-      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
-      drawDebugBtnBg(true);
-      this.btnDebug.scale.set(0.92);
-    });
-    this.btnDebug.on("pointerup", (e: any) => {
-      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
-      drawDebugBtnBg(false);
-      this.btnDebug.scale.set(1.0);
-      (this as any).emit("toggleDebug");
-    });
-    this.btnDebug.on("pointerupoutside", () => {
-      drawDebugBtnBg(false);
-      this.btnDebug.scale.set(1.0);
-    });
-    this.btnDebug.on("pointercancel", () => {
-      drawDebugBtnBg(false);
-      this.btnDebug.scale.set(1.0);
-    });
-    this.addChild(this.btnDebug);
+      this.btnDebug.on("pointerdown", (e: any) => {
+        if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+        drawDebugBtnBg(true);
+        this.btnDebug?.scale.set(0.92);
+      });
+      this.btnDebug.on("pointerup", (e: any) => {
+        if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+        drawDebugBtnBg(false);
+        this.btnDebug?.scale.set(1.0);
+        (this as any).emit("toggleDebug");
+      });
+      this.btnDebug.on("pointerupoutside", () => {
+        drawDebugBtnBg(false);
+        this.btnDebug?.scale.set(1.0);
+      });
+      this.btnDebug.on("pointercancel", () => {
+        drawDebugBtnBg(false);
+        this.btnDebug?.scale.set(1.0);
+      });
+      this.addChild(this.btnDebug);
+    }
 
     // 12. In-Game Pause / Options Menu Button ([||])
     this.btnPause = new Container();
-    this.btnPause.position.set(screenW - 420, 60);
+    this.btnPause.position.set(debugEnabled ? screenW - 420 : screenW - 330, 60);
     this.btnPause.eventMode = "static";
     this.btnPause.cursor = "pointer";
 
@@ -398,6 +401,8 @@ export class MobileControls extends Container implements IDisposable {
     this.btnSprint.dispose();
     this.btnMap.destroy({ children: true });
     this.btnObjectives.destroy({ children: true });
+    this.btnDebug?.destroy({ children: true });
+    this.btnPause.destroy({ children: true });
     this.destroy({ children: true });
   }
 }

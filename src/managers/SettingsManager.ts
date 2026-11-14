@@ -1,6 +1,11 @@
 import { sound } from "@pixi/sound";
 import { enemyVoicelineConfig } from "../configs/EnemyVoicelineConfig";
 import { gameConfig } from "../configs/GameConfig";
+import {
+  DEFAULT_MUSIC_VOLUME,
+  DEFAULT_VOICES_VOLUME,
+  MUSIC_VOLUME_MULTIPLIER,
+} from "../configs/SoundConfig";
 
 export const SUBTITLE_SCALE_MIN = 0.7;
 export const SUBTITLE_SCALE_MAX = 1.8;
@@ -25,10 +30,15 @@ const MUSIC_TRACK_ALIASES = [
   "end_level"
 ];
 
+const MUSIC_TRACK_MULTIPLIERS: Record<string, number> = {
+  base_alarm: 0.7,
+};
+
 export class SettingsManager {
   private static instance: SettingsManager;
   private settings: IGameSettings;
   private listeners: Set<(settings: IGameSettings) => void> = new Set();
+  private dynamicMusicAliases: Map<string, number> = new Map();
 
   private constructor() {
     this.settings = this.loadSettings();
@@ -53,8 +63,8 @@ export class SettingsManager {
   private loadSettings(): IGameSettings {
     const isMobile = SettingsManager.isMobileDevice();
     const defaults: IGameSettings = {
-      voicesVolume: 0.8,
-      musicVolume: 0.5,
+      voicesVolume: DEFAULT_VOICES_VOLUME,
+      musicVolume: DEFAULT_MUSIC_VOLUME,
       autoAim: isMobile,
       subtitleScale: 1.0,
     };
@@ -94,16 +104,48 @@ export class SettingsManager {
     enemyVoicelineConfig.volume = this.settings.voicesVolume;
 
     // 2. Apply music volume to GameConfig
-    gameConfig.musicVolume = this.settings.musicVolume;
+    const effectiveMusicVol = this.getEffectiveMusicVolume();
+    gameConfig.musicVolume = effectiveMusicVol;
 
-    // 3. Update all active/cached music tracks in Pixi Sound
+    // 3. Update all active/cached music & dynamic level sound tracks in Pixi Sound
     for (const alias of MUSIC_TRACK_ALIASES) {
       if (sound.exists(alias)) {
         try {
-          sound.volume(alias, this.settings.musicVolume);
+          const mult = MUSIC_TRACK_MULTIPLIERS[alias] ?? 1.0;
+          sound.volume(alias, effectiveMusicVol * mult);
         } catch {}
       }
     }
+    for (const [alias, mult] of this.dynamicMusicAliases) {
+      if (sound.exists(alias)) {
+        try {
+          sound.volume(alias, effectiveMusicVol * mult);
+        } catch {}
+      }
+    }
+  }
+
+  /**
+   * Registers a dynamically loaded sound alias (such as level override background music
+   * or looping prop/ambient sounds) so its live playback volume stays synced with the music slider.
+   */
+  public registerDynamicMusic(alias: string, baseMultiplier: number = 1.0): void {
+    if (!alias) return;
+    this.dynamicMusicAliases.set(alias, baseMultiplier);
+    if (sound.exists(alias)) {
+      try {
+        sound.volume(alias, this.getEffectiveMusicVolume() * baseMultiplier);
+      } catch {}
+    }
+  }
+
+  public getEffectiveMusicVolume(): number {
+    return Math.max(0, Math.min(1, this.settings.musicVolume * MUSIC_VOLUME_MULTIPLIER));
+  }
+
+  public unregisterDynamicMusic(alias: string): void {
+    if (!alias) return;
+    this.dynamicMusicAliases.delete(alias);
   }
 
   public getSettings(): Readonly<IGameSettings> {

@@ -2,6 +2,21 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-11-14] - Debug URL Gating, Live Audio/Voice Controls, Pause-Synced Voices & Pause Menu Polish
+
+### 1. Debug Mode URL Gating & Debug Toasts ([`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts))
+- Added `isDebugEnabled()` in `Utils.ts` to check for the `debug` query parameter in the URL (enabled when present and not `false`/`0`).
+- Gated `RaycastDebugMenu`, its desktop trigger button, mobile `DEV` button, and `` ` `` / `~` / `F2` keyboard shortcuts behind `isDebugEnabled()`.
+- Gated combat/damage/breakable debug toasts (`Neutralized ...`, `Caught in Thermal Blast!`, `Hit by Blaster Fire!`, `Smashed/Destroyed ...`) behind `showDebugToast()` (`isDebugEnabled()`), while keeping objective, barrier, access card, and extraction toasts always visible.
+
+### 2. Live Volume Control & Voice Balance ([`src/configs/SoundConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SoundConfig.ts), [`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts))
+- Added `registerDynamicMusic()` / `unregisterDynamicMusic()` on `SettingsManager` and subscribed `RaycastScene` to live settings updates so dynamic level tracks (such as Level 3 `overrideBackgroundMusic`), looping prop/trigger sounds, alert themes, and enemy hover loops respond immediately to the music volume slider while playing.
+- Added `DEFAULT_VOICES_VOLUME = 1.0`, `DEFAULT_MUSIC_VOLUME = 0.3`, and `MUSIC_VOLUME_MULTIPLIER = 0.65` in `SoundConfig.ts` and wired `getEffectiveMusicVolume()` so voices are clearly audible over music by default.
+
+### 3. Pause-Synced Voices & Pause Menu Styling ([`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/ui/InGameMenu.ts`](file:///D:/Projects/side-scroller/src/ui/InGameMenu.ts))
+- Added `pauseVoicelines()` / `resumeVoicelines()` across `RaycastTriggerManager` and `EnemyVoicelineManager` and wired them into `RaycastScene.pauseGame()` / `resumeGame()` so dialog and enemy voices pause when the pause menu opens and resume from the exact playback position with updated `voicesVolume` on unpause.
+- Updated `InGameMenu` header text color from yellow to cyan (`0x00e5ff`) to match the pause menu theme.
+
 ## [2026-11-14] - Mobile/Desktop UI Config, Subtitle Size Settings, Minimap Waypoints & Level 2/3 Updates
 
 ### 1. Minimap Active Objective Waypoints ([`src/plugins/minimap/`](file:///D:/Projects/side-scroller/src/plugins/minimap/), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))

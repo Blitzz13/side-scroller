@@ -105,6 +105,14 @@ export class RaycastMissionManager {
     return this.triggerManager;
   }
 
+  public pauseVoicelines(): void {
+    this.triggerManager.pauseVoicelines();
+  }
+
+  public resumeVoicelines(): void {
+    this.triggerManager.resumeVoicelines();
+  }
+
   public destroy(): void {
     this.triggerManager.dispose();
     this.ui.destroy({ children: true });

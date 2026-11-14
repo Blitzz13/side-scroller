@@ -5,6 +5,7 @@ import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
 import { RaycastDirectionalObject } from "./RaycastDirectionalObject";
 import { IEnemyItemDrop } from "./types";
 import { AStarPathFollower } from "../../plugins/pathfinding";
+import { SettingsManager } from "../../managers/SettingsManager";
 
 export type EnemyAIState = "idle" | "chase" | "attack" | "dead";
 export type DiagonaPhase =
@@ -423,8 +424,10 @@ export class RaycastEnemy extends RaycastDirectionalObject {
     try {
       if (!sound.exists(hoverConfig.src)) return;
       this.isHoverSoundPlaying = true;
+      const baseVol = (hoverConfig.volume ?? 0.5) * 2.0;
+      SettingsManager.getInstance().registerDynamicMusic(hoverConfig.src, baseVol);
       const res = sound.play(hoverConfig.src, {
-        volume: hoverConfig.volume ?? 0.5,
+        volume: Math.max(0, Math.min(1, baseVol * SettingsManager.getInstance().getEffectiveMusicVolume())),
         loop: true,
       }) as IMediaInstance | Promise<IMediaInstance>;
       if (res) {

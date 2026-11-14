@@ -65,7 +65,7 @@ export class InGameMenu extends Container implements IDisposable {
       fontSize: 26,
       fontWeight: "900",
       letterSpacing: 4,
-      fill: ["#FFE81F", "#D4AC0D"],
+      fill: 0x00e5ff,
       dropShadow: true,
       dropShadowColor: 0x000000,
       dropShadowDistance: 2,

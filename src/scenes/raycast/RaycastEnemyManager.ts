@@ -237,6 +237,14 @@ export class RaycastEnemyManager {
     return this.voicelineManager;
   }
 
+  public pauseVoicelines(): void {
+    this.voicelineManager.pauseAll();
+  }
+
+  public resumeVoicelines(): void {
+    this.voicelineManager.resumeAll();
+  }
+
   public getAliveEnemies(): RaycastEnemy[] {
     return this.enemies.filter((e) => !e.isDead);
   }

@@ -40,6 +40,22 @@ export function setTintToSprite(container: Sprite | AnimatedSprite, tint: number
   }, timout);
 }
 
+/**
+ * Returns true only when the URL contains a `debug` query parameter
+ * that is not explicitly disabled (`false` or `0`).
+ */
+export function isDebugEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("debug")) return false;
+    const value = (params.get("debug") ?? "").trim().toLowerCase();
+    return value !== "false" && value !== "0";
+  } catch {
+    return false;
+  }
+}
+
 export async function loadGameAssets(manifest: AssetsManifest): Promise<void> {
   if (manifest && Array.isArray(manifest.bundles)) {
     for (const bundle of manifest.bundles) {

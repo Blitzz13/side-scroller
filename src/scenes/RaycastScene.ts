@@ -21,7 +21,7 @@ import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
 import { Scene } from "../enums/Scene";
 import { gameConfig } from "../configs/GameConfig";
-import { getSoundBaseVolume } from "../configs/SoundConfig";
+import { DEFAULT_SFX_VOLUME, getSoundBaseVolume } from "../configs/SoundConfig";
 import { MobileControls } from "../ui/MobileControls";
 import { MapObject, RaycastBreakable, TileMeta } from "./raycast/types";
 import { RaycastSaveManager } from "./raycast/RaycastSaveManager";
@@ -56,8 +56,9 @@ import { RaycastMissionManager, ITriggerZone, ITriggerSoundConfig } from "./rayc
 import { SubtitleManager, RaycastSubtitles } from "./raycast/subtitles";
 import { InGameMenu } from "../ui/InGameMenu";
 import { RaycastLoadingOverlay } from "../ui/RaycastLoadingOverlay";
-import { SettingsManager } from "../managers/SettingsManager";
+import { SettingsManager, IGameSettings } from "../managers/SettingsManager";
 import { GameEvent } from "../enums/GameEvent";
+import { isDebugEnabled } from "../Utils";
 import {
   calculateMapBounds,
   extractTiledGidAndRotation,
@@ -231,8 +232,9 @@ export class RaycastScene extends BaseScene {
   private missionManager!: RaycastMissionManager;
   private subtitleManager!: SubtitleManager;
   private subtitles?: RaycastSubtitles;
-  private debugMenu!: RaycastDebugMenu;
+  private debugMenu?: RaycastDebugMenu;
   private inGameMenu!: InGameMenu;
+  private settingsUnsubscribe?: () => void;
   private loadingOverlay?: RaycastLoadingOverlay;
   private isLevelLoading: boolean = false;
   private isPaused: boolean = false;
@@ -256,6 +258,7 @@ export class RaycastScene extends BaseScene {
   private unlockedKeycardDoors: Set<string> = new Set();
   private disabledDoors: Set<string> = new Set();
   private activePropSounds: Map<string, any> = new Map();
+  private activePropSoundMeta: Map<any, { alias: string; baseVolume: number }> = new Map();
   private triggerSoundTimeouts: Set<number> = new Set();
   private isLeftMouseDown: boolean = false;
   private isRightMouseDown: boolean = false;
@@ -570,7 +573,11 @@ export class RaycastScene extends BaseScene {
       });
       this.mobileControls.on("toggleMinimap", () => this.minimap.toggle());
       this.mobileControls.on("toggleObjectives", () => this.missionManager.toggleObjectives());
-      this.mobileControls.on("toggleDebug", () => this.debugMenu.toggle());
+      this.mobileControls.on("toggleDebug", () => {
+        if (isDebugEnabled()) {
+          this.debugMenu?.toggle();
+        }
+      });
       this.mobileControls.on("togglePause", () => this.togglePause());
       this.addChild(this.mobileControls);
     }
@@ -623,31 +630,33 @@ export class RaycastScene extends BaseScene {
     this.hud.on("toggleMinimap", () => this.minimap.toggle());
     this.addChild(this.minimap);
 
-    // In-game mobile & desktop Debug / Tuning Datapad
-    this.debugMenu = new RaycastDebugMenu({
-      getSkyboxZoom: () => this.currentSkyboxZoom,
-      setSkyboxZoom: (zoom) => this.setSkyboxZoom(zoom),
-      getSkyboxYaw: () => this.currentSkyboxYaw,
-      setSkyboxYaw: (yaw) => this.setSkyboxYaw(yaw),
-      getSkyboxWallName: (yaw) => this.getCubeMapWallNameForYaw(yaw),
-      isSkyboxOnly: () => this.isSkyboxOnlyActive,
-      toggleSkyboxOnly: () => this.toggleSkyboxOnly(),
-      isCubemapActive: () => (this.skyboxShader?.uniforms?.uHasCubeMap || 0) > 0.5,
-      getCurrentLevel: () => this.currentLevel || "level3",
-      isGodMode: () => this.playerController?.isGodMode || false,
-      toggleGodMode: () => this.playerController?.toggleGodMode() || false,
-      healPlayer: () => this.playerController?.refillHealthAndShield(),
-      refillAmmo: () => this.playerController?.refillAllAmmo(),
-      giveAllWeapons: () => this.playerController?.unlockAllWeapons(),
-      giveAllKeycards: () => this.playerController?.grantAllKeycards(),
-      cycleDoorMode: () => this.cycleDoorSlideMode(),
-      killNearbyEnemies: () => this.killNearbyEnemies(),
-      warpToLevel: (levelName) => this.loadLevel(levelName),
-      showToast: (text, color, duration) => this.hud?.showToast(text, color, duration),
-    });
-    this.addChild(this.debugMenu);
-    if (!this.isMobileDevice()) {
-      this.addChild(this.debugMenu.getTriggerButton());
+    // In-game mobile & desktop Debug / Tuning Datapad (only available when ?debug is in URL)
+    if (isDebugEnabled()) {
+      this.debugMenu = new RaycastDebugMenu({
+        getSkyboxZoom: () => this.currentSkyboxZoom,
+        setSkyboxZoom: (zoom) => this.setSkyboxZoom(zoom),
+        getSkyboxYaw: () => this.currentSkyboxYaw,
+        setSkyboxYaw: (yaw) => this.setSkyboxYaw(yaw),
+        getSkyboxWallName: (yaw) => this.getCubeMapWallNameForYaw(yaw),
+        isSkyboxOnly: () => this.isSkyboxOnlyActive,
+        toggleSkyboxOnly: () => this.toggleSkyboxOnly(),
+        isCubemapActive: () => (this.skyboxShader?.uniforms?.uHasCubeMap || 0) > 0.5,
+        getCurrentLevel: () => this.currentLevel || "level3",
+        isGodMode: () => this.playerController?.isGodMode || false,
+        toggleGodMode: () => this.playerController?.toggleGodMode() || false,
+        healPlayer: () => this.playerController?.refillHealthAndShield(),
+        refillAmmo: () => this.playerController?.refillAllAmmo(),
+        giveAllWeapons: () => this.playerController?.unlockAllWeapons(),
+        giveAllKeycards: () => this.playerController?.grantAllKeycards(),
+        cycleDoorMode: () => this.cycleDoorSlideMode(),
+        killNearbyEnemies: () => this.killNearbyEnemies(),
+        warpToLevel: (levelName) => this.loadLevel(levelName),
+        showToast: (text, color, duration) => this.hud?.showToast(text, color, duration),
+      });
+      this.addChild(this.debugMenu);
+      if (!this.isMobileDevice()) {
+        this.addChild(this.debugMenu.getTriggerButton());
+      }
     }
 
     // In-game Pause & Options Menu
@@ -660,6 +669,10 @@ export class RaycastScene extends BaseScene {
       this.quitToMainMenu();
     });
     this.addChild(this.inGameMenu);
+
+    this.settingsUnsubscribe = SettingsManager.getInstance().subscribe((settings) => {
+      this.handleSettingsChanged(settings);
+    });
 
     this.setupControls();
 
@@ -877,7 +890,7 @@ export class RaycastScene extends BaseScene {
       radius,
       damage,
       (enemy) => {
-        this.hud.showToast(`[!] Neutralized ${enemy.config.name} (Explosion)`, 0x00ff88);
+        this.showDebugToast(`[!] Neutralized ${enemy.config.name} (Explosion)`, 0x00ff88);
       },
       this.allThinWalls
     );
@@ -902,9 +915,15 @@ export class RaycastScene extends BaseScene {
         const falloff = 1 - distToPlayer / radius;
         const playerDmg = Math.max(10, Math.round(damage * 0.6 * falloff));
         this.playerController.takeDamage(playerDmg);
-        this.hud.showToast(`[-] Caught in Thermal Blast! (-${playerDmg} HP)`, 0xff3333);
+        this.showDebugToast(`[-] Caught in Thermal Blast! (-${playerDmg} HP)`, 0xff3333);
         this.hud.flashScreen(0xff5500, 0.4);
       }
+    }
+  }
+
+  private showDebugToast(text: string, color?: number, duration?: number): void {
+    if (isDebugEnabled()) {
+      this.hud?.showToast(text, color, duration);
     }
   }
 
@@ -921,7 +940,7 @@ export class RaycastScene extends BaseScene {
       this.handleWallBlockDestroyed(broken);
     } else {
       const toastText = context ? `[!] Smashed ${broken.name} (${context})` : `[!] Smashed ${broken.name}`;
-      this.hud.showToast(toastText, 0xffaa00);
+      this.showDebugToast(toastText, 0xffaa00);
       if (this.destructableWallManager) {
         this.destructableWallManager.onBreakableDestroyed(broken);
       }
@@ -1087,9 +1106,9 @@ export class RaycastScene extends BaseScene {
       );
     }
 
-    // 3. Screen shake & toast
+    // 3. Screen shake & debug toast
     this.triggerScreenShake(8, 0.45);
-    this.hud.showToast(`[!] Destroyed ${broken.name}!`, 0xff5533);
+    this.showDebugToast(`[!] Destroyed ${broken.name}!`, 0xff5533);
 
     // 4. Deactivate linked security barrier (door protector) if not enabling
     if (this.destructableWallManager) {
@@ -1152,6 +1171,7 @@ export class RaycastScene extends BaseScene {
       try { inst?.stop?.(); } catch {}
     }
     this.activePropSounds.clear();
+    this.activePropSoundMeta.clear();
     this.levelFinishZones = [];
     if (this.laserManager) this.laserManager.clear();
     if (this.detonatorManager) this.detonatorManager.clear();
@@ -1480,7 +1500,9 @@ export class RaycastScene extends BaseScene {
       this.hud?.flashScreen(0xff6600, 0.25);
       if (sound.exists("stormtrooper_there_he_is")) {
         try {
-          sound.play("stormtrooper_there_he_is", { volume: 0.65 });
+          sound.play("stormtrooper_there_he_is", {
+            volume: Math.max(0, Math.min(1, SettingsManager.getInstance().getVoicesVolume() * 0.8)),
+          });
         } catch {}
       }
     });
@@ -2895,14 +2917,22 @@ export class RaycastScene extends BaseScene {
         sound.add("calm_loop", { url: "./assets/sounds/calm_loop.mp3", preload: true });
       }
       this.currentBgMusicAlias = "calm_loop";
+      const musicVol = SettingsManager.getInstance().getEffectiveMusicVolume();
       const res = sound.play("calm_loop", {
         loop: true,
-        volume: gameConfig.musicVolume ?? 0.35,
+        volume: musicVol,
       });
       if (res && typeof (res as any).then === "function") {
         (res as any)
           .then((inst: any) => {
+            if (this.destroyed) {
+              try { inst?.stop?.(); } catch {}
+              return;
+            }
             this.bgMusicInstance = inst;
+            if (inst) {
+              inst.volume = SettingsManager.getInstance().getEffectiveMusicVolume();
+            }
           })
           .catch(() => {});
       } else {
@@ -2931,6 +2961,7 @@ export class RaycastScene extends BaseScene {
           sound.stop(this.currentBgMusicAlias);
         }
       } catch {}
+      SettingsManager.getInstance().unregisterDynamicMusic(this.currentBgMusicAlias);
     }
     this.currentBgMusicAlias = null;
   }
@@ -2961,12 +2992,19 @@ export class RaycastScene extends BaseScene {
       }
       const res = sound.play("battle_theme", {
         loop: true,
-        volume: gameConfig.musicVolume ?? 0.45,
+        volume: SettingsManager.getInstance().getEffectiveMusicVolume(),
       });
       if (res && typeof (res as any).then === "function") {
         (res as any)
           .then((inst: any) => {
+            if (this.destroyed || !this.isAlertActive) {
+              try { inst?.stop?.(); } catch {}
+              return;
+            }
             this.battleMusicInstance = inst;
+            if (inst) {
+              inst.volume = SettingsManager.getInstance().getEffectiveMusicVolume();
+            }
           })
           .catch(() => {});
       } else {
@@ -2987,12 +3025,19 @@ export class RaycastScene extends BaseScene {
       }
       const res = sound.play("base_alarm", {
         loop: true,
-        volume: 0.35,
+        volume: SettingsManager.getInstance().getEffectiveMusicVolume() * 0.7,
       });
       if (res && typeof (res as any).then === "function") {
         (res as any)
           .then((inst: any) => {
+            if (this.destroyed || !this.isAlertActive) {
+              try { inst?.stop?.(); } catch {}
+              return;
+            }
             this.baseAlarmInstance = inst;
+            if (inst) {
+              inst.volume = SettingsManager.getInstance().getEffectiveMusicVolume() * 0.7;
+            }
           })
           .catch(() => {});
       } else {
@@ -3000,6 +3045,40 @@ export class RaycastScene extends BaseScene {
       }
     } catch (e) {
       console.warn("Could not play base_alarm:", e);
+    }
+  }
+
+  private handleSettingsChanged(_settings: IGameSettings): void {
+    const musicVol = SettingsManager.getInstance().getEffectiveMusicVolume();
+    if (this.bgMusicInstance) {
+      try {
+        this.bgMusicInstance.volume = musicVol;
+      } catch {}
+    }
+    if (this.currentBgMusicAlias && sound.exists(this.currentBgMusicAlias)) {
+      try {
+        sound.volume(this.currentBgMusicAlias, musicVol);
+      } catch {}
+    }
+    if (this.battleMusicInstance) {
+      try {
+        this.battleMusicInstance.volume = musicVol;
+      } catch {}
+    }
+    if (this.baseAlarmInstance) {
+      try {
+        this.baseAlarmInstance.volume = musicVol * 0.7;
+      } catch {}
+    }
+    const updatedInstances = new Set<any>();
+    for (const inst of this.activePropSounds.values()) {
+      if (!inst || updatedInstances.has(inst)) continue;
+      updatedInstances.add(inst);
+      const meta = this.activePropSoundMeta.get(inst);
+      const baseVol = meta?.baseVolume ?? DEFAULT_SFX_VOLUME;
+      try {
+        inst.volume = Math.max(0, Math.min(1, baseVol * musicVol));
+      } catch {}
     }
   }
 
@@ -3147,6 +3226,8 @@ export class RaycastScene extends BaseScene {
   }
 
   public dispose(): void {
+    this.settingsUnsubscribe?.();
+    this.settingsUnsubscribe = undefined;
     this.removeControls();
     try {
       if (document.exitPointerLock) {
@@ -3165,6 +3246,7 @@ export class RaycastScene extends BaseScene {
       try { inst?.stop?.(); } catch {}
     }
     this.activePropSounds.clear();
+    this.activePropSoundMeta.clear();
     this.disabledDoors.clear();
     try {
       this.clearSkybox();
@@ -3539,7 +3621,7 @@ export class RaycastScene extends BaseScene {
         targetEnemy,
         breakableHit?.breakable ?? null,
         (killedEnemy) => {
-          this.hud.showToast(
+          this.showDebugToast(
             `[!] Neutralized ${killedEnemy.config.name} (+${currentCfg.name})`,
             0x00ff88
           );
@@ -3828,8 +3910,8 @@ export class RaycastScene extends BaseScene {
       e.preventDefault();
       this.missionManager?.toggleObjectives();
     }
-    // Toggle In-Game Debug Datapad (` or ~ or F2)
-    if (key === "`" || key === "~" || e.key === "F2") {
+    // Toggle In-Game Debug Datapad (` or ~ or F2) - only when ?debug is enabled
+    if ((key === "`" || key === "~" || e.key === "F2") && isDebugEnabled()) {
       this.debugMenu?.toggle();
     }
   };
@@ -3882,6 +3964,8 @@ export class RaycastScene extends BaseScene {
     if (this.playerController) {
       this.playerController.stopSprint();
     }
+    this.missionManager?.pauseVoicelines();
+    this.enemyManager?.pauseVoicelines();
     try {
       if (document.exitPointerLock) {
         document.exitPointerLock();
@@ -3899,6 +3983,8 @@ export class RaycastScene extends BaseScene {
     if (this.inGameMenu) {
       this.inGameMenu.visible = false;
     }
+    this.missionManager?.resumeVoicelines();
+    this.enemyManager?.resumeVoicelines();
     if (!this.isMobileDevice()) {
       try {
         const p: any = (document.body as any).requestPointerLock?.();
@@ -4005,7 +4091,7 @@ export class RaycastScene extends BaseScene {
         (dmg) => {
           this.playerController.takeDamage(dmg);
           this.triggerScreenShake(5, 0.22);
-          this.hud.showToast(`[-] Hit by Blaster Fire! (-${dmg} HP)`, 0xff4444);
+          this.showDebugToast(`[-] Hit by Blaster Fire! (-${dmg} HP)`, 0xff4444);
         },
         allThinWalls,
         this.stationaryObjectManager
@@ -4835,12 +4921,14 @@ export class RaycastScene extends BaseScene {
     if (!soundName) return;
 
     const normName = this.normalizeSoundName(soundName);
-    let volume = 0.6;
+    let baseVolume = getSoundBaseVolume(normName, 1.2);
     if (propCenterX !== undefined && propCenterY !== undefined) {
       const dist = Math.hypot(this.player.x - propCenterX, this.player.y - propCenterY);
       const maxDist = 15;
-      volume = Math.max(0.05, Math.min(1.0, 1.0 - dist / maxDist)) * 0.7;
+      baseVolume = Math.max(0.05, Math.min(1.0, 1.0 - dist / maxDist)) * 1.4;
     }
+    const musicVol = SettingsManager.getInstance().getEffectiveMusicVolume();
+    const volume = Math.max(0, Math.min(1, baseVolume * musicVol));
 
     const isWaitTrigger = Boolean(
       sourceTrigger?.isWaitRunning || (sourceTrigger?.wait?.shouldWait && action === "disable")
@@ -4850,7 +4938,20 @@ export class RaycastScene extends BaseScene {
     try {
       if (sound.exists(normName)) {
         this.stopTriggerPropSounds(soundKey, normName);
+        SettingsManager.getInstance().registerDynamicMusic(normName, baseVolume);
         const res = sound.play(normName, { loop: isWaitTrigger, volume });
+        const registerPropInst = (inst: any) => {
+          if (!inst) return;
+          this.activePropSoundMeta.set(inst, { alias: normName, baseVolume });
+          const currentVol = SettingsManager.getInstance().getEffectiveMusicVolume();
+          try {
+            inst.volume = Math.max(0, Math.min(1, baseVolume * currentVol));
+          } catch {}
+          if (isWaitTrigger) {
+            this.activePropSounds.set(soundKey, inst);
+            this.activePropSounds.set(normName, inst);
+          }
+        };
         if (isWaitTrigger) {
           if (res && typeof (res as any).then === "function") {
             (res as any)
@@ -4861,14 +4962,16 @@ export class RaycastScene extends BaseScene {
                   } catch {}
                   return;
                 }
-                this.activePropSounds.set(soundKey, inst);
-                this.activePropSounds.set(normName, inst);
+                registerPropInst(inst);
               })
               .catch(() => {});
           } else if (res) {
-            this.activePropSounds.set(soundKey, res);
-            this.activePropSounds.set(normName, res);
+            registerPropInst(res);
           }
+        } else if (res && typeof (res as any).then === "function") {
+          (res as any).then(registerPropInst).catch(() => {});
+        } else if (res) {
+          registerPropInst(res);
         }
       } else {
         console.warn(`Sound '${normName}' not found in Pixi sound cache.`);
@@ -4885,6 +4988,7 @@ export class RaycastScene extends BaseScene {
       try {
         inst.stop?.();
       } catch {}
+      this.activePropSoundMeta.delete(inst);
       this.activePropSounds.delete(sKey);
     }
     if (soundName) {
@@ -4894,8 +4998,10 @@ export class RaycastScene extends BaseScene {
         try {
           inst2.stop?.();
         } catch {}
+        this.activePropSoundMeta.delete(inst2);
         this.activePropSounds.delete(norm);
       }
+      SettingsManager.getInstance().unregisterDynamicMusic(norm);
       try {
         if (sound.exists(norm)) {
           sound.stop(norm);
@@ -5205,17 +5311,17 @@ export class RaycastScene extends BaseScene {
       return;
     }
 
-    const optionsMusicVol = SettingsManager.getInstance().getMusicVolume();
+    const optionsMusicVol = SettingsManager.getInstance().getEffectiveMusicVolume();
     const sfxBaseVolume = getSoundBaseVolume(normName);
-    const volume = config.overrideBackgroundMusic
-      ? (gameConfig.musicVolume ?? optionsMusicVol)
-      : sfxBaseVolume * optionsMusicVol;
+    const baseMultiplier = config.overrideBackgroundMusic ? 1.0 : sfxBaseVolume;
+    const volume = Math.max(0, Math.min(1, baseMultiplier * optionsMusicVol));
     const loop = Boolean(config.shouldLoop);
 
     try {
       if (!config.overrideBackgroundMusic) {
         this.stopTriggerPropSounds(trigger.id, normName);
       }
+      SettingsManager.getInstance().registerDynamicMusic(normName, baseMultiplier);
 
       const res = sound.play(normName, { loop, volume });
       const handleInstance = (inst: any) => {
@@ -5225,10 +5331,15 @@ export class RaycastScene extends BaseScene {
           } catch {}
           return;
         }
+        const currentMusicVol = SettingsManager.getInstance().getEffectiveMusicVolume();
+        try {
+          inst.volume = Math.max(0, Math.min(1, baseMultiplier * currentMusicVol));
+        } catch {}
         if (config.overrideBackgroundMusic) {
           this.bgMusicInstance = inst;
           this.currentBgMusicAlias = normName;
         } else {
+          this.activePropSoundMeta.set(inst, { alias: normName, baseVolume: baseMultiplier });
           this.activePropSounds.set(String(trigger.id), inst);
           this.activePropSounds.set(normName, inst);
         }
