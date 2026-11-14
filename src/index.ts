@@ -14,6 +14,8 @@ import { CutsceneScene } from "./scenes/CutsceneScene";
 import { StarWarsIntroScene } from "./scenes/StarWarsIntroScene";
 import { LevelEndScene, ILevelEndOptions } from "./scenes/LevelEndScene";
 import { LevelSelectScene } from "./scenes/LevelSelectScene";
+import { CreditsScene } from "./scenes/CreditsScene";
+import { creditsConfig } from "./configs/CreditsConfig";
 import { RaycastSaveManager } from "./scenes/raycast/RaycastSaveManager";
 import { allConfigs } from "./configs/PlayerConfigs";
 import { sound } from "@pixi/sound";
@@ -144,6 +146,9 @@ function buildScene(scene: Scene, nextLevel?: string, levelEndOptions?: ILevelEn
         shipConfig = config;
       });
       break;
+    case Scene.Credits:
+      currentScene = new CreditsScene(app.stage, currentScale);
+      break;
     case Scene.Raycast: {
       const startingLevel = nextLevel || RaycastSaveManager.getCurrentLevel();
       currentScene = new RaycastScene(app.stage, currentScale, startingLevel);
@@ -199,6 +204,59 @@ function changeScene(
       }
     };
     Ticker.shared.add(onInitialFadeIn);
+    return;
+  }
+
+  // Iconic expanding circle iris wipe from the center of the screen into Credits
+  if (scene === Scene.Credits) {
+    isSceneTransitioning = true;
+    const previousScene = currentScene;
+    previousScene.eventMode = "none";
+    previousScene.interactiveChildren = false;
+
+    try {
+      if (sound.exists("end_theme")) sound.stop("end_theme");
+      if (sound.exists("end_level")) sound.stop("end_level");
+      if (sound.exists("menu_theme")) sound.stop("menu_theme");
+    } catch {}
+
+    const creditsScene = new CreditsScene(app.stage, currentScale);
+    creditsScene.zIndex = 500;
+    const irisMask = new Graphics();
+    app.stage.addChild(irisMask);
+    creditsScene.mask = irisMask;
+
+    const centerX = gameConfig.width / 2;
+    const centerY = gameConfig.height / 2;
+    const maxRadius = Math.hypot(centerX, centerY) + 24;
+    const wipeDuration = creditsConfig.irisWipeDurationSec;
+    let wipeElapsed = 0;
+
+    const onIrisWipe = (delta: number) => {
+      wipeElapsed += delta / 60;
+      const t = Math.min(1, wipeElapsed / wipeDuration);
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const radius = maxRadius * eased;
+
+      irisMask.clear();
+      irisMask.beginFill(0xffffff);
+      irisMask.drawCircle(centerX, centerY, Math.max(1, radius));
+      irisMask.endFill();
+
+      if (t >= 1) {
+        Ticker.shared.remove(onIrisWipe);
+        creditsScene.mask = null;
+        creditsScene.zIndex = 0;
+        irisMask.destroy();
+        previousScene.dispose();
+        currentScene = creditsScene;
+        Ticker.shared.speed = 1;
+        currentScene.on(Scene.Change, changeScene);
+        isSceneTransitioning = false;
+      }
+    };
+
+    Ticker.shared.add(onIrisWipe);
     return;
   }
 

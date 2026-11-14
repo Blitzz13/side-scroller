@@ -27,7 +27,8 @@ const MUSIC_TRACK_ALIASES = [
   "base_alarm",
   "intro_theme",
   "end_theme",
-  "end_level"
+  "end_level",
+  "end_credits_theme"
 ];
 
 const MUSIC_TRACK_MULTIPLIERS: Record<string, number> = {

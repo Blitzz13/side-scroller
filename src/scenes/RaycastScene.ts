@@ -651,6 +651,11 @@ export class RaycastScene extends BaseScene {
         cycleDoorMode: () => this.cycleDoorSlideMode(),
         killNearbyEnemies: () => this.killNearbyEnemies(),
         warpToLevel: (levelName) => this.loadLevel(levelName),
+        openCredits: () => {
+          this.stopAlertAudio();
+          this.stopBackgroundMusic();
+          this.emit(Scene.Change, Scene.Credits);
+        },
         showToast: (text, color, duration) => this.hud?.showToast(text, color, duration),
       });
       this.addChild(this.debugMenu);

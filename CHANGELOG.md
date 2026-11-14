@@ -2,6 +2,19 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-11-14] - Credits Scene, Circle Iris Wipe Transition & Dev Menu Trigger
+
+### 1. Credits Scene & Translatable Config ([`src/scenes/CreditsScene.ts`](file:///D:/Projects/side-scroller/src/scenes/CreditsScene.ts), [`src/configs/CreditsConfig.ts`](file:///D:/Projects/side-scroller/src/configs/CreditsConfig.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts))
+- Added `CreditsScene` featuring `assets/cutscenes/intro/star_background.jpg`, animated twinkling stars, yellow (`0xffe81f`) centered text lines fading smoothly in and out across the full duration of `assets/sounds/end_credits_theme.mp3`.
+- Added `CREDITS_TRANSLATIONS` and `getCreditsLocale()` in `CreditsConfig.ts` for easy localization, including refined credits copy and artist attribution.
+- Registered `end_credits_theme` in `GameConfig.ts` and `SettingsManager.ts` for live volume control.
+- Added a **Skip** button (and `Escape`/`Space`/`Enter` support) that cross-fades to the final message, seeks the audio to `37s`, and waits for the track to finish before transitioning to `Scene.MainMenu`.
+
+### 2. Circle Iris Wipe & Level 3 / Dev Menu Integration ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts), [`src/enums/Scene.ts`](file:///D:/Projects/side-scroller/src/enums/Scene.ts), [`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`src/scenes/raycast/RaycastDebugMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastDebugMenu.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- Added `Scene.Credits` and an expanding circular `Graphics` mask iris wipe transition from the center of the screen when entering `CreditsScene`.
+- Updated `LevelEndScene` so completing Level 3 (`nextLevel === "credits"`) preserves the saved `currentLevel`, labels the primary button `"Credits"`, and transitions to `Scene.Credits`.
+- Added a `🎬 Credits (Iris Wipe)` button in `RaycastDebugMenu` for instant previewing from gameplay.
+
 ## [2026-11-14] - Debug URL Gating, Live Audio/Voice Controls, Pause-Synced Voices & Pause Menu Polish
 
 ### 1. Debug Mode URL Gating & Debug Toasts ([`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts))

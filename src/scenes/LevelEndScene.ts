@@ -33,8 +33,10 @@ export class LevelEndScene extends BaseScene {
       this.nextLevel = options?.failedLevel || nextLevel || save?.currentLevel || "level1";
     } else {
       this.nextLevel = nextLevel || save?.nextLevel || save?.currentLevel || "test_level";
-      // Ensure the saved currentLevel is already set to the new level so restarting begins at the new level
-      RaycastSaveManager.setCurrentLevel(this.nextLevel);
+      // Ensure the saved currentLevel is updated for the next playable level (not "credits")
+      if (this.nextLevel !== "credits") {
+        RaycastSaveManager.setCurrentLevel(this.nextLevel);
+      }
     }
 
     // Unlock mouse cursor from pointer lock and ensure default pointer cursor
@@ -182,7 +184,7 @@ export class LevelEndScene extends BaseScene {
     const mainMenuButton = new Button(btnSize, "Main Menu", btnOptions);
     const primaryButton = new Button(
       btnSize,
-      this.isMissionFailed ? "Retry Mission" : "Next Level",
+      this.isMissionFailed ? "Retry Mission" : (this.nextLevel === "credits" ? "Credits" : "Next Level"),
       btnOptions
     );
 
@@ -524,6 +526,8 @@ export class LevelEndScene extends BaseScene {
     this.playButtonClick();
     if (this.isMissionFailed) {
       this.emit(Scene.Change, Scene.Raycast, this.nextLevel, true);
+    } else if (this.nextLevel === "credits") {
+      this.emit(Scene.Change, Scene.Credits);
     } else {
       RaycastSaveManager.setCurrentLevel(this.nextLevel);
       this.emit(Scene.Change, Scene.Raycast, this.nextLevel);

@@ -21,6 +21,7 @@ export interface IRaycastDebugCallbacks {
   cycleDoorMode: () => void;
   killNearbyEnemies: () => number;
   warpToLevel: (levelName: string) => void;
+  openCredits?: () => void;
   showToast: (text: string, color?: number, duration?: number) => void;
 }
 
@@ -523,18 +524,30 @@ export class RaycastDebugMenu extends Container {
     ];
     let lx = -halfW + 24;
     for (const lvl of levels) {
-      const btn = this.createButton(lvl.label, 280, 42, () => {
+      const btn = this.createButton(lvl.label, 212, 42, () => {
         this.hide();
         this.callbacks.warpToLevel(lvl.file);
       }, {
         bgColor: 0x112638,
         borderColor: 0x00ccee,
-        fontSize: 14,
+        fontSize: 13,
       });
       btn.position.set(lx, y);
       this.contentContainer.addChild(btn);
-      lx += 296;
+      lx += 224;
     }
+
+    const creditsBtn = this.createButton("🎬 Credits (Iris Wipe)", 212, 42, () => {
+      this.hide();
+      this.callbacks.openCredits?.();
+    }, {
+      bgColor: 0x1a1635,
+      borderColor: 0xffe81f,
+      textColor: 0xffe81f,
+      fontSize: 13,
+    });
+    creditsBtn.position.set(lx, y);
+    this.contentContainer.addChild(creditsBtn);
 
     y += 62;
 

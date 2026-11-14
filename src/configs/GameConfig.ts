@@ -114,6 +114,10 @@ export const manifest: AssetsManifest = {
             src: "./assets/sounds/end_level.mp3"
           },
           {
+            alias: "end_credits_theme",
+            src: "./assets/sounds/end_credits_theme.mp3"
+          },
+          {
             alias: "blaster_1",
             src: "./assets/sounds/blaster_1.mp3"
           },
