@@ -561,7 +561,8 @@ export class RaycastScene extends BaseScene {
       this.mobileControls = new MobileControls();
       this.mobileControls.zIndex = 80;
       this.mobileControls.on("action", () => this.tryOpenDoor());
-      this.mobileControls.on("fire", () => this.tryShoot());
+      this.mobileControls.on("fire", () => this.tryShoot(false));
+      this.mobileControls.on("altFire", () => this.tryAltFire());
       this.mobileControls.on("switchWeapon", () => this.playerController.cycleWeapon(1));
       this.mobileControls.on("toggleSprint", (active: boolean) => {
         this.playerController.setSprinting(active);
@@ -3416,23 +3417,26 @@ export class RaycastScene extends BaseScene {
         this.tryShoot(false);
       } else if (e.button === 2) {
         this.isRightMouseDown = true;
-
-        // Auto-switch to E-11 if player owns it and isn't currently holding it
-        if (
-          this.playerController.equippedWeapon !== RaycastWeaponType.E11 &&
-          this.playerController.weaponInventory.has(RaycastWeaponType.E11)
-        ) {
-          this.playerController.switchWeapon(RaycastWeaponType.E11);
-        }
-
-        if (this.playerController.equippedWeapon === RaycastWeaponType.E11) {
-          this.tryShoot(true);
-        } else {
-          this.hud.showToast("[!] E-11 Blaster Rifle required for Auto-Fire", 0x88bbdd);
-        }
+        this.tryAltFire();
       }
     }
   };
+
+  private tryAltFire(): void {
+    // Auto-switch to E-11 if player owns it and isn't currently holding it
+    if (
+      this.playerController.equippedWeapon !== RaycastWeaponType.E11 &&
+      this.playerController.weaponInventory.has(RaycastWeaponType.E11)
+    ) {
+      this.playerController.switchWeapon(RaycastWeaponType.E11);
+    }
+
+    if (this.playerController.equippedWeapon === RaycastWeaponType.E11) {
+      this.tryShoot(true);
+    } else {
+      this.hud.showToast("[!] E-11 Blaster Rifle required for Auto-Fire", 0x88bbdd);
+    }
+  }
 
   private pointerLockChangeHandler = () => {
     if (!document.pointerLockElement) {
@@ -4054,8 +4058,11 @@ export class RaycastScene extends BaseScene {
     // Determine movement for weapon bobbing
     const isMoving = this.isPlayerMoving();
 
-    // Automatic continuous firing while right mouse button is pressed with the E-11 Blaster
-    if (this.isRightMouseDown && this.playerController.equippedWeapon === RaycastWeaponType.E11) {
+    // Automatic continuous firing while right mouse button or mobile alt-fire is pressed with the E-11 Blaster
+    if (
+      (this.isRightMouseDown || this.mobileControls?.isAltFirePressed) &&
+      this.playerController.equippedWeapon === RaycastWeaponType.E11
+    ) {
       this.tryShoot(true);
     }
 

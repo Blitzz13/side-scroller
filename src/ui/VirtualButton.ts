@@ -1,11 +1,36 @@
-import { Container, Graphics, FederatedPointerEvent, Text } from "pixi.js";
+import {
+  Container,
+  Graphics,
+  FederatedPointerEvent,
+  SCALE_MODES,
+  Sprite,
+  Text,
+  Texture,
+} from "pixi.js";
 import { IDisposable } from "../characters/interfaces/IDisposable";
+
+export interface IVirtualButtonTheme {
+  bgColor?: number;
+  borderColor?: number;
+  pressedBgColor?: number;
+  pressedBorderColor?: number;
+  bgAlpha?: number;
+  pressedBgAlpha?: number;
+}
 
 export class VirtualButton extends Container implements IDisposable {
   private bgGraphic: Graphics;
   private labelText: Text;
+  private iconSprite?: Sprite;
+  private iconSize: number = 36;
+  private iconTint: number = 0xffffff;
   private radius: number;
   private bgColor: number;
+  private borderColor: number = 0xffffff;
+  private pressedBgColor: number;
+  private pressedBorderColor: number = 0xffffff;
+  private bgAlpha: number = 0.4;
+  private pressedBgAlpha: number = 0.85;
   private _isPressed: boolean = false;
   private activePointerId: number | null = null;
   private isToggle: boolean = false;
@@ -17,12 +42,18 @@ export class VirtualButton extends Container implements IDisposable {
     radius: number = 36,
     label: string = "",
     bgColor: number = 0x111111,
-    _fontName: string = "arial32"
+    _fontName: string = "arial32",
+    theme?: IVirtualButtonTheme
   ) {
     super();
 
     this.radius = radius;
-    this.bgColor = bgColor;
+    this.bgColor = theme?.bgColor ?? bgColor;
+    this.borderColor = theme?.borderColor ?? 0xffffff;
+    this.pressedBgColor = theme?.pressedBgColor ?? this.bgColor;
+    this.pressedBorderColor = theme?.pressedBorderColor ?? this.borderColor;
+    this.bgAlpha = theme?.bgAlpha ?? 0.4;
+    this.pressedBgAlpha = theme?.pressedBgAlpha ?? 0.85;
 
     this.bgGraphic = new Graphics();
     this.drawButton(false);
@@ -89,20 +120,89 @@ export class VirtualButton extends Container implements IDisposable {
     this.labelText.text = text;
   }
 
-  private updateLabelStyle(): void {
-    if (this._isToggled) {
-      this.labelText.style.fill = this.activeBorderColor;
+  public setIcon(
+    textureKey: string,
+    fallbackPath?: string,
+    size: number = Math.round(this.radius * 1.1),
+    tint: number = 0xffffff
+  ): void {
+    this.iconSize = size;
+    this.iconTint = tint;
+
+    const tex = this.resolveTexture(textureKey, fallbackPath);
+    if (!this.iconSprite) {
+      this.iconSprite = new Sprite(tex);
+      this.iconSprite.anchor.set(0.5);
+      this.iconSprite.position.set(0, 0);
+      this.addChild(this.iconSprite);
     } else {
-      this.labelText.style.fill = 0xffffff;
+      this.iconSprite.texture = tex;
+    }
+
+    this.fitIconSprite();
+    this.labelText.visible = false;
+    this.updateLabelStyle();
+  }
+
+  public updateIconTexture(textureKey: string, fallbackPath?: string): void {
+    if (!this.iconSprite) {
+      this.setIcon(textureKey, fallbackPath);
+      return;
+    }
+    this.iconSprite.texture = this.resolveTexture(textureKey, fallbackPath);
+    this.fitIconSprite();
+  }
+
+  private resolveTexture(textureKey: string, fallbackPath?: string): Texture {
+    try {
+      const tex = Texture.from(textureKey);
+      tex.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+      return tex;
+    } catch {
+      if (fallbackPath) {
+        try {
+          const tex = Texture.from(fallbackPath);
+          tex.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+          return tex;
+        } catch {
+          return Texture.EMPTY;
+        }
+      }
+      return Texture.EMPTY;
+    }
+  }
+
+  private fitIconSprite(): void {
+    if (!this.iconSprite) return;
+    const tex = this.iconSprite.texture;
+    const w = tex.width || this.iconSize;
+    const h = tex.height || this.iconSize;
+    const scale = Math.min(this.iconSize / w, this.iconSize / h);
+    this.iconSprite.scale.set(scale);
+  }
+
+  private updateLabelStyle(): void {
+    const color = this._isToggled ? this.activeBorderColor : this.iconTint;
+    this.labelText.style.fill = this._isToggled ? this.activeBorderColor : 0xffffff;
+    if (this.iconSprite) {
+      this.iconSprite.tint = color;
     }
   }
 
   private drawButton(pressedOrActive: boolean): void {
     this.bgGraphic.clear();
-    const currentColor = this._isToggled ? this.activeBgColor : this.bgColor;
-    const currentBorder = this._isToggled ? this.activeBorderColor : 0xffffff;
-    const borderAlpha = pressedOrActive ? 0.95 : (this._isToggled ? 0.9 : 0.6);
-    const fillAlpha = pressedOrActive ? 0.85 : (this._isToggled ? 0.75 : 0.4);
+    const currentColor = this._isToggled
+      ? this.activeBgColor
+      : pressedOrActive
+      ? this.pressedBgColor
+      : this.bgColor;
+    const currentBorder = this._isToggled
+      ? this.activeBorderColor
+      : pressedOrActive
+      ? this.pressedBorderColor
+      : this.borderColor;
+    const borderAlpha = pressedOrActive ? 0.95 : (this._isToggled ? 0.95 : 0.75);
+    const fillAlpha = pressedOrActive ? this.pressedBgAlpha : (this._isToggled ? 0.8 : this.bgAlpha);
 
     this.bgGraphic.beginFill(currentColor, fillAlpha);
     this.bgGraphic.lineStyle({

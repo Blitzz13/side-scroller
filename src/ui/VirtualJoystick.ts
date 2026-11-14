@@ -20,15 +20,15 @@ export class VirtualJoystick extends Container implements IDisposable {
     this.baseRadius = baseRadius;
     this.knobRadius = knobRadius;
 
-    // Outer base circle
+    // Outer base circle (sci-fi blue theme)
     this.baseGraphic = new Graphics();
-    this.baseGraphic.beginFill(0x111111, 0.4);
-    this.baseGraphic.lineStyle({ width: 3, color: 0xffffff, alpha: 0.5 });
+    this.baseGraphic.beginFill(0x091929, 0.55);
+    this.baseGraphic.lineStyle({ width: 2.5, color: 0x00e5ff, alpha: 0.75 });
     this.baseGraphic.drawCircle(0, 0, this.baseRadius);
     this.baseGraphic.endFill();
 
     // Directional cross markers
-    this.baseGraphic.lineStyle({ width: 2, color: 0xffffff, alpha: 0.25 });
+    this.baseGraphic.lineStyle({ width: 2, color: 0x00e5ff, alpha: 0.35 });
     this.baseGraphic.moveTo(0, -this.baseRadius + 10);
     this.baseGraphic.lineTo(0, this.baseRadius - 10);
     this.baseGraphic.moveTo(-this.baseRadius + 10, 0);
@@ -36,8 +36,8 @@ export class VirtualJoystick extends Container implements IDisposable {
 
     // Inner knob circle
     this.knobGraphic = new Graphics();
-    this.knobGraphic.beginFill(0xffffff, 0.65);
-    this.knobGraphic.lineStyle({ width: 2, color: 0xffffff, alpha: 0.9 });
+    this.knobGraphic.beginFill(0x00e5ff, 0.55);
+    this.knobGraphic.lineStyle({ width: 2, color: 0x7be5ff, alpha: 0.95 });
     this.knobGraphic.drawCircle(0, 0, this.knobRadius);
     this.knobGraphic.endFill();
 

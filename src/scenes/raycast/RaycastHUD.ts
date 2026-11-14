@@ -1,6 +1,7 @@
-import { Container, Graphics, Sprite, Text, TextStyle, Texture } from "pixi.js";
+import { Container, Graphics, SCALE_MODES, Sprite, Text, TextStyle, Texture } from "pixi.js";
 import { gameConfig } from "../../configs/GameConfig";
 import { getRaycastUIConfig, IRaycastUIConfig } from "../../configs/RaycastUIConfig";
+import { SettingsManager } from "../../managers/SettingsManager";
 
 export class RaycastHUD extends Container {
   // Health components
@@ -47,8 +48,10 @@ export class RaycastHUD extends Container {
   // Interaction prompt (Center, below crosshair)
   private promptContainer: Container;
   private promptBg: Graphics;
+  private promptIcon: Sprite;
   private promptText: Text;
   private currentPromptText: string = "";
+  private isMobilePrompt: boolean = SettingsManager.isMobileDevice();
 
   // Dynamic Crosshair (Screen center default, enemy snapping, damageable target red indicator)
   private crosshairContainer: Container;
@@ -328,6 +331,23 @@ export class RaycastHUD extends Container {
     this.promptBg = new Graphics();
     this.promptContainer.addChild(this.promptBg);
 
+    let interactTexture: Texture;
+    try {
+      interactTexture = Texture.from("interact_icon");
+    } catch {
+      try {
+        interactTexture = Texture.from("assets/common/interact.png");
+      } catch {
+        interactTexture = Texture.EMPTY;
+      }
+    }
+    interactTexture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+    this.promptIcon = new Sprite(interactTexture);
+    this.promptIcon.anchor.set(0.5, 0.5);
+    this.promptIcon.tint = 0x00e5ff;
+    this.promptIcon.visible = false;
+    this.promptContainer.addChild(this.promptIcon);
+
     this.promptText = new Text("", {
       fontFamily: "Arial, sans-serif",
       fontSize: this.uiCfg.promptFontSize,
@@ -570,6 +590,7 @@ export class RaycastHUD extends Container {
   }
 
   public adaptForMobile(): void {
+    this.isMobilePrompt = true;
     if (this.switchHint) {
       this.switchHint.text = "[TAP / WPN]";
     }
@@ -711,21 +732,59 @@ export class RaycastHUD extends Container {
     }
 
     this.currentPromptText = message;
-    this.promptText.text = message;
+
+    const hasInteractMarker = /\[E(?:\s*\/\s*TAP)?\]/i.test(message);
+    const showIcon =
+      this.isMobilePrompt && hasInteractMarker && this.promptIcon.texture !== Texture.EMPTY;
+
+    const displayMessage = showIcon
+      ? message
+          .replace(/PRESS\s*\[E(?:\s*\/\s*TAP)?\]\s*(?:TO\s+|-\s*)?/gi, "")
+          .replace(/\[E(?:\s*\/\s*TAP)?\]\s*/gi, "")
+          .replace(/\s{2,}/g, " ")
+          .trim()
+      : message;
+
+    this.promptText.text = displayMessage;
 
     const textW = this.promptText.width;
     const textH = this.promptText.height;
     const padX = this.uiCfg.promptPadX;
     const padY = this.uiCfg.promptPadY;
 
+    let contentW = textW;
+    let contentH = textH;
+
+    if (showIcon) {
+      const iconTargetSize = Math.round(this.uiCfg.promptFontSize * 1.45);
+      const texW = this.promptIcon.texture.width || iconTargetSize;
+      const texH = this.promptIcon.texture.height || iconTargetSize;
+      const iconScale = Math.min(iconTargetSize / texW, iconTargetSize / texH);
+      this.promptIcon.scale.set(iconScale);
+
+      const iconW = texW * iconScale;
+      const iconH = texH * iconScale;
+      const gap = 8;
+
+      contentW = iconW + gap + textW;
+      contentH = Math.max(iconH, textH);
+
+      this.promptIcon.visible = true;
+      this.promptIcon.position.set(-contentW / 2 + iconW / 2, 0);
+      this.promptText.position.set(-contentW / 2 + iconW + gap + textW / 2, 0);
+    } else {
+      this.promptIcon.visible = false;
+      this.promptText.position.set(0, 0);
+    }
+
     this.promptBg.clear();
     this.promptBg.beginFill(0x060f18, 0.85);
     this.promptBg.lineStyle(1.8, borderColor, 0.85);
     this.promptBg.drawRoundedRect(
-      -textW / 2 - padX,
-      -textH / 2 - padY,
-      textW + padX * 2,
-      textH + padY * 2,
+      -contentW / 2 - padX,
+      -contentH / 2 - padY,
+      contentW + padX * 2,
+      contentH + padY * 2,
       6
     );
     this.promptBg.endFill();

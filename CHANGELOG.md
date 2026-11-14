@@ -39,6 +39,17 @@ This document logs recent development changes and enhancements made to the Rayca
   - Enlarged the mobile objectives modal (`960x580`), fonts, and close button (`closeButtonRadius: 22`) in `MOBILE_RAYCAST_UI_CONFIG.objectives` with dynamic card heights in `ObjectivesUI`.
   - Added config-driven `fontFamily`, `maxTextDpr`, `linearTextScaling` (`SCALE_MODES.LINEAR` to avoid `NEAREST` downsampling artifacts on high-DPR mobile screens), `descriptionColor`, and `descriptionDropShadow`.
 
+### 6. Mobile Control Icons, Uniform Button Sizing & Icon Prompts ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts), [`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts), [`src/ui/VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts))
+- **Mobile Control Icons & Sci-Fi Blue Theme**:
+  - Added and preloaded `fire_icon` (`fire.png`), `alt_fire_icon` (`alt_fire.png`), `interact_icon` (`interact.png`), `change_icon` (`change.png`), `run_icon` (`run.png`), `fullscreen_icon` (`fullscreen.png`), and `exit_fullscreen_icon` (`exit_fullscreen.png`) in `GameConfig.ts`.
+  - Recolored all mobile control icon PNGs (including `map_icon.png`) to `#00FFFF` cyan with preserved alpha so they match the `0x091929` / `0x00e5ff` cyber-blue button theme across `MobileControls`, `VirtualButton`, and `VirtualJoystick`.
+  - Extended `VirtualButton` with `IVirtualButtonTheme`, `setIcon()`, and `updateIconTexture()`, and wired `fullscreenchange` updates for `btnFullscreen`.
+- **Control Layout, Alt-Fire & Prompt Icons**:
+  - Removed the `<` / `>` quick-turn arrow buttons (`btnTurnLeft`, `btnTurnRight`) from `MobileControls`.
+  - Added `btnAltFire` (`alt_fire.png`) and `RaycastScene.tryAltFire()` for mobile E-11 continuous auto-fire while held.
+  - Standardized all mobile circle buttons (`btnFire`, `btnAltFire`, `btnAction`, `btnWeapon`, `btnSprint`, `btnFullscreen`, `btnMap`, `btnObjectives`, `btnDebug`, `btnPause`) to `CIRCLE_BTN_RADIUS = 40` with `CIRCLE_ICON_SIZE = 42`.
+  - Updated `RaycastHUD.setPrompt()` on mobile to strip `[E]` / `[E / TAP]` / `PRESS [E]` text and display the `interact_icon` sprite inline.
+
 ## [2026-11-13] - Trigger Sound System, Lever Mechanics, Level 3 Audio & Mobile Control Fixes
 
 ### 1. Tiled Trigger Sound System & Background Music Override ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts), [`src/configs/SoundConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SoundConfig.ts))

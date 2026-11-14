@@ -514,6 +514,34 @@ export const manifest: AssetsManifest = {
             name: "map_icon",
             src: "./assets/common/map_icon.png",
           },
+          {
+            name: "change_icon",
+            src: "./assets/common/change.png",
+          },
+          {
+            name: "fullscreen_icon",
+            src: "./assets/common/fullscreen.png",
+          },
+          {
+            name: "exit_fullscreen_icon",
+            src: "./assets/common/exit_fullscreen.png",
+          },
+          {
+            name: "interact_icon",
+            src: "./assets/common/interact.png",
+          },
+          {
+            name: "run_icon",
+            src: "./assets/common/run.png",
+          },
+          {
+            name: "fire_icon",
+            src: "./assets/common/fire.png",
+          },
+          {
+            name: "alt_fire_icon",
+            src: "./assets/common/alt_fire.png",
+          },
         ],
       },
       {

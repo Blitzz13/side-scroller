@@ -1,17 +1,28 @@
 import { Container, Graphics, Sprite, Text, Circle } from "pixi.js";
 import { IDisposable } from "../characters/interfaces/IDisposable";
 import { VirtualJoystick, JoystickVector } from "./VirtualJoystick";
-import { VirtualButton } from "./VirtualButton";
+import { VirtualButton, IVirtualButtonTheme } from "./VirtualButton";
 import { TouchLookArea } from "./TouchLookArea";
 import { gameConfig } from "../configs/GameConfig";
 import { toggleFullscreen } from "../Utils";
 
+const BLUE_BUTTON_THEME: IVirtualButtonTheme = {
+  bgColor: 0x091929,
+  borderColor: 0x00e5ff,
+  pressedBgColor: 0x004466,
+  pressedBorderColor: 0x00ffff,
+  bgAlpha: 0.85,
+  pressedBgAlpha: 0.95,
+};
+
+const CIRCLE_BTN_RADIUS = 40;
+const CIRCLE_ICON_SIZE = 42;
+
 export class MobileControls extends Container implements IDisposable {
   private joystick: VirtualJoystick;
   private lookArea: TouchLookArea;
-  private btnTurnLeft: VirtualButton;
-  private btnTurnRight: VirtualButton;
   private btnFire: VirtualButton;
+  private btnAltFire: VirtualButton;
   private btnAction: VirtualButton;
   private btnWeapon: VirtualButton;
   private btnFullscreen: VirtualButton;
@@ -20,7 +31,7 @@ export class MobileControls extends Container implements IDisposable {
   private btnObjectives: Container;
   private btnDebug: Container;
   private btnPause: Container;
-  private buttonTurnSpeed: number = 0.04;
+  private onFullscreenChange?: () => void;
 
   constructor() {
     super();
@@ -60,33 +71,34 @@ export class MobileControls extends Container implements IDisposable {
     this.joystick.position.set(160, screenH - 160);
     this.addChild(this.joystick);
 
-    // 3. Quick Turn Left Button (<)
-    this.btnTurnLeft = new VirtualButton(36, "<", 0x111111);
-    this.btnTurnLeft.position.set(screenW - 270, screenH - 130);
-    this.addChild(this.btnTurnLeft);
-
-    // 4. Quick Turn Right Button (>)
-    this.btnTurnRight = new VirtualButton(36, ">", 0x111111);
-    this.btnTurnRight.position.set(screenW - 180, screenH - 130);
-    this.addChild(this.btnTurnRight);
-
-    // 5. Fire / Shoot Button
-    this.btnFire = new VirtualButton(46, "FIRE", 0x882222);
+    // 3. Fire / Shoot Button
+    this.btnFire = new VirtualButton(CIRCLE_BTN_RADIUS, "FIRE", 0x091929, "arial32", BLUE_BUTTON_THEME);
+    this.btnFire.setIcon("fire_icon", "assets/common/fire.png", CIRCLE_ICON_SIZE, 0xffffff);
     this.btnFire.position.set(screenW - 85, screenH - 130);
-    this.btnFire.on("tap", () => {
+    this.btnFire.on("press", () => {
       (this as any).emit("fire");
     });
     this.addChild(this.btnFire);
 
-    // 6. Action / Interact Button ([E] Open Door / Use)
-    this.btnAction = new VirtualButton(46, "E", 0x224422);
-    this.btnAction.position.set(screenW - 85, screenH - 230);
-    this.btnAction.hitArea = new Circle(0, 0, 54);
+    // 4. Alt Fire / Auto-Fire Button
+    this.btnAltFire = new VirtualButton(CIRCLE_BTN_RADIUS, "ALT", 0x091929, "arial32", BLUE_BUTTON_THEME);
+    this.btnAltFire.setIcon("alt_fire_icon", "assets/common/alt_fire.png", CIRCLE_ICON_SIZE, 0xffffff);
+    this.btnAltFire.position.set(screenW - 180, screenH - 130);
+    this.btnAltFire.on("press", () => {
+      (this as any).emit("altFire");
+    });
+    this.addChild(this.btnAltFire);
+
+    // 5. Action / Interact Button
+    this.btnAction = new VirtualButton(CIRCLE_BTN_RADIUS, "E", 0x091929, "arial32", BLUE_BUTTON_THEME);
+    this.btnAction.setIcon("interact_icon", "assets/common/interact.png", CIRCLE_ICON_SIZE, 0xffffff);
+    this.btnAction.position.set(screenW - 85, screenH - 225);
+    this.btnAction.hitArea = new Circle(0, 0, CIRCLE_BTN_RADIUS + 8);
     this.btnAction.on("press", triggerAction);
     this.btnAction.on("tap", triggerAction);
     this.addChild(this.btnAction);
 
-    // 7. Weapon Switch Button ([WPN])
+    // 6. Weapon Switch Button
     let lastSwitchWeaponTime = 0;
     const triggerSwitchWeapon = () => {
       const now = Date.now();
@@ -94,31 +106,46 @@ export class MobileControls extends Container implements IDisposable {
       lastSwitchWeaponTime = now;
       (this as any).emit("switchWeapon");
     };
-    this.btnWeapon = new VirtualButton(42, "WPN", 0x224466);
-    this.btnWeapon.position.set(screenW - 180, screenH - 230);
-    this.btnWeapon.hitArea = new Circle(0, 0, 50);
+    this.btnWeapon = new VirtualButton(CIRCLE_BTN_RADIUS, "WPN", 0x091929, "arial32", BLUE_BUTTON_THEME);
+    this.btnWeapon.setIcon("change_icon", "assets/common/change.png", CIRCLE_ICON_SIZE, 0xffffff);
+    this.btnWeapon.position.set(screenW - 180, screenH - 225);
+    this.btnWeapon.hitArea = new Circle(0, 0, CIRCLE_BTN_RADIUS + 8);
     this.btnWeapon.on("press", triggerSwitchWeapon);
     this.btnWeapon.on("tap", triggerSwitchWeapon);
     this.addChild(this.btnWeapon);
 
-    // 8. Fullscreen Button ([FS])
-    this.btnFullscreen = new VirtualButton(36, "FS", 0x222244);
-    this.btnFullscreen.position.set(screenW - 70, 60);
+    // 7. Fullscreen Toggle Button
+    this.btnFullscreen = new VirtualButton(CIRCLE_BTN_RADIUS, "FS", 0x091929, "arial32", BLUE_BUTTON_THEME);
+    const syncFullscreenIcon = () => {
+      const isFs = Boolean(typeof document !== "undefined" && document.fullscreenElement);
+      if (isFs) {
+        this.btnFullscreen.setIcon("exit_fullscreen_icon", "assets/common/exit_fullscreen.png", CIRCLE_ICON_SIZE, 0xffffff);
+      } else {
+        this.btnFullscreen.setIcon("fullscreen_icon", "assets/common/fullscreen.png", CIRCLE_ICON_SIZE, 0xffffff);
+      }
+    };
+    syncFullscreenIcon();
+    if (typeof document !== "undefined") {
+      this.onFullscreenChange = syncFullscreenIcon;
+      document.addEventListener("fullscreenchange", this.onFullscreenChange);
+    }
+    this.btnFullscreen.position.set(screenW - 60, 60);
     this.btnFullscreen.on("tap", () => {
       toggleFullscreen();
     });
     this.addChild(this.btnFullscreen);
 
-    // 9. Sprint Toggle Button ([RUN])
-    this.btnSprint = new VirtualButton(42, "RUN", 0x1f2937);
-    this.btnSprint.position.set(screenW - 270, screenH - 230);
-    this.btnSprint.setToggleMode(true, 0x005577, 0x00e5ff);
+    // 8. Sprint Toggle Button
+    this.btnSprint = new VirtualButton(CIRCLE_BTN_RADIUS, "RUN", 0x091929, "arial32", BLUE_BUTTON_THEME);
+    this.btnSprint.setIcon("run_icon", "assets/common/run.png", CIRCLE_ICON_SIZE, 0xffffff);
+    this.btnSprint.position.set(screenW - 275, screenH - 225);
+    this.btnSprint.setToggleMode(true, 0x005577, 0x00ffff);
     this.btnSprint.on("toggle", (active: boolean) => {
       (this as any).emit("toggleSprint", active);
     });
     this.addChild(this.btnSprint);
 
-    // 10. Map Button ([MAP]) with assets/common/map_icon.png
+    // 9. Map Button ([MAP]) with assets/common/map_icon.png
     this.btnMap = new Container();
     this.btnMap.position.set(screenW - 150, 60);
     this.btnMap.eventMode = "static";
@@ -132,9 +159,9 @@ export class MobileControls extends Container implements IDisposable {
       const borderColor = pressed ? 0x00ffff : 0x00e5ff;
       mapBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
       mapBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
-      mapBg.drawCircle(0, 0, 36);
+      mapBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS);
       mapBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
-      mapBg.drawCircle(0, 0, 31);
+      mapBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS - 5);
       mapBg.endFill();
     };
     drawBtnBg(false);
@@ -174,9 +201,9 @@ export class MobileControls extends Container implements IDisposable {
     });
     this.addChild(this.btnMap);
 
-    // 11. Objectives Info Button ([i])
+    // 10. Objectives Info Button ([i])
     this.btnObjectives = new Container();
-    this.btnObjectives.position.set(screenW - 230, 60);
+    this.btnObjectives.position.set(screenW - 240, 60);
     this.btnObjectives.eventMode = "static";
     this.btnObjectives.cursor = "pointer";
 
@@ -187,9 +214,9 @@ export class MobileControls extends Container implements IDisposable {
       const borderColor = pressed ? 0x00ffff : 0x00e5ff;
       objBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
       objBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
-      objBg.drawCircle(0, 0, 36);
+      objBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS);
       objBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
-      objBg.drawCircle(0, 0, 31);
+      objBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS - 5);
       objBg.endFill();
     };
     drawObjBtnBg(false);
@@ -230,9 +257,9 @@ export class MobileControls extends Container implements IDisposable {
     });
     this.addChild(this.btnObjectives);
 
-    // 12. In-Game Debug / Dev Menu Button ([DEV])
+    // 11. In-Game Debug / Dev Menu Button ([DEV])
     this.btnDebug = new Container();
-    this.btnDebug.position.set(screenW - 310, 60);
+    this.btnDebug.position.set(screenW - 330, 60);
     this.btnDebug.eventMode = "static";
     this.btnDebug.cursor = "pointer";
 
@@ -243,9 +270,9 @@ export class MobileControls extends Container implements IDisposable {
       const borderColor = pressed ? 0x00ffff : 0x00e5ff;
       debugBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
       debugBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
-      debugBg.drawCircle(0, 0, 36);
+      debugBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS);
       debugBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
-      debugBg.drawCircle(0, 0, 31);
+      debugBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS - 5);
       debugBg.endFill();
     };
     drawDebugBtnBg(false);
@@ -285,9 +312,9 @@ export class MobileControls extends Container implements IDisposable {
     });
     this.addChild(this.btnDebug);
 
-    // 13. In-Game Pause / Options Menu Button ([||])
+    // 12. In-Game Pause / Options Menu Button ([||])
     this.btnPause = new Container();
-    this.btnPause.position.set(screenW - 390, 60);
+    this.btnPause.position.set(screenW - 420, 60);
     this.btnPause.eventMode = "static";
     this.btnPause.cursor = "pointer";
 
@@ -298,9 +325,9 @@ export class MobileControls extends Container implements IDisposable {
       const borderColor = pressed ? 0x00ffff : 0x00e5ff;
       pauseBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
       pauseBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
-      pauseBg.drawCircle(0, 0, 36);
+      pauseBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS);
       pauseBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
-      pauseBg.drawCircle(0, 0, 31);
+      pauseBg.drawCircle(0, 0, CIRCLE_BTN_RADIUS - 5);
       pauseBg.endFill();
     };
     drawPauseBtnBg(false);
@@ -344,30 +371,27 @@ export class MobileControls extends Container implements IDisposable {
     return this.btnSprint.isToggled;
   }
 
+  public get isAltFirePressed(): boolean {
+    return this.btnAltFire.isPressed;
+  }
+
   public setSprintToggled(active: boolean): void {
     this.btnSprint.setToggled(active);
   }
 
   public consumeLookDelta(): number {
-    let delta = this.lookArea.consumeDelta();
-
-    // Add continuous turn button inputs
-    if (this.btnTurnLeft.isPressed) {
-      delta -= this.buttonTurnSpeed;
-    }
-    if (this.btnTurnRight.isPressed) {
-      delta += this.buttonTurnSpeed;
-    }
-
-    return delta;
+    return this.lookArea.consumeDelta();
   }
 
   public dispose(): void {
+    if (typeof document !== "undefined" && this.onFullscreenChange) {
+      document.removeEventListener("fullscreenchange", this.onFullscreenChange);
+      this.onFullscreenChange = undefined;
+    }
     this.joystick.dispose();
     this.lookArea.dispose();
-    this.btnTurnLeft.dispose();
-    this.btnTurnRight.dispose();
     this.btnFire.dispose();
+    this.btnAltFire.dispose();
     this.btnAction.dispose();
     this.btnWeapon.dispose();
     this.btnFullscreen.dispose();
