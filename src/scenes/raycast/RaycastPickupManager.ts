@@ -797,10 +797,7 @@ export class RaycastPickupManager {
                   normalizedType.includes("chair") ||
                   normalizedType.includes("table") ||
                   normalizedType.includes("power_cell") ||
-                  normalizedType.includes("powercell") ||
-                  obj.type === "DestructableWall" ||
-                  normalizedType.includes("destructablewall") ||
-                  (layer.name && layer.name.toLowerCase().includes("doorprotector")));
+                  normalizedType.includes("powercell"));
 
               if (!isBreakable && !isDirectionalObject) {
                 this.staticObjects.push({

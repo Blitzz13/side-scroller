@@ -362,6 +362,29 @@ export class MinimapUI {
     hostileLabel.resolution = devicePixelRatio;
     hostileLabel.position.set(cursorX + 14, 2);
     this.legendContainer.addChild(hostileLabel);
+    cursorX += 66;
+
+    // 8. Objective: Gold Diamond
+    const objX = cursorX + 5;
+    const objY = 8;
+    const objR = 4.5;
+    legendGraphics.lineStyle(1.2, 0xffffff, 0.95);
+    legendGraphics.beginFill(0xffbb00, 0.95);
+    legendGraphics.moveTo(objX, objY - objR);
+    legendGraphics.lineTo(objX + objR, objY);
+    legendGraphics.lineTo(objX, objY + objR);
+    legendGraphics.lineTo(objX - objR, objY);
+    legendGraphics.closePath();
+    legendGraphics.endFill();
+    const objLabel = new Text("OBJ", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 10,
+      fontWeight: "bold",
+      fill: 0xffcc00,
+    });
+    objLabel.resolution = devicePixelRatio;
+    objLabel.position.set(cursorX + 14, 2);
+    this.legendContainer.addChild(objLabel);
 
     // Right-aligned hotkey hint
     const hintLabel = new Text("[M] / [ESC] / TAP [X] TO CLOSE", {

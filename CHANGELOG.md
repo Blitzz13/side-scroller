@@ -2,20 +2,29 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
-## [2026-11-14] - Generic Trigger Linking, Door Protector Shield Fix & Level 2/3 Asset Updates
+## [2026-11-14] - Minimap Objective Waypoints, Generic Trigger Linking, Door Protector Fix & Level 2/3 Updates
 
-### 1. Generic Trigger-to-Trigger Linking & Link Action Resolution ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts))
+### 1. Minimap Active Objective Waypoints ([`src/plugins/minimap/`](file:///D:/Projects/side-scroller/src/plugins/minimap/), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- **Fog-Independent Objective Markers**:
+  - Added `IMinimapObjectiveMarker` and `getObjectiveMarkers` on `IMinimapDataSource` (`MinimapTypes.ts`) and wired `getActiveObjectiveMarkers()` from `RaycastScene` into `RaycastMinimap`.
+  - Resolves coordinates of the current active objective across un-triggered objective `Triggers`, unbroken `Breakables`, active `DestructableWalls`, and `LevelFinish` zones for escape/extraction objectives.
+  - Draws a pulsing gold diamond beacon with halo ring in `MinimapRenderer.drawDynamicMap` without modifying or revealing surrounding `discoveredTiles`, and added the matching `OBJ` indicator to the footer legend (`MinimapUI.ts`).
+  - Lowered the minimum minimap `cellSize` clamp from `6` to `2` in `MinimapRenderer.computeMetrics` so tall maps like Level 3 (`64x96`) fit completely inside the viewport.
+- **Level 3 Objective Key Fix**:
+  - Fixed Trigger `id=146`'s `objectiveKey` in `assets/raycast/levels/level3.json` from `"fin_yourway_to_hanger"` to `"find_your_way_to_hanger"` to match `assets/raycast/levels/objectives/level3.json`.
+
+### 2. Generic Trigger-to-Trigger Linking & Link Action Resolution ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts))
 - **Trigger Enable/Disable Lifecycle**:
   - Added `enabled?: boolean` to `ITriggerZone` and exposed `getTriggerById` / `setTriggerEnabled` on `RaycastTriggerManager` and `RaycastMissionManager`.
   - Triggers targeted by another trigger with `linkAction: "enable"` now initialize disabled (`enabled = false`) and are skipped in `update` and `handleInteract` until enabled.
 - **Unified Link Resolution**:
   - Extracted `resolveLinkTargetState` in `RaycastScene.applyLinkAction` so `enable`, `disable`, and toggle actions apply uniformly to linked triggers, `DestructableWallManager` door protectors, doors, and `levelFinishZones`.
 
-### 2. Door Protector & Shield Pickup Separation ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts))
-- Skipped `DestructableWall` objects and `doorprotector` layers before pickup classification so door protectors no longer spawn duplicate/stuck pickups.
+### 3. Door Protector & Shield Pickup Separation ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts))
+- Skipped `DestructableWall` objects and `doorprotector` layers before pickup classification so door protectors no longer spawn duplicate/stuck pickups, and removed the now-unreachable duplicate checks in `isBreakable`.
 - Narrowed `isShield` image matching from `imgStr.includes("shield")` to `imgStr.includes("shield_unit")` so `assets/raycast/textures/shield.png` is not mistaken for `assets/raycast/pickups/shield_unit.png`.
 
-### 3. Weapon Config, Level Maps & Asset Updates ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`assets/raycast/levels/level2.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level2.json), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+### 4. Weapon Config, Level Maps & Asset Updates ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`assets/raycast/levels/level2.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level2.json), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
 - Adjusted `dh17Config.muzzleFlash.offsetX` from `-420` to `-315` in `RaycastWeaponConfigs.ts`.
 - Updated `level2.json`, `level3.json`, `objectives/level3.json`, `StarWarsTileset.tsx`, Level 3 dialog/audio (`dialog.json`, `prisoner_dialog_1.mp3`), weapon sprites (`dh_17_equiped.png`, `thermal_detonator.png`), and textures (`elevator_pad.jpg`, `lever_off.png`, `lever_on.jpg`, `shield.png`).
 

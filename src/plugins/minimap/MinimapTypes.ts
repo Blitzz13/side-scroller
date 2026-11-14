@@ -17,6 +17,11 @@ export interface IDiscoveredMapObject {
   stairType?: "up" | "down" | "generic";
 }
 
+export interface IMinimapObjectiveMarker {
+  x: number;
+  y: number;
+}
+
 export interface IMinimapDataSource {
   getMapWidth(): number;
   getMapHeight(): number;
@@ -28,6 +33,7 @@ export interface IMinimapDataSource {
   getThinWalls?(): Array<{ x1: number; y1: number; x2: number; y2: number }>;
   getDestructableWalls?(): Array<{ x: number; y: number; isDestroyed?: boolean }>;
   getLevelFinishZones?(): Array<{ x1: number; y1: number; x2: number; y2: number; enabled?: boolean; targetLevel?: string }>;
+  getObjectiveMarkers?(): IMinimapObjectiveMarker[];
   getPlayer(): { x: number; y: number; dirX: number; dirY: number };
   getActiveEnemies?(): Array<{ x: number; y: number; isDead?: boolean; isAlerted?: boolean }>;
   getAllies?(): Array<{ x: number; y: number; isDead?: boolean; isFollowing?: boolean }>;

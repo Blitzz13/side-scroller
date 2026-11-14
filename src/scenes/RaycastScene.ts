@@ -51,7 +51,7 @@ import floorCeilingVert from "./raycast/shaders/floorCeiling.vert";
 import floorCeilingFrag from "./raycast/shaders/floorCeiling.frag";
 import skyboxVert from "./raycast/shaders/skybox.vert";
 import skyboxFrag from "./raycast/shaders/skybox.frag";
-import { RaycastMinimap } from "../plugins/minimap";
+import { RaycastMinimap, IMinimapObjectiveMarker } from "../plugins/minimap";
 import { RaycastMissionManager, ITriggerZone, ITriggerSoundConfig } from "./raycast/objectives";
 import { SubtitleManager, RaycastSubtitles } from "./raycast/subtitles";
 import { InGameMenu } from "../ui/InGameMenu";
@@ -608,6 +608,7 @@ export class RaycastScene extends BaseScene {
       getUnlockedKeycardDoors: () => this.unlockedKeycardDoors,
       getThinWalls: () => this.allThinWalls,
       getLevelFinishZones: () => this.levelFinishZones,
+      getObjectiveMarkers: () => this.getActiveObjectiveMarkers(),
       getPlayer: () => this.player,
       getActiveEnemies: () => this.enemyManager?.activeEnemies || [],
       getAllies: () => this.allyManager?.allies || [],
@@ -6459,6 +6460,78 @@ export class RaycastScene extends BaseScene {
 
   public getPlayer(): { x: number; y: number; dirX: number; dirY: number; planeX: number; planeY: number } {
     return this.player;
+  }
+
+  /**
+   * Resolves grid-space positions for the current active objective so it can be
+   * displayed on the minimap without revealing fog-of-war tiles around it.
+   */
+  private getActiveObjectiveMarkers(): IMinimapObjectiveMarker[] {
+    const activeObj = this.missionManager?.getObjectiveManager().getCurrentActiveObjective();
+    if (!activeObj) return [];
+
+    const targetKey = activeObj.key.trim().toLowerCase();
+    const markers: IMinimapObjectiveMarker[] = [];
+
+    for (const trigger of this.missionManager?.getTriggers() || []) {
+      if (
+        !trigger.hasTriggered &&
+        (trigger.isObjective || Boolean(trigger.objectiveKey)) &&
+        trigger.objectiveKey?.trim().toLowerCase() === targetKey
+      ) {
+        markers.push({
+          x: (trigger.minX + trigger.maxX) / 2,
+          y: (trigger.minY + trigger.maxY) / 2,
+        });
+      }
+    }
+
+    for (const b of this.breakableManager?.getBreakables() || []) {
+      if (
+        !b.isBroken &&
+        (b.isObjective || Boolean(b.objectiveKey)) &&
+        b.objectiveKey?.trim().toLowerCase() === targetKey
+      ) {
+        markers.push({
+          x: b.x,
+          y: b.y,
+        });
+      }
+    }
+
+    for (const wall of this.destructableWallManager?.getWalls() || []) {
+      if (
+        wall.isActive() &&
+        (wall.isObjective || Boolean(wall.objectiveKey)) &&
+        wall.objectiveKey?.trim().toLowerCase() === targetKey
+      ) {
+        markers.push({
+          x: (wall.x1 + wall.x2) / 2,
+          y: (wall.y1 + wall.y2) / 2,
+        });
+      }
+    }
+
+    if (
+      markers.length === 0 &&
+      this.levelFinishZones.length > 0 &&
+      (targetKey === "escape" ||
+        targetKey.startsWith("escape_") ||
+        targetKey === "reach_elevator" ||
+        targetKey === "reach_exit" ||
+        targetKey.includes("extraction"))
+    ) {
+      const enabledZones = this.levelFinishZones.filter((z) => z.enabled !== false);
+      const zonesToShow = enabledZones.length > 0 ? enabledZones : this.levelFinishZones;
+      for (const z of zonesToShow) {
+        markers.push({
+          x: (z.x1 + z.x2) / 2,
+          y: (z.y1 + z.y2) / 2,
+        });
+      }
+    }
+
+    return markers;
   }
 
   public getHUD(): RaycastHUD {

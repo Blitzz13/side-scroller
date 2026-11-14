@@ -18,7 +18,7 @@ export class MinimapRenderer {
   ): IMinimapViewportMetrics {
     const cellWidth = (viewportW - 16) / mapWidth;
     const cellHeight = (viewportH - 16) / mapHeight;
-    const cellSize = Math.max(6, Math.min(cellWidth, cellHeight));
+    const cellSize = Math.max(2, Math.min(cellWidth, cellHeight));
 
     const totalMapWidth = mapWidth * cellSize;
     const totalMapHeight = mapHeight * cellSize;
@@ -427,6 +427,35 @@ export class MinimapRenderer {
         dynamicGraphics.drawCircle(allyScreenX, allyScreenY, allyRadius);
         dynamicGraphics.endFill();
       }
+    }
+
+    // 4.75 Draw Active Objective Waypoints (Always visible through fog without revealing map tiles)
+    const objectiveMarkers = dataSource.getObjectiveMarkers?.() || [];
+    for (const marker of objectiveMarkers) {
+      const objX = mapOffsetX + marker.x * cellSize;
+      const objY = mapOffsetY + marker.y * cellSize;
+      const outerRadius = Math.max(8, cellSize * (0.85 + 0.35 * pulseAlpha));
+      const diamondRadius = Math.max(5, cellSize * 0.55);
+
+      // Pulsing outer target ring
+      dynamicGraphics.lineStyle(1.5, 0xffcc00, 0.35 + 0.55 * pulseAlpha);
+      dynamicGraphics.drawCircle(objX, objY, outerRadius);
+
+      // Gold diamond beacon
+      dynamicGraphics.lineStyle(1.5, 0xffffff, 0.95);
+      dynamicGraphics.beginFill(0xffbb00, 0.95);
+      dynamicGraphics.moveTo(objX, objY - diamondRadius);
+      dynamicGraphics.lineTo(objX + diamondRadius, objY);
+      dynamicGraphics.lineTo(objX, objY + diamondRadius);
+      dynamicGraphics.lineTo(objX - diamondRadius, objY);
+      dynamicGraphics.closePath();
+      dynamicGraphics.endFill();
+
+      // Center glint
+      dynamicGraphics.lineStyle(0);
+      dynamicGraphics.beginFill(0xffffff, 1);
+      dynamicGraphics.drawCircle(objX, objY, Math.max(1.5, cellSize * 0.14));
+      dynamicGraphics.endFill();
     }
 
     // 5. Draw Player
