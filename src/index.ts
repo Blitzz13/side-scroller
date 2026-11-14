@@ -12,7 +12,7 @@ import { GameEvent } from "./enums/GameEvent";
 import { RaycastScene } from "./scenes/RaycastScene";
 import { CutsceneScene } from "./scenes/CutsceneScene";
 import { StarWarsIntroScene } from "./scenes/StarWarsIntroScene";
-import { LevelEndScene } from "./scenes/LevelEndScene";
+import { LevelEndScene, ILevelEndOptions } from "./scenes/LevelEndScene";
 import { LevelSelectScene } from "./scenes/LevelSelectScene";
 import { RaycastSaveManager } from "./scenes/raycast/RaycastSaveManager";
 import { allConfigs } from "./configs/PlayerConfigs";
@@ -110,7 +110,7 @@ function getTransitionOverlay(): Graphics {
   return transitionOverlay;
 }
 
-function buildScene(scene: Scene, nextLevel?: string): void {
+function buildScene(scene: Scene, nextLevel?: string, levelEndOptions?: ILevelEndOptions): void {
   currentScene?.dispose();
 
   if (scene !== Scene.MainMenu && scene !== Scene.LevelSelect) {
@@ -130,7 +130,7 @@ function buildScene(scene: Scene, nextLevel?: string): void {
       currentScene = new EndGame(app.stage, currentScale);
       break;
     case Scene.LevelEnd:
-      currentScene = new LevelEndScene(app.stage, currentScale, nextLevel);
+      currentScene = new LevelEndScene(app.stage, currentScale, nextLevel, levelEndOptions);
       break;
     case Scene.Intro:
       currentScene = new StarWarsIntroScene(app.stage, currentScale, nextLevel || "level1");
@@ -157,8 +157,15 @@ function buildScene(scene: Scene, nextLevel?: string): void {
   currentScene.on(Scene.Change, changeScene);
 }
 
-function changeScene(scene: Scene, nextLevel?: string, skipIntroAndCutscene?: boolean): void {
+function changeScene(
+  scene: Scene,
+  nextLevel?: string,
+  thirdArg?: boolean | ILevelEndOptions
+): void {
   if (isSceneTransitioning) return;
+
+  const skipIntroAndCutscene = thirdArg === true;
+  const levelEndOptions = typeof thirdArg === "object" && thirdArg !== null ? thirdArg : undefined;
 
   // Intercept loading level 1 to play the iconic Star Wars intro before cutscene1
   if (scene === Scene.Raycast && !skipIntroAndCutscene) {
@@ -178,7 +185,7 @@ function changeScene(scene: Scene, nextLevel?: string, skipIntroAndCutscene?: bo
     overlay.eventMode = "static";
     app.stage.addChild(overlay);
 
-    buildScene(scene, nextLevel);
+    buildScene(scene, nextLevel, levelEndOptions);
 
     let fadeElapsed = 0;
     const fadeDuration = 0.35;
@@ -213,7 +220,7 @@ function changeScene(scene: Scene, nextLevel?: string, skipIntroAndCutscene?: bo
       overlay.alpha = 1;
 
       // Swap the active scene while screen is fully black
-      buildScene(scene, nextLevel);
+      buildScene(scene, nextLevel, levelEndOptions);
       app.stage.addChild(overlay); // Ensure overlay stays on top
 
       // Smoothly fade in the new scene

@@ -2,24 +2,40 @@ import { Assets, Container, Graphics, ITextStyle, RoundedRectangle, SCALE_MODES,
 import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
 import { Scene } from "../enums/Scene";
-import { Button } from "../misc/Button";
+import { Button, IButtonOptions } from "../misc/Button";
 import { defaultButtonSize, gameConfig } from "../configs/GameConfig";
 import { RaycastSaveManager } from "./raycast/RaycastSaveManager";
 import { RaycastWeaponType } from "../enums/RaycastWeaponType";
+import { SettingsManager } from "../managers/SettingsManager";
+
+export interface ILevelEndOptions {
+  isMissionFailed?: boolean;
+  failedLevel?: string;
+  enemiesKilled?: number;
+  totalEnemies?: number;
+}
 
 export class LevelEndScene extends BaseScene {
   private nextLevel: string;
+  private isMissionFailed: boolean;
+  private musicAlias: string;
   private keydownHandler?: (e: KeyboardEvent) => void;
   private isNavigating: boolean = false;
 
-  constructor(stage: Container, scale: number, nextLevel?: string) {
+  constructor(stage: Container, scale: number, nextLevel?: string, options?: ILevelEndOptions) {
     super(stage, scale);
 
     const save = RaycastSaveManager.loadProgress();
-    this.nextLevel = nextLevel || save?.nextLevel || save?.currentLevel || "test_level";
+    this.isMissionFailed = Boolean(options?.isMissionFailed);
+    this.musicAlias = this.isMissionFailed ? "end_level" : "end_theme";
 
-    // Ensure the saved currentLevel is already set to the new level so restarting begins at the new level
-    RaycastSaveManager.setCurrentLevel(this.nextLevel);
+    if (this.isMissionFailed) {
+      this.nextLevel = options?.failedLevel || nextLevel || save?.currentLevel || "level1";
+    } else {
+      this.nextLevel = nextLevel || save?.nextLevel || save?.currentLevel || "test_level";
+      // Ensure the saved currentLevel is already set to the new level so restarting begins at the new level
+      RaycastSaveManager.setCurrentLevel(this.nextLevel);
+    }
 
     // Unlock mouse cursor from pointer lock and ensure default pointer cursor
     const unlockMouse = () => {
@@ -78,37 +94,40 @@ export class LevelEndScene extends BaseScene {
 
     // 2. Dark vignette / overlay
     const overlay = new Graphics();
-    overlay.beginFill(0x020710, 0.65);
+    overlay.beginFill(this.isMissionFailed ? 0x120206 : 0x020710, this.isMissionFailed ? 0.72 : 0.65);
     overlay.drawRect(0, 0, gameConfig.width, gameConfig.height);
     overlay.endFill();
     this.addChild(overlay);
 
-    // 3. Central Mission Complete Terminal Panel
+    // 3. Central Terminal Panel (Victory or Failure)
     const panelW = 760;
     const panelH = 540;
     const panelX = (gameConfig.width - panelW) / 2;
     const panelY = (gameConfig.height - panelH) / 2;
+    const accentColor = this.isMissionFailed ? 0xff4d4d : 0x00e5ff;
+    const panelBgColor = this.isMissionFailed ? 0x16070c : 0x060f1c;
+    const dividerColor = this.isMissionFailed ? 0x662233 : 0x1a4566;
 
     const panel = new Graphics();
     // Glassmorphism background
-    panel.beginFill(0x060f1c, 0.90);
-    panel.lineStyle({ width: 2, color: 0x00e5ff, alpha: 0.85 });
+    panel.beginFill(panelBgColor, 0.92);
+    panel.lineStyle({ width: 2, color: accentColor, alpha: 0.85 });
     panel.drawRoundedRect(panelX, panelY, panelW, panelH, 16);
     panel.endFill();
 
-    // Top glowing cyan accent bar
-    panel.beginFill(0x00e5ff, 0.9);
+    // Top glowing accent bar
+    panel.beginFill(accentColor, 0.9);
     panel.drawRoundedRect(panelX + 24, panelY + 6, panelW - 48, 3, 2);
     panel.endFill();
     this.addChild(panel);
 
     // 4. Header Titles
     this.createSharpText(
-      "[ MISSION ACCOMPLISHED ]",
+      this.isMissionFailed ? "[ MISSION FAILED ]" : "[ MISSION ACCOMPLISHED ]",
       {
         fontSize: 16,
         fontWeight: "bold",
-        fill: 0x00e5ff,
+        fill: accentColor,
         letterSpacing: 4,
       },
       gameConfig.width / 2,
@@ -118,13 +137,13 @@ export class LevelEndScene extends BaseScene {
     );
 
     this.createSharpText(
-      "SECTOR SECURED",
+      this.isMissionFailed ? "OPERATIVE FALLEN" : "SECTOR SECURED",
       {
         fontSize: 36,
         fontWeight: "900",
-        fill: ["#ffffff", "#b0f4ff"],
+        fill: this.isMissionFailed ? ["#ffffff", "#ffb0b0"] : ["#ffffff", "#b0f4ff"],
         dropShadow: true,
-        dropShadowColor: "#00e5ff",
+        dropShadowColor: this.isMissionFailed ? "#ff3333" : "#00e5ff",
         dropShadowBlur: 6,
         dropShadowDistance: 0,
         letterSpacing: 3,
@@ -137,11 +156,186 @@ export class LevelEndScene extends BaseScene {
 
     // 5. Divider
     const divider = new Graphics();
-    divider.lineStyle(1, 0x1a4566, 0.7);
+    divider.lineStyle(1, dividerColor, 0.7);
     divider.moveTo(panelX + 40, panelY + 98);
     divider.lineTo(panelX + panelW - 40, panelY + 98);
     this.addChild(divider);
 
+    if (this.isMissionFailed) {
+      this.renderFailureContent(panelX, panelY, panelW, options);
+    } else {
+      this.renderVictoryContent(panelX, panelY, panelW, save);
+    }
+
+    // 8. Navigation Action Buttons
+    const btnWidth = 230;
+    const btnHeight = 55;
+    const btnSize = new RoundedRectangle(0, 0, btnWidth, btnHeight, 14);
+    const btnOptions: IButtonOptions = this.isMissionFailed
+      ? {
+          fillColor: 0x1e060b,
+          strokeColor: 0xff4d4d,
+          textColor: 0xff6666,
+        }
+      : {};
+
+    const mainMenuButton = new Button(btnSize, "Main Menu", btnOptions);
+    const primaryButton = new Button(
+      btnSize,
+      this.isMissionFailed ? "Retry Mission" : "Next Level",
+      btnOptions
+    );
+
+    const btnGap = 40;
+    const totalBtnW = btnWidth * 2 + btnGap;
+    const startBtnX = (gameConfig.width - totalBtnW) / 2;
+    const btnY = panelY + panelH - 95;
+
+    mainMenuButton.position.set(startBtnX, btnY);
+    primaryButton.position.set(startBtnX + btnWidth + btnGap, btnY);
+
+    mainMenuButton.eventMode = "static";
+    mainMenuButton.cursor = "pointer";
+    primaryButton.eventMode = "static";
+    primaryButton.cursor = "pointer";
+
+    mainMenuButton.on("pointertap", (e) => {
+      e?.stopPropagation?.();
+      this.goToMainMenu();
+    });
+
+    primaryButton.on("pointertap", (e) => {
+      e?.stopPropagation?.();
+      this.handlePrimaryAction();
+    });
+
+    this.addChild(mainMenuButton);
+    this.addChild(primaryButton);
+
+    // Keyboard controls
+    this.keydownHandler = (e: KeyboardEvent) => {
+      if (this.isNavigating) return;
+      if (e.key === "Enter" || e.key === " " || e.key.toLowerCase() === "e") {
+        this.handlePrimaryAction();
+      } else if (e.key === "Escape") {
+        this.goToMainMenu();
+      }
+    };
+    window.addEventListener("keydown", this.keydownHandler);
+
+    // Play appropriate end audio (victory: end_theme, failure: end_level)
+    try {
+      const musicVol = SettingsManager.getInstance().getMusicVolume();
+      if (sound.exists(this.musicAlias)) {
+        sound.play(this.musicAlias, { volume: musicVol });
+      }
+    } catch {}
+  }
+
+  private renderFailureContent(
+    panelX: number,
+    panelY: number,
+    panelW: number,
+    options?: ILevelEndOptions
+  ): void {
+    const failedName = this.nextLevel.toUpperCase();
+    const kills = options?.enemiesKilled ?? 0;
+    const total = options?.totalEnemies ?? 0;
+    const killsStr = total > 0 ? `${kills} / ${total}` : `${kills}`;
+
+    this.createSharpText(
+      `SECTOR: ${failedName}`,
+      {
+        fontSize: 18,
+        fill: 0xff9999,
+        fontWeight: "bold",
+        letterSpacing: 1,
+      },
+      panelX + 48,
+      panelY + 112
+    );
+
+    this.createSharpText(
+      `HOSTILES NEUTRALIZED: ${killsStr}`,
+      {
+        fontSize: 18,
+        fill: 0xffcc66,
+        fontWeight: "bold",
+        letterSpacing: 1,
+      },
+      panelX + panelW - 48,
+      panelY + 112,
+      1,
+      0
+    );
+
+    // Tactical Memorial / Debrief Box
+    const msgBox = new Graphics();
+    const boxW = panelW - 80;
+    const boxH = 246;
+    const boxX = panelX + 40;
+    const boxY = panelY + 148;
+    msgBox.beginFill(0x0d0408, 0.88);
+    msgBox.lineStyle(1.5, 0x882233, 0.75);
+    msgBox.drawRoundedRect(boxX, boxY, boxW, boxH, 10);
+    msgBox.endFill();
+    this.addChild(msgBox);
+
+    this.createSharpText(
+      "TRANSMISSION // REBELLION COMMAND",
+      {
+        fontSize: 14,
+        fill: 0xff6677,
+        fontWeight: "bold",
+        letterSpacing: 2,
+      },
+      gameConfig.width / 2,
+      boxY + 26,
+      0.5,
+      0
+    );
+
+    this.createSharpText(
+      "You died in the name of the Rebellion.\nYou fought valiantly, but failed.",
+      {
+        fontSize: 24,
+        fontWeight: "bold",
+        fill: 0xffffff,
+        align: "center",
+        lineHeight: 38,
+        wordWrap: true,
+        wordWrapWidth: boxW - 64,
+        dropShadow: true,
+        dropShadowColor: 0x000000,
+        dropShadowDistance: 2,
+      },
+      gameConfig.width / 2,
+      boxY + boxH / 2 + 4,
+      0.5,
+      0.5
+    );
+
+    this.createSharpText(
+      "Regroup and strike back for the Alliance.",
+      {
+        fontSize: 15,
+        fill: 0xcc8899,
+        fontStyle: "italic",
+        letterSpacing: 0.5,
+      },
+      gameConfig.width / 2,
+      boxY + boxH - 36,
+      0.5,
+      0
+    );
+  }
+
+  private renderVictoryContent(
+    panelX: number,
+    panelY: number,
+    panelW: number,
+    save: ReturnType<typeof RaycastSaveManager.loadProgress>
+  ): void {
     // 6. Level Info & Stats Display
     const completedName = (save?.previousLevel || "LEVEL 1").toUpperCase();
     const targetName = this.nextLevel.toUpperCase();
@@ -297,58 +491,6 @@ export class LevelEndScene extends BaseScene {
       boxX + 24,
       boxY + boxH - 28
     );
-
-    // 8. Navigation Action Buttons
-    const btnWidth = 230;
-    const btnHeight = 55;
-    const btnSize = new RoundedRectangle(0, 0, btnWidth, btnHeight, 14);
-
-    const mainMenuButton = new Button(btnSize, "Main Menu");
-    const nextLevelButton = new Button(btnSize, "Next Level");
-
-    const btnGap = 40;
-    const totalBtnW = btnWidth * 2 + btnGap;
-    const startBtnX = (gameConfig.width - totalBtnW) / 2;
-    const btnY = panelY + panelH - 95;
-
-    mainMenuButton.position.set(startBtnX, btnY);
-    nextLevelButton.position.set(startBtnX + btnWidth + btnGap, btnY);
-
-    mainMenuButton.eventMode = "static";
-    mainMenuButton.cursor = "pointer";
-    nextLevelButton.eventMode = "static";
-    nextLevelButton.cursor = "pointer";
-
-    mainMenuButton.on("pointertap", (e) => {
-      e?.stopPropagation?.();
-      this.goToMainMenu();
-    });
-
-    nextLevelButton.on("pointertap", (e) => {
-      e?.stopPropagation?.();
-      this.playNextLevel();
-    });
-
-    this.addChild(mainMenuButton);
-    this.addChild(nextLevelButton);
-
-    // Keyboard controls
-    this.keydownHandler = (e: KeyboardEvent) => {
-      if (this.isNavigating) return;
-      if (e.key === "Enter" || e.key === " " || e.key.toLowerCase() === "e") {
-        this.playNextLevel();
-      } else if (e.key === "Escape") {
-        this.goToMainMenu();
-      }
-    };
-    window.addEventListener("keydown", this.keydownHandler);
-
-    // Play victory music/sound
-    try {
-      if (sound.exists("end_level")) {
-        sound.play("end_level", { volume: 0.5 });
-      }
-    } catch {}
   }
 
   private playButtonClick(): void {
@@ -376,12 +518,16 @@ export class LevelEndScene extends BaseScene {
     this.emit(Scene.Change, Scene.MainMenu);
   }
 
-  private playNextLevel(): void {
+  private handlePrimaryAction(): void {
     if (this.isNavigating) return;
     this.isNavigating = true;
     this.playButtonClick();
-    RaycastSaveManager.setCurrentLevel(this.nextLevel);
-    this.emit(Scene.Change, Scene.Raycast, this.nextLevel);
+    if (this.isMissionFailed) {
+      this.emit(Scene.Change, Scene.Raycast, this.nextLevel, true);
+    } else {
+      RaycastSaveManager.setCurrentLevel(this.nextLevel);
+      this.emit(Scene.Change, Scene.Raycast, this.nextLevel);
+    }
   }
 
   private createSharpText(
@@ -403,7 +549,7 @@ export class LevelEndScene extends BaseScene {
     t.resolution = textRes;
     t.roundPixels = true;
     if (t.texture && t.texture.baseTexture) {
-      t.texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      t.texture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
     }
     t.anchor.set(anchorX, anchorY);
     t.position.set(Math.round(x), Math.round(y));
@@ -413,8 +559,8 @@ export class LevelEndScene extends BaseScene {
 
   public dispose(): void {
     try {
-      if (sound.exists("end_level")) {
-        sound.stop("end_level");
+      if (sound.exists(this.musicAlias)) {
+        sound.stop(this.musicAlias);
       }
     } catch {}
 

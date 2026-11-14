@@ -50,6 +50,15 @@ This document logs recent development changes and enhancements made to the Rayca
   - Standardized all mobile circle buttons (`btnFire`, `btnAltFire`, `btnAction`, `btnWeapon`, `btnSprint`, `btnFullscreen`, `btnMap`, `btnObjectives`, `btnDebug`, `btnPause`) to `CIRCLE_BTN_RADIUS = 40` with `CIRCLE_ICON_SIZE = 42`.
   - Updated `RaycastHUD.setPrompt()` on mobile to strip `[E]` / `[E / TAP]` / `PRESS [E]` text and display the `interact_icon` sprite inline.
 
+### 7. Player Death Handling & Mission Failure End Screen ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts), [`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts))
+- **Player Death Lifecycle**:
+  - Added `isDead` state and `onPlayerDeath` callback to `RaycastPlayerController.takeDamage()` triggered when `health <= 0` (unless God Mode is enabled).
+  - Wired `onPlayerDeath` in `RaycastScene` to `handlePlayerDeath()`, halting game updates/shooting via `isLevelTransitioning`, disabling controls, stopping alert audio, flashing red, unlocking the pointer, and transitioning to `Scene.LevelEnd` with `{ isMissionFailed: true, failedLevel, enemiesKilled, totalEnemies }` without saving `0 HP` to `RaycastSaveManager`.
+- **Failure & Victory End Screen + Audio**:
+  - Forwarded `ILevelEndOptions` through `changeScene` and `buildScene` in `src/index.ts` (preserving `skipIntroAndCutscene` when retrying a level).
+  - Updated `LevelEndScene` to render a crimson `[ MISSION FAILED ]` / `OPERATIVE FALLEN` screen with `"You died in the name of the Rebellion. You fought valiantly, but failed."`, red-styled **Main Menu** and **Retry Mission** buttons, and `end_level.mp3` playback.
+  - Switched mission completion (`!isMissionFailed`) in `LevelEndScene` to play `end_theme.mp3`, added `"end_level"` to `MUSIC_TRACK_ALIASES` in `SettingsManager`, and switched `LevelEndScene.createSharpText()` to `SCALE_MODES.LINEAR`.
+
 ## [2026-11-13] - Trigger Sound System, Lever Mechanics, Level 3 Audio & Mobile Control Fixes
 
 ### 1. Tiled Trigger Sound System & Background Music Override ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts), [`src/configs/SoundConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SoundConfig.ts))

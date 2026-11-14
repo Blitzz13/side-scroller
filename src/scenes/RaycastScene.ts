@@ -547,6 +547,7 @@ export class RaycastScene extends BaseScene {
     this.addChild(this.hud);
 
     this.playerController = new RaycastPlayerController(this.weaponView, this.hud);
+    this.playerController.onPlayerDeath = () => this.handlePlayerDeath();
     this.pickupManager = new RaycastPickupManager(this.animatedPickupContainer);
     this.breakableManager = new RaycastBreakableManager();
     this.destructableWallManager = new DestructableWallManager();
@@ -3446,7 +3447,7 @@ export class RaycastScene extends BaseScene {
   };
 
   private tryShoot(isAutoFire: boolean = false): void {
-    if (this.isPaused) return;
+    if (this.isPaused || this.isLevelTransitioning) return;
     if (this.debugMenu?.isVisibleOpen) return;
     if (this.stairsManager && this.stairsManager.isTransitioning()) return;
     const currentCfg = this.playerController.weaponConfig;
@@ -3924,7 +3925,7 @@ export class RaycastScene extends BaseScene {
   };
 
   private tick(delta: number) {
-    if (this.isPaused || this.isLevelLoading) {
+    if (this.isPaused || this.isLevelLoading || this.isLevelTransitioning) {
       return;
     }
     // Screen shake update (only shakes the 3D world, keeping HUD and overlays steady)
@@ -4296,6 +4297,36 @@ export class RaycastScene extends BaseScene {
     );
 
     this.emit(Scene.Change, Scene.LevelEnd, targetLevel);
+  }
+
+  private handlePlayerDeath(): void {
+    if (this.isLevelTransitioning) return;
+    this.isLevelTransitioning = true;
+    this.isLeftMouseDown = false;
+    this.isRightMouseDown = false;
+    this.removeControls();
+    this.stopAlertAudio();
+
+    const kills = this.enemyManager ? this.enemyManager.killedEnemies : 0;
+    const total = this.enemyManager ? this.enemyManager.totalEnemies : 0;
+
+    this.hud?.setPrompt(null);
+    this.hud?.flashScreen(0xff0000, 0.75);
+    this.subtitles?.clear();
+
+    // Unlock mouse cursor so player can click Retry Mission / Main Menu
+    try {
+      if (document.exitPointerLock) {
+        document.exitPointerLock();
+      }
+    } catch {}
+
+    this.emit(Scene.Change, Scene.LevelEnd, this.currentLevel, {
+      isMissionFailed: true,
+      failedLevel: this.currentLevel,
+      enemiesKilled: kills,
+      totalEnemies: total,
+    });
   }
 
   private tryMove(newX: number, newY: number): boolean {

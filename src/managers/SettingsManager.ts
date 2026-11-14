@@ -21,7 +21,8 @@ const MUSIC_TRACK_ALIASES = [
   "calm_loop",
   "base_alarm",
   "intro_theme",
-  "end_theme"
+  "end_theme",
+  "end_level"
 ];
 
 export class SettingsManager {

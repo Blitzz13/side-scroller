@@ -22,6 +22,8 @@ export class RaycastPlayerController {
   private readonly STEP_DISTANCE_THRESHOLD: number = 0.58;
   private currentSurface: "default" | "water" = "default";
   private _isGodMode: boolean = false;
+  private isDead: boolean = false;
+  public onPlayerDeath?: () => void;
 
   public get isGodMode(): boolean {
     return this._isGodMode;
@@ -216,7 +218,7 @@ export class RaycastPlayerController {
   }
 
   public takeDamage(amount: number): void {
-    if (this._isGodMode) return;
+    if (this._isGodMode || this.isDead) return;
     if (amount <= 0) return;
 
     let healthDamage = amount;
@@ -241,6 +243,11 @@ export class RaycastPlayerController {
     } else {
       // Red flash on pure health damage
       this.hud.flashScreen(0xff0000, 0.35);
+    }
+
+    if (this.state.health <= 0) {
+      this.isDead = true;
+      this.onPlayerDeath?.();
     }
   }
 
