@@ -4865,6 +4865,12 @@ export class RaycastScene extends BaseScene {
     }
   }
 
+  private resolveLinkTargetState(normAction: string, currentState: boolean): boolean {
+    if (normAction === "enable") return true;
+    if (normAction === "disable") return false;
+    return !currentState;
+  }
+
   public applyLinkAction(
     linkIds: (string | number)[],
     action: string = "disable",
@@ -4872,26 +4878,33 @@ export class RaycastScene extends BaseScene {
   ): void {
     if (!linkIds || linkIds.length === 0) return;
     const normAction = (action || "disable").toLowerCase();
+    const shouldPlayDoorSound = !this.hasTriggerSound(sourceTrigger);
 
     for (const rawId of linkIds) {
       const numId = Number(rawId);
       const strId = String(rawId).trim();
 
-      // 1. Check DestructableWallManager (door protectors / security barriers by ID)
+      // 0. Linked Triggers
+      const linkedTrigger = this.missionManager?.getTriggerById(strId);
+      if (linkedTrigger && linkedTrigger !== sourceTrigger) {
+        this.missionManager.setTriggerEnabled(
+          strId,
+          this.resolveLinkTargetState(normAction, linkedTrigger.enabled ?? true)
+        );
+        continue;
+      }
+
+      // 1. DestructableWallManager (door protectors / security barriers by ID)
       let isDoorProtector = false;
-      const shouldPlayDoorSound = !this.hasTriggerSound(sourceTrigger);
       if (this.destructableWallManager) {
         const wall = this.destructableWallManager.getWallById(strId);
         if (wall) {
           isDoorProtector = true;
-          if (normAction === "enable") {
-            this.destructableWallManager.setWallActiveById(wall.id, true, shouldPlayDoorSound);
-          } else if (normAction === "disable") {
-            this.destructableWallManager.setWallActiveById(wall.id, false, shouldPlayDoorSound);
-          } else {
-            const nextActive = !wall.isActive();
-            this.destructableWallManager.setWallActiveById(wall.id, nextActive, shouldPlayDoorSound);
-          }
+          this.destructableWallManager.setWallActiveById(
+            wall.id,
+            this.resolveLinkTargetState(normAction, wall.isActive()),
+            shouldPlayDoorSound
+          );
         }
       }
 
@@ -4945,23 +4958,16 @@ export class RaycastScene extends BaseScene {
                 }
               } else {
                 // Non-protector controlled doors (elevators / mechanisms)
-                if (normAction === "enable") {
-                  // Enabling a door unlocks it and opens it
+                const shouldEnable = this.resolveLinkTargetState(
+                  normAction,
+                  !this.disabledDoors.has(doorKey)
+                );
+                if (shouldEnable) {
                   this.disabledDoors.delete(doorKey);
                   this.openDoorAt(gx, gy, shouldPlayDoorSound);
-                } else if (normAction === "disable") {
-                  // Disabling a door locks it shut
+                } else {
                   this.disabledDoors.add(doorKey);
                   this.closeDoorAt(gx, gy, shouldPlayDoorSound);
-                } else {
-                  // Toggle
-                  if (this.disabledDoors.has(doorKey)) {
-                    this.disabledDoors.delete(doorKey);
-                    this.openDoorAt(gx, gy, shouldPlayDoorSound);
-                  } else {
-                    this.disabledDoors.add(doorKey);
-                    this.closeDoorAt(gx, gy, shouldPlayDoorSound);
-                  }
                 }
               }
             }
@@ -4972,13 +4978,11 @@ export class RaycastScene extends BaseScene {
         if (this.destructableWallManager) {
           for (const wall of this.destructableWallManager.getWalls()) {
             if (wall.gridX >= minGx && wall.gridX <= maxGx && wall.gridY >= minGy && wall.gridY <= maxGy) {
-              if (normAction === "enable") {
-                this.destructableWallManager.setWallActiveById(wall.id, true);
-              } else if (normAction === "disable") {
-                this.destructableWallManager.setWallActiveById(wall.id, false);
-              } else {
-                this.destructableWallManager.setWallActiveById(wall.id, !wall.isActive());
-              }
+              this.destructableWallManager.setWallActiveById(
+                wall.id,
+                this.resolveLinkTargetState(normAction, wall.isActive()),
+                shouldPlayDoorSound
+              );
             }
           }
         }
@@ -4987,18 +4991,15 @@ export class RaycastScene extends BaseScene {
       // 3. Check level finish zones
       for (const zone of this.levelFinishZones) {
         if ((zone.id !== undefined && String(zone.id) === strId) || zone.targetLevel === strId) {
-          if (normAction === "disable") {
-            zone.enabled = false;
-          } else {
-            const wasDisabled = zone.enabled === false;
-            zone.enabled = true;
-            if (wasDisabled) {
-              this.hud.showToast("[★] Exit Sector Unlocked!", 0x00ffcc);
-              if (!this.hasTriggerSound(sourceTrigger)) {
-                try {
-                  sound.play("door_1", { volume: 0.5 });
-                } catch {}
-              }
+          const wasDisabled = zone.enabled === false;
+          const nextEnabled = this.resolveLinkTargetState(normAction, zone.enabled !== false);
+          zone.enabled = nextEnabled;
+          if (nextEnabled && wasDisabled) {
+            this.hud.showToast("[★] Exit Sector Unlocked!", 0x00ffcc);
+            if (shouldPlayDoorSound) {
+              try {
+                sound.play("door_1", { volume: 0.5 });
+              } catch {}
             }
           }
         }

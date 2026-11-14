@@ -2,6 +2,23 @@
 
 This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
 
+## [2026-11-14] - Generic Trigger Linking, Door Protector Shield Fix & Level 2/3 Asset Updates
+
+### 1. Generic Trigger-to-Trigger Linking & Link Action Resolution ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts))
+- **Trigger Enable/Disable Lifecycle**:
+  - Added `enabled?: boolean` to `ITriggerZone` and exposed `getTriggerById` / `setTriggerEnabled` on `RaycastTriggerManager` and `RaycastMissionManager`.
+  - Triggers targeted by another trigger with `linkAction: "enable"` now initialize disabled (`enabled = false`) and are skipped in `update` and `handleInteract` until enabled.
+- **Unified Link Resolution**:
+  - Extracted `resolveLinkTargetState` in `RaycastScene.applyLinkAction` so `enable`, `disable`, and toggle actions apply uniformly to linked triggers, `DestructableWallManager` door protectors, doors, and `levelFinishZones`.
+
+### 2. Door Protector & Shield Pickup Separation ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts))
+- Skipped `DestructableWall` objects and `doorprotector` layers before pickup classification so door protectors no longer spawn duplicate/stuck pickups.
+- Narrowed `isShield` image matching from `imgStr.includes("shield")` to `imgStr.includes("shield_unit")` so `assets/raycast/textures/shield.png` is not mistaken for `assets/raycast/pickups/shield_unit.png`.
+
+### 3. Weapon Config, Level Maps & Asset Updates ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`assets/raycast/levels/level2.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level2.json), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- Adjusted `dh17Config.muzzleFlash.offsetX` from `-420` to `-315` in `RaycastWeaponConfigs.ts`.
+- Updated `level2.json`, `level3.json`, `objectives/level3.json`, `StarWarsTileset.tsx`, Level 3 dialog/audio (`dialog.json`, `prisoner_dialog_1.mp3`), weapon sprites (`dh_17_equiped.png`, `thermal_detonator.png`), and textures (`elevator_pad.jpg`, `lever_off.png`, `lever_on.jpg`, `shield.png`).
+
 ## [2026-11-13] - Trigger Sound System, Lever Mechanics, Level 3 Audio & Mobile Control Fixes
 
 ### 1. Tiled Trigger Sound System & Background Music Override ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts), [`src/configs/SoundConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SoundConfig.ts))

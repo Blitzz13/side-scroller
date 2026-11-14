@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="55" columns="0" tilerendersize="grid">
+<tileset version="1.10" tiledversion="1.12.2" name="StarWarsTileset" tilewidth="2048" tileheight="2048" tilecount="57" columns="0" tilerendersize="grid">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0" type="Tile">
   <properties>
@@ -217,11 +217,7 @@
  <tile id="49">
   <image source="assets/raycast/textures/sewer_ceiling.jpg" width="2048" height="2048"/>
  </tile>
-  <tile id="50" type="Tile">
-  <properties>
-   <property name="open" propertytype="DoorOpen" value="Up"/>
-   <property name="tileType" propertytype="TileType" value="door"/>
-  </properties>
+ <tile id="50" type="Tile">
   <image source="assets/raycast/textures/sewer_door.jpg" width="2048" height="2048"/>
  </tile>
  <tile id="51" type="Tile">
@@ -232,21 +228,27 @@
   <image source="assets/raycast/textures/sewer_waterfall.png" width="678" height="678"/>
  </tile>
  <tile id="52">
-  <image source="assets/raycast/textures/worn_stairs_up.jpg" width="2048" height="2048"/>
+  <image source="../../../side-scroller/assets/raycast/textures/worn_stairs_up.jpg" width="2048" height="2048"/>
  </tile>
  <tile id="53">
-  <image source="assets/raycast/textures/worn_stairs_down.jpg" width="2048" height="2048"/>
+  <image source="../../../side-scroller/assets/raycast/textures/worn_stairs_down.jpg" width="2048" height="2048"/>
  </tile>
  <tile id="54">
   <image source="assets/raycast/enemies/prisoner.png" width="35" height="69"/>
  </tile>
  <tile id="55">
-  <image source="assets/raycast/decorations/at_st.png" width="4268" height="1647"/>
+  <image source="assets/raycast/enemies/at_st.png" width="54" height="102"/>
  </tile>
  <tile id="56">
-  <image source="assets/raycast/decorations/tie_fighter.png" width="2546" height="2006"/>
+  <image source="assets/raycast/enemies/tie_fighter.png" width="46" height="66"/>
  </tile>
  <tile id="57">
-  <image source="assets/raycast/decorations/tie_bomber.png" width="3466" height="2045"/>
+  <image source="assets/raycast/enemies/tie_bomber.png" width="67" height="61"/>
+ </tile>
+ <tile id="58">
+  <image source="assets/raycast/textures/elevator_pad.jpg" width="2048" height="2048"/>
+ </tile>
+ <tile id="59" type="Tile">
+  <image source="assets/raycast/textures/shield.png" width="1146" height="1146"/>
  </tile>
 </tileset>

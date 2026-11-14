@@ -232,6 +232,7 @@ export class RaycastTriggerManager extends utils.EventEmitter {
           isObjective,
           hasTriggered: false,
           isPlayerInside: false,
+          enabled: true,
           linkAction,
           linkIds,
           wait,
@@ -241,6 +242,18 @@ export class RaycastTriggerManager extends utils.EventEmitter {
         };
 
         this.triggers.push(triggerZone);
+      }
+    }
+
+    // Any trigger targeted by another trigger with action "enable" starts disabled
+    for (const source of this.triggers) {
+      if (source.linkAction === "enable" && source.linkIds && source.linkIds.length > 0) {
+        for (const lid of source.linkIds) {
+          const target = this.getTriggerById(lid);
+          if (target && target !== source) {
+            target.enabled = false;
+          }
+        }
       }
     }
 
@@ -296,6 +309,11 @@ export class RaycastTriggerManager extends utils.EventEmitter {
     let activeInteractiveInside: ITriggerZone | null = null;
 
     for (const trigger of this.triggers) {
+      if (trigger.enabled === false) {
+        trigger.isPlayerInside = false;
+        continue;
+      }
+
       // Check if wait timer completed
       if (trigger.isWaitRunning && trigger.waitEndTime && Date.now() >= trigger.waitEndTime) {
         this.completeTriggerWait(trigger);
@@ -327,7 +345,16 @@ export class RaycastTriggerManager extends utils.EventEmitter {
       }
 
       if (isInside && trigger.shouldBePressed && (!trigger.hasTriggered || trigger.isWaitRunning)) {
-        activeInteractiveInside = trigger;
+        const hasPromptDetails = (t: ITriggerZone) => Boolean(t.displayMessage || t.isObjective);
+        if (
+          !activeInteractiveInside ||
+          trigger.isWaitRunning ||
+          (!activeInteractiveInside.isWaitRunning &&
+            hasPromptDetails(trigger) &&
+            !hasPromptDetails(activeInteractiveInside))
+        ) {
+          activeInteractiveInside = trigger;
+        }
       }
     }
 
@@ -406,17 +433,25 @@ export class RaycastTriggerManager extends utils.EventEmitter {
   }
 
   public handleInteract(): boolean {
-    if (this.currentInsideInteractiveTrigger) {
-      const trigger = this.currentInsideInteractiveTrigger;
-      if (trigger.isWaitRunning && trigger.waitEndTime) {
-        const remainingSec = Math.max(1, Math.ceil((trigger.waitEndTime - Date.now()) / 1000));
-        this.callbacks.showToast?.(`[⏳] Please wait, in progress... (${remainingSec}s)`, 0xffaa00, 1.5);
-        return true;
-      }
+    const insideInteractive = this.triggers.filter(
+      (t) => t.enabled !== false && t.isPlayerInside && t.shouldBePressed && (!t.hasTriggered || t.isWaitRunning)
+    );
+    if (insideInteractive.length === 0) return false;
+
+    let firedAny = false;
+    for (const trigger of insideInteractive) {
       if (!trigger.hasTriggered) {
         this.fireTrigger(trigger);
-        return true;
+        firedAny = true;
       }
+    }
+    if (firedAny) return true;
+
+    const waiting = insideInteractive.find((t) => t.isWaitRunning && t.waitEndTime);
+    if (waiting && waiting.waitEndTime) {
+      const remainingSec = Math.max(1, Math.ceil((waiting.waitEndTime - Date.now()) / 1000));
+      this.callbacks.showToast?.(`[⏳] Please wait, in progress... (${remainingSec}s)`, 0xffaa00, 1.5);
+      return true;
     }
     return false;
   }
@@ -643,6 +678,18 @@ export class RaycastTriggerManager extends utils.EventEmitter {
 
   public getTriggers(): ITriggerZone[] {
     return this.triggers;
+  }
+
+  public getTriggerById(id: number | string): ITriggerZone | undefined {
+    const strId = String(id).trim();
+    return this.triggers.find((t) => String(t.id) === strId);
+  }
+
+  public setTriggerEnabled(id: number | string, enabled: boolean): boolean {
+    const target = this.getTriggerById(id);
+    if (!target) return false;
+    target.enabled = enabled;
+    return true;
   }
 
   public dispose(): void {

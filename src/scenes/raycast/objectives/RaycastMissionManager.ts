@@ -37,6 +37,14 @@ export class RaycastMissionManager {
     return this.triggerManager.getTriggers();
   }
 
+  public getTriggerById(id: number | string): ITriggerZone | undefined {
+    return this.triggerManager.getTriggerById(id);
+  }
+
+  public setTriggerEnabled(id: number | string, enabled: boolean): boolean {
+    return this.triggerManager.setTriggerEnabled(id, enabled);
+  }
+
   public isWaitRunning(): boolean {
     return this.triggerManager.getTriggers().some((t) => Boolean(t.isWaitRunning));
   }

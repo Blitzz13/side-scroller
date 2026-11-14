@@ -18,6 +18,12 @@
     "description": "Rescue the captive from their cell."
   },
   {
+    "id": "find_your_way_to_hanger",
+    "key": "find_your_way_to_hanger",
+    "title": "Find Your Way to the Hangar",
+    "description": "Navigate through the facility to reach the extraction hangar."
+  },
+  {
     "id": "disable_hanger_shield",
     "key": "disable_hanger_shield",
     "title": "Disable Hangar Shield",

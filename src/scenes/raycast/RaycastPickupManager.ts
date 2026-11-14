@@ -656,6 +656,15 @@ export class RaycastPickupManager {
               return;
             }
 
+            const isDoorProtector =
+              obj.type === "DestructableWall" ||
+              normalizedType.includes("destructablewall") ||
+              (layer.name && layer.name.toLowerCase().includes("doorprotector"));
+
+            if (isDoorProtector) {
+              return;
+            }
+
             const isKeycard =
               normalizedType.includes("keycard") ||
               normalizedType.includes("card") ||
@@ -672,7 +681,7 @@ export class RaycastPickupManager {
 
             const isShield =
               normalizedType.includes("shield") ||
-              imgStr.includes("shield") ||
+              imgStr.includes("shield_unit") ||
               (obj.name && obj.name.toLowerCase().includes("shield"));
 
             const isPickup =

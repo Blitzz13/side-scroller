@@ -112,7 +112,7 @@ export const dh17Config: IRaycastWeaponConfig = {
   anchorY: 0.85,
   muzzleFlash: {
     enabled: true,
-    offsetX: -420,
+    offsetX: -315,
     offsetY: -506,
     followRotation: true,
     duration: 5,

@@ -30,6 +30,7 @@ export interface ITriggerZone {
   isObjective?: boolean;
   hasTriggered: boolean;
   isPlayerInside: boolean;
+  enabled?: boolean;
   linkAction?: string;
   linkIds?: string[];
   wait?: {
