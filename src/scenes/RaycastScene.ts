@@ -5098,13 +5098,10 @@ export class RaycastScene extends BaseScene {
               const shouldPlayDoorSound = !this.hasTriggerSound(sourceTrigger);
               if (isDoorProtector) {
                 // When acting on a door protector / security barrier:
-                // "disable" deactivates the barrier and OPENS/ENABLES the door!
-                // It should NEVER lock the door shut or mark it offline!
+                // "disable" only deactivates the barrier and ensures the door is not marked offline;
+                // it must NEVER automatically open or close the door behind the barrier.
                 if (normAction === "disable") {
                   this.disabledDoors.delete(doorKey);
-                  this.openDoorAt(gx, gy, shouldPlayDoorSound);
-                } else if (normAction === "enable") {
-                  this.closeDoorAt(gx, gy, shouldPlayDoorSound);
                 }
               } else {
                 // Non-protector controlled doors (elevators / mechanisms)
@@ -5125,7 +5122,7 @@ export class RaycastScene extends BaseScene {
         }
 
         // Also disable/enable any DestructableWall barriers within limits of the linked object
-        if (this.destructableWallManager) {
+        if (!isDoorProtector && this.destructableWallManager) {
           for (const wall of this.destructableWallManager.getWalls()) {
             if (wall.gridX >= minGx && wall.gridX <= maxGx && wall.gridY >= minGy && wall.gridY <= maxGy) {
               this.destructableWallManager.setWallActiveById(

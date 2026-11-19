@@ -19,12 +19,14 @@ uniform vec4 uCeilingBounds; // [minCeilX, minCeilY, maxCeilX, maxCeilY]
 uniform sampler2D uWallBoundsTex; // 1280x1 RGBA: R = wallTop/screenH, G = wallBottom/screenH
 uniform float uSkyActive; // 1.0 when the skybox mesh is rendered behind this mesh
 
-// Output for ceiling cells with no ceiling tile: keep the skybox behind (transparent) or opaque fallback
+const vec3 FLOOR_FOG = vec3(0.036);
+
+// Output for ceiling cells with no ceiling tile: keep the skybox behind (transparent) or dark fog fallback
 vec4 openCeiling() {
     if (uSkyActive > 0.5) {
         return vec4(0.0);
     }
-    return vec4(vec3(211.0 / 255.0), 1.0);
+    return vec4(FLOOR_FOG, 1.0);
 }
 
 void main(void) {
@@ -38,20 +40,23 @@ void main(void) {
     bool isCeiling = vTextureCoord.y < 0.5;
     float p = isCeiling ? (0.5 - vTextureCoord.y) : (vTextureCoord.y - 0.5);
     vec2 rayDir = uDir + (2.0 * vTextureCoord.x - 1.0) * uPlane;
-    vec3 floorFog = vec3(0.036);
 
     if (p <= 0.0001) {
-        gl_FragColor = isCeiling ? openCeiling() : vec4(floorFog, 1.0);
+        gl_FragColor = vec4(FLOOR_FOG, 1.0);
         return;
     }
 
     float rowDist = 0.5 / p;
+    if (rowDist > uMaxDist) {
+        gl_FragColor = vec4(FLOOR_FOG, 1.0);
+        return;
+    }
+
     vec2 worldPos = uPlayerPos + rowDist * rayDir;
     float shade = clamp(1.0 - rowDist * (0.75 / uMaxDist), 0.18, 1.0);
 
     if (isCeiling) {
         if (
-            rowDist > uMaxDist ||
             uCeilingBounds.z <= uCeilingBounds.x ||
             worldPos.x < uCeilingBounds.x ||
             worldPos.y < uCeilingBounds.y ||
@@ -79,11 +84,6 @@ void main(void) {
         vec4 texColor = texture2D(uAtlas, atlasUv);
         gl_FragColor = vec4(texColor.rgb * shade, 1.0);
     } else {
-        if (rowDist > uMaxDist) {
-            gl_FragColor = vec4(floorFog, 1.0);
-            return;
-        }
-
         vec2 cell = floor(worldPos);
         if (cell.x < 0.0 || cell.x >= uMapSize.x || cell.y < 0.0 || cell.y >= uMapSize.y) {
             gl_FragColor = vec4(vec3(0.2) * shade, 1.0);
