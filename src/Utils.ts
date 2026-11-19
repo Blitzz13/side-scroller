@@ -30,9 +30,7 @@ export function getTextureArrayFromStrings(textureStrings: string[]): Texture[] 
 export function getRandomInt(min: number, max: number) {
   min = Math.ceil(min);
   max = Math.floor(max);
-  const asd = Math.floor(Math.random() * (max - min)) + min;
-  console.log(asd);
-  return asd;
+  return Math.floor(Math.random() * (max - min)) + min;
 }
 
 export function setTintToSprite(container: Sprite | AnimatedSprite, tint: number, timout: number): NodeJS.Timeout {
@@ -42,7 +40,73 @@ export function setTintToSprite(container: Sprite | AnimatedSprite, tint: number
   }, timout);
 }
 
+/**
+ * Returns true only when the URL contains a `debug` query parameter
+ * that is not explicitly disabled (`false` or `0`).
+ */
+export function isDebugEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("debug")) return false;
+    const value = (params.get("debug") ?? "").trim().toLowerCase();
+    return value !== "false" && value !== "0";
+  } catch {
+    return false;
+  }
+}
+
 export async function loadGameAssets(manifest: AssetsManifest): Promise<void> {
+  if (manifest && Array.isArray(manifest.bundles)) {
+    for (const bundle of manifest.bundles) {
+      if (Array.isArray(bundle.assets)) {
+        for (const asset of bundle.assets) {
+          if (asset && asset.alias) {
+            if (typeof asset.alias === "string") {
+              asset.alias = [asset.alias];
+            }
+          }
+        }
+      }
+    }
+  }
   await Assets.init({ manifest });
   await Assets.loadBundle(manifest.bundles.map(x => x.name));
+}
+
+export function toggleFullscreen(): void {
+  const doc = document as any;
+  const isFullscreen =
+    doc.fullscreenElement ||
+    doc.webkitFullscreenElement ||
+    doc.mozFullScreenElement ||
+    doc.msFullscreenElement;
+
+  if (!isFullscreen) {
+    const el = (document.documentElement || document.body) as any;
+    const req =
+      el.requestFullscreen ||
+      el.webkitRequestFullscreen ||
+      el.webkitRequestFullScreen ||
+      el.mozRequestFullScreen ||
+      el.msRequestFullscreen;
+    if (req) {
+      try {
+        const p = req.call(el, { navigationUI: "hide" });
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) {}
+    }
+  } else {
+    const exit =
+      doc.exitFullscreen ||
+      doc.webkitExitFullscreen ||
+      doc.mozCancelFullScreen ||
+      doc.msExitFullscreen;
+    if (exit) {
+      try {
+        const p = exit.call(doc);
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) {}
+    }
+  }
 }

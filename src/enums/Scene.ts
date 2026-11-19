@@ -3,4 +3,10 @@ export enum Scene {
     Endless = "Endless",
     MainMenu = "MainMenu",
     EndGame = "EndGame",
+    Raycast = "Raycast",
+    LevelEnd = "LevelEnd",
+    Cutscene = "Cutscene",
+    Intro = "Intro",
+    LevelSelect = "LevelSelect",
+    Credits = "Credits",
 }

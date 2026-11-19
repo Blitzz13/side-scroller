@@ -1,0 +1,81 @@
+import { ISoundConfig } from "./ISoundConfig";
+import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
+import { RaycastWeaponType } from "../../enums/RaycastWeaponType";
+import { IEnemyVoicePool } from "./IStormtrooperVoicelineConfig";
+
+export interface IRaycastEnemyAnimationSequence {
+  prefix: string;
+  count: number;
+  speed?: number;
+  loop?: boolean;
+}
+
+export interface IRaycastEnemyAnimationConfig {
+  omniDirectional?: boolean;
+  defaultAnimation?: IRaycastEnemyAnimationSequence;
+  shootingAnimation?: IRaycastEnemyAnimationSequence;
+  deathAnimation?: IRaycastEnemyAnimationSequence;
+  walkingPrefix?: string;
+  standingPrefix?: string;
+  shootingPrefix?: string;
+  deathPrefix?: string;
+  meleePrefix?: string;
+  meleeAnimation?: IRaycastEnemyAnimationSequence;
+  shieldPrefix?: string;
+  shieldFrame?: string;
+  damagePrefix?: string;
+}
+
+export interface IRaycastEnemyConfig {
+  type: RaycastEnemyType;
+  name: string;
+  maxHealth: number;
+  speed: number; // Base movement speed per delta (e.g. 0.018)
+  sightRange: number; // Maximum detection distance in tiles (e.g. 12)
+  visionConeAngle?: number; // Total field of view angle in degrees (e.g. 90, 110, 120, 180, 360). Default: 120 for normal enemies, 360 for Viper Droid.
+  fov?: number; // Optional alias for visionConeAngle
+  attackRange: number; // Range at which enemy stops chasing and fires (e.g. 5.5)
+  minDistance: number; // Minimum distance to maintain from player (e.g. 2.0)
+  lostSightDuration?: number; // Duration in seconds enemy pursues/searches last known position after losing sight of player before giving up and returning to idle (e.g. 3.0s). If > 30, auto-converted from legacy frames. Default: 3.0
+  /** @deprecated Use lostSightDuration */
+  lostSightDurationFrames?: number; // Legacy alias for lostSightDuration in frames
+  rateOfFire: number; // Attack cooldown in ms between blaster shots (e.g. 900)
+  damage: number; // Damage dealt to player per shot (e.g. 10)
+  accuracy: number; // Hit chance 0..1 (e.g. 0.65)
+  initialAccuracyMultiplier?: number; // Hit chance multiplier when first acquiring player (e.g. 0.35). Default: 0.35
+  accuracyRampTime?: number; // Duration in ms of continuous sight before reaching full accuracy (e.g. 2500ms). Default: 2500
+  firstShotsInaccuracyCount?: number; // Number of initial shots guaranteed to have reduced accuracy (e.g. 2). Default: 2
+  initialReactionDelay?: number; // Delay in ms before enemy takes their very first shot after spotting player (e.g. 400ms). Default: 400
+  scale: number; // Height scale relative to standard wall (e.g. 0.9)
+  scaleX?: number;
+  scaleY?: number;
+  referenceHeight?: number; // Base pixel height of standing frame in spritesheet (e.g. 67)
+  spritesheet: string; // Asset path to spritesheet json (e.g. "assets/storm_trooper.json")
+  dropWeapon?: RaycastWeaponType; // Weapon type dropped on death
+  dropAmmo?: number; // Ammo amount provided by drop
+  dropChance?: number; // Probability of dropping item 0..1 (default: 1.0)
+  painSounds?: ISoundConfig[];
+  deathSounds?: ISoundConfig[];
+  attackSounds?: ISoundConfig[];
+  emergeSound?: ISoundConfig; // Sound played when emerging / coming out of water
+  idleSound?: ISoundConfig; // Looping idle/hover sound
+  hoverSound?: ISoundConfig; // Looping hover sound
+  voicelines?: IEnemyVoicePool;
+  shootHeight?: number; // Vertical height offset for firing laser (default: 0.55)
+  vOffset?: number; // Normalized vertical offset above floor (e.g. 0.12 for floating)
+  floatingBob?: boolean; // Organic floating bobbing motion while hovering
+  shoulderOffset?: number; // Distance in tiles from center to left/right shoulders for cover clearance checks (default: 0.35)
+  coverClearanceOffset?: number; // Extra offset distance to step out past cover edges into open space (default: 1.5)
+  stepOutDuration?: number; // Duration in seconds the enemy continues moving out into the open upon spotting player (default: 0.5s)
+  /** @deprecated Use stepOutDuration */
+  stepOutFrames?: number; // Legacy alias for stepOutDuration in frames
+  animationConfig?: IRaycastEnemyAnimationConfig;
+  isMelee?: boolean; // True if enemy fights with sword/melee instead of ranged blaster
+  shieldDuration?: number; // Duration in seconds the enemy stops and holds shield (e.g. 2.0s). If > 10, auto-converted from legacy frames. Default: 2.0
+  shieldInterval?: number; // Period/cooldown in seconds between using shield (e.g. 3.0s). If > 10, auto-converted from legacy frames. Default: 3.0
+  meleeHitSound?: ISoundConfig; // Sound played when melee strike hits player (e.g. hit_flesh)
+  stepSounds?: ISoundConfig[]; // Periodic footstep sounds while moving
+  deflectSound?: ISoundConfig; // Sound played when deflecting projectile
+  deathAnchorY?: number; // Custom anchor Y for dead sprite frame (e.g. 0.65 for fallen horizontal corpse, default: 1.0)
+  deathVOffset?: number; // Normalized vertical offset applied when dead (positive lowers towards floor, default: 0)
+}

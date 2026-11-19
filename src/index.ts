@@ -1,53 +1,159 @@
 import "./style.css";
-import { Application, Ticker } from "pixi.js";
+import { Application, BaseTexture, Graphics, MIPMAP_MODES, SCALE_MODES, Ticker } from "pixi.js";
 import { MainMenu } from "./scenes/MainMenu";
 import { gameConfig, manifest, registerFonts } from "./configs/GameConfig";
 import { BaseScene } from "./scenes/BaseScene";
 import { EndGame } from "./scenes/EndGame";
 import { Scene } from "./enums/Scene";
-import { loadGameAssets } from "./Utils";
+import { loadGameAssets, toggleFullscreen } from "./Utils";
 import { EndlessLevel } from "./scenes/EndlessLevel";
 import { IPlayerConfig } from "./configs/interfaces/IPlayerConfig";
 import { GameEvent } from "./enums/GameEvent";
+import { RaycastScene } from "./scenes/RaycastScene";
+import { CutsceneScene } from "./scenes/CutsceneScene";
+import { StarWarsIntroScene } from "./scenes/StarWarsIntroScene";
+import { LevelEndScene, ILevelEndOptions } from "./scenes/LevelEndScene";
+import { LevelSelectScene } from "./scenes/LevelSelectScene";
+import { CreditsScene } from "./scenes/CreditsScene";
+import { creditsConfig } from "./configs/CreditsConfig";
+import { RaycastSaveManager } from "./scenes/raycast/RaycastSaveManager";
+import { allConfigs } from "./configs/PlayerConfigs";
+import { sound } from "@pixi/sound";
+import { Stats } from "pixi-stats";
+
+// Set global nearest-neighbor pixel sampling and disable mipmaps for all loaded textures and spritesheets
+BaseTexture.defaultOptions.scaleMode = SCALE_MODES.NEAREST;
+BaseTexture.defaultOptions.mipmap = MIPMAP_MODES.OFF;
+
+// Mobile GPUs can't sustain 120 Hz at a 2560x1440 framebuffer for a 1280x720 pixel-art raycaster,
+// so cap the render resolution on touch devices (CSS `image-rendering: pixelated` keeps it crisp).
+const isMobileDevice =
+  /android|iphone|ipad|ipod/i.test(navigator.userAgent) ||
+  (typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches);
+const maxResolution = isMobileDevice ? 1.5 : 2;
 
 const app = new Application<HTMLCanvasElement>({
   backgroundColor: 0xd3d3d3,
   width: gameConfig.width,
   height: gameConfig.height,
+  autoDensity: true,
+  resolution: Math.max(1, Math.min(window.devicePixelRatio || 1, maxResolution)),
+  antialias: false,
 });
 
-let showInstructions = true;
-let shipConfig: IPlayerConfig;
+let shipConfig: IPlayerConfig = allConfigs[0];
 let currentScale = 1;
 
 // For pixi debug utils
 (globalThis as any).__PIXI_APP__ = app;
 let currentScene: BaseScene;
+
+const isAndroid = /android/i.test(navigator.userAgent);
+
+function setupAndroidFullscreen(): void {
+  if (!isAndroid) return;
+
+  const onFirstInteraction = () => {
+    toggleFullscreen();
+    if (screen.orientation && (screen.orientation as any).lock) {
+      (screen.orientation as any).lock("landscape").catch(() => {});
+    }
+  };
+
+  document.body.addEventListener("touchend", onFirstInteraction, { once: true });
+  document.body.addEventListener("click", onFirstInteraction, { once: true });
+  app.view.addEventListener("touchend", onFirstInteraction, { once: true });
+}
+
 window.onload = async (): Promise<void> => {
   await loadGameAssets(manifest);
   registerFonts();
   document.body.appendChild(app.view);
+
+  // Add Pixi Stats and adjust its z-index
+  // Pixi Stats overlay: skipped on mobile (2D canvas redraws every frame hurt 120 Hz); force with ?stats
+  const showStats = new URLSearchParams(window.location.search).has("stats") || !isMobileDevice;
+  const stats = showStats ? new Stats(app.renderer) : null;
+
+  setupAndroidFullscreen();
   resizeCanvas();
   app.stage.interactive = true;
-  changeScene(Scene.MainMenu);
+
+  const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const urlLevel = urlParams?.get("level");
+
+  if (urlLevel) {
+    changeScene(Scene.Raycast, urlLevel, true);
+  } else {
+    changeScene(Scene.MainMenu);
+  }
+
+  // Update stats on each frame
+  if (stats) {
+    Ticker.shared.add(() => {
+      stats.update();
+    });
+  }
 };
 
-function changeScene(scene: Scene): void {
+let transitionOverlay: Graphics | null = null;
+let isSceneTransitioning = false;
+
+function getTransitionOverlay(): Graphics {
+  if (!transitionOverlay) {
+    transitionOverlay = new Graphics();
+    transitionOverlay.beginFill(0x000000);
+    transitionOverlay.drawRect(-20, -20, gameConfig.width + 40, gameConfig.height + 40);
+    transitionOverlay.endFill();
+    transitionOverlay.zIndex = 999999;
+    transitionOverlay.alpha = 0;
+    transitionOverlay.eventMode = "none";
+  }
+  return transitionOverlay;
+}
+
+function buildScene(scene: Scene, nextLevel?: string, levelEndOptions?: ILevelEndOptions): void {
   currentScene?.dispose();
+
+  if (scene !== Scene.MainMenu && scene !== Scene.LevelSelect) {
+    if (sound.exists("menu_theme")) {
+      sound.stop("menu_theme");
+    }
+  }
+
   switch (scene) {
     case Scene.Endless:
-      showInstructions = false;
       currentScene = new EndlessLevel(app.stage, currentScale, shipConfig);
       break;
     case Scene.MainMenu:
-      currentScene = new MainMenu(app.stage, currentScale, showInstructions);
-      currentScene.on(GameEvent.SELECT_SHIP, (config: IPlayerConfig) => {
-        shipConfig = config;
-      });
+      currentScene = new MainMenu(app.stage, currentScale);
       break;
     case Scene.EndGame:
       currentScene = new EndGame(app.stage, currentScale);
       break;
+    case Scene.LevelEnd:
+      currentScene = new LevelEndScene(app.stage, currentScale, nextLevel, levelEndOptions);
+      break;
+    case Scene.Intro:
+      currentScene = new StarWarsIntroScene(app.stage, currentScale, nextLevel || "level1");
+      break;
+    case Scene.Cutscene:
+      currentScene = new CutsceneScene(app.stage, currentScale, nextLevel || "level1");
+      break;
+    case Scene.LevelSelect:
+      currentScene = new LevelSelectScene(app.stage, currentScale);
+      currentScene.on(GameEvent.SELECT_SHIP, (config: IPlayerConfig) => {
+        shipConfig = config;
+      });
+      break;
+    case Scene.Credits:
+      currentScene = new CreditsScene(app.stage, currentScale);
+      break;
+    case Scene.Raycast: {
+      const startingLevel = nextLevel || RaycastSaveManager.getCurrentLevel();
+      currentScene = new RaycastScene(app.stage, currentScale, startingLevel);
+      break;
+    }
     default:
       break;
   }
@@ -56,11 +162,153 @@ function changeScene(scene: Scene): void {
   currentScene.on(Scene.Change, changeScene);
 }
 
+function changeScene(
+  scene: Scene,
+  nextLevel?: string,
+  thirdArg?: boolean | ILevelEndOptions
+): void {
+  if (isSceneTransitioning) return;
+
+  const skipIntroAndCutscene = thirdArg === true;
+  const levelEndOptions = typeof thirdArg === "object" && thirdArg !== null ? thirdArg : undefined;
+
+  // Intercept loading level 1 to play the iconic Star Wars intro before cutscene1
+  if (scene === Scene.Raycast && !skipIntroAndCutscene) {
+    const target = nextLevel || RaycastSaveManager.getCurrentLevel();
+    if (target === "level1" || target === "assets/raycast/levels/level1.json") {
+      scene = Scene.Intro;
+      nextLevel = "level1";
+    }
+  }
+
+  const overlay = getTransitionOverlay();
+  app.stage.sortableChildren = true;
+
+  if (!currentScene) {
+    // Initial scene start: fade in from black smoothly
+    overlay.alpha = 1;
+    overlay.eventMode = "static";
+    app.stage.addChild(overlay);
+
+    buildScene(scene, nextLevel, levelEndOptions);
+
+    let fadeElapsed = 0;
+    const fadeDuration = 0.35;
+    const onInitialFadeIn = (delta: number) => {
+      fadeElapsed += delta / 60;
+      overlay.alpha = Math.max(0, 1 - fadeElapsed / fadeDuration);
+      if (overlay.alpha <= 0) {
+        overlay.alpha = 0;
+        overlay.eventMode = "none";
+        Ticker.shared.remove(onInitialFadeIn);
+      }
+    };
+    Ticker.shared.add(onInitialFadeIn);
+    return;
+  }
+
+  // Iconic expanding circle iris wipe from the center of the screen into Credits
+  if (scene === Scene.Credits) {
+    isSceneTransitioning = true;
+    const previousScene = currentScene;
+    previousScene.eventMode = "none";
+    previousScene.interactiveChildren = false;
+
+    try {
+      if (sound.exists("end_theme")) sound.stop("end_theme");
+      if (sound.exists("end_level")) sound.stop("end_level");
+      if (sound.exists("menu_theme")) sound.stop("menu_theme");
+    } catch {}
+
+    const creditsScene = new CreditsScene(app.stage, currentScale);
+    creditsScene.zIndex = 500;
+    const irisMask = new Graphics();
+    app.stage.addChild(irisMask);
+    creditsScene.mask = irisMask;
+
+    const centerX = gameConfig.width / 2;
+    const centerY = gameConfig.height / 2;
+    const maxRadius = Math.hypot(centerX, centerY) + 24;
+    const wipeDuration = creditsConfig.irisWipeDurationSec;
+    let wipeElapsed = 0;
+
+    const onIrisWipe = (delta: number) => {
+      wipeElapsed += delta / 60;
+      const t = Math.min(1, wipeElapsed / wipeDuration);
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const radius = maxRadius * eased;
+
+      irisMask.clear();
+      irisMask.beginFill(0xffffff);
+      irisMask.drawCircle(centerX, centerY, Math.max(1, radius));
+      irisMask.endFill();
+
+      if (t >= 1) {
+        Ticker.shared.remove(onIrisWipe);
+        creditsScene.mask = null;
+        creditsScene.zIndex = 0;
+        irisMask.destroy();
+        previousScene.dispose();
+        currentScene = creditsScene;
+        Ticker.shared.speed = 1;
+        currentScene.on(Scene.Change, changeScene);
+        isSceneTransitioning = false;
+      }
+    };
+
+    Ticker.shared.add(onIrisWipe);
+    return;
+  }
+
+  // Smooth cinematic scene transition: Fade Out -> Swap Scene -> Fade In
+  isSceneTransitioning = true;
+  overlay.alpha = 0;
+  overlay.eventMode = "static";
+  app.stage.addChild(overlay);
+
+  let fadeOutElapsed = 0;
+  const fadeDuration = 0.28;
+
+  const onFadeOut = (delta: number) => {
+    fadeOutElapsed += delta / 60;
+    overlay.alpha = Math.min(1, fadeOutElapsed / fadeDuration);
+
+    if (overlay.alpha >= 1) {
+      Ticker.shared.remove(onFadeOut);
+      overlay.alpha = 1;
+
+      // Swap the active scene while screen is fully black
+      buildScene(scene, nextLevel, levelEndOptions);
+      app.stage.addChild(overlay); // Ensure overlay stays on top
+
+      // Smoothly fade in the new scene
+      let fadeInElapsed = 0;
+      const onFadeIn = (inDelta: number) => {
+        fadeInElapsed += inDelta / 60;
+        overlay.alpha = Math.max(0, 1 - fadeInElapsed / fadeDuration);
+
+        if (overlay.alpha <= 0) {
+          Ticker.shared.remove(onFadeIn);
+          overlay.alpha = 0;
+          overlay.eventMode = "none";
+          isSceneTransitioning = false;
+        }
+      };
+      Ticker.shared.add(onFadeIn);
+    }
+  };
+
+  Ticker.shared.add(onFadeOut);
+}
+
 function resizeCanvas(): void {
-  const cleintWidth = document.documentElement.clientWidth;
+  const clientWidth = document.documentElement.clientWidth;
   const clientHeight = document.documentElement.clientHeight;
 
-  let scale = Math.min(cleintWidth / gameConfig.width, clientHeight / gameConfig.height);
+  let scale = Math.min(
+    clientWidth / gameConfig.width,
+    clientHeight / gameConfig.height
+  );
   currentScale = scale;
 
   const newWidth = Math.round(gameConfig.width * scale);
@@ -72,7 +320,7 @@ function resizeCanvas(): void {
     currentScene.appScale = scale;
   }
 
-  const offsetX = (cleintWidth - newWidth) / 2;
+  const offsetX = (clientWidth - newWidth) / 2;
   const offsetY = (clientHeight - newHeight) / 2;
   app.view.style.position = "absolute";
   app.view.style.left = `${offsetX}px`;
@@ -81,3 +329,8 @@ function resizeCanvas(): void {
 
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
+window.addEventListener("orientationchange", () => {
+  setTimeout(resizeCanvas, 150);
+});
+document.addEventListener("fullscreenchange", resizeCanvas);
+document.addEventListener("webkitfullscreenchange", resizeCanvas);

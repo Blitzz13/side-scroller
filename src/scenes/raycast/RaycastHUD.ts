@@ -1,0 +1,949 @@
+import { Container, Graphics, SCALE_MODES, Sprite, Text, TextStyle, Texture } from "pixi.js";
+import { gameConfig } from "../../configs/GameConfig";
+import { getRaycastUIConfig, IRaycastUIConfig } from "../../configs/RaycastUIConfig";
+import { SettingsManager } from "../../managers/SettingsManager";
+
+export class RaycastHUD extends Container {
+  // Health components
+  private healthContainer: Container;
+  private healthBarBg: Graphics;
+  private healthBarFill: Graphics;
+  private healthText: Text;
+  private healthIcon: Sprite;
+
+  // Shield components
+  private shieldIcon: Graphics;
+  private shieldBarFill: Graphics;
+  private shieldText: Text;
+
+  // Weapon & Ammo components
+  private weaponContainer: Container;
+  private weaponNameText: Text;
+  private ammoText: Text;
+  private ammoIcon: Sprite;
+  private switchHint: Text;
+
+  // Toast notification
+  private toastContainer: Container;
+  private toastBg: Graphics;
+  private toastText: Text;
+  private toastTimer: number = 0;
+
+  // Screen Flash
+  private flashOverlay: Graphics;
+  private flashAlpha: number = 0;
+  private flashColor: number = 0x000000;
+
+  // Keycards inventory display
+  private keycardContainer: Container;
+  private keycardBg: Graphics;
+  private keycardIcons: Map<string, Sprite> = new Map();
+
+  // Sprint Indicator
+  private sprintContainer: Container;
+  private sprintBg: Graphics;
+  private sprintText: Text;
+  private sprintIcon: Graphics;
+
+  // Interaction prompt (Center, below crosshair)
+  private promptContainer: Container;
+  private promptBg: Graphics;
+  private promptIcon: Sprite;
+  private promptText: Text;
+  private currentPromptText: string = "";
+  private isMobilePrompt: boolean = SettingsManager.isMobileDevice();
+
+  // Dynamic Crosshair (Screen center default, enemy snapping, damageable target red indicator)
+  private crosshairContainer: Container;
+  private crosshairGraphics: Graphics;
+  private defaultCrosshairX: number;
+  private defaultCrosshairY: number;
+  private crosshairX: number;
+  private crosshairY: number;
+  private targetCrosshairX: number;
+  private targetCrosshairY: number;
+  private isCrosshairTargetLocked: boolean = false;
+
+  // Mobile Map Button (Top-Right)
+  private mapButton: Container;
+  private mapButtonBg: Graphics;
+
+  // Mobile Objectives Button (Top-Right)
+  private objectivesButton: Container;
+  private objectivesButtonBg: Graphics;
+
+  private readonly uiCfg: IRaycastUIConfig["hud"];
+
+  constructor() {
+    super();
+
+    this.uiCfg = getRaycastUIConfig().hud;
+    const screenW = gameConfig.width;
+    const screenH = gameConfig.height;
+    const dpr = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));
+
+    // 1. Fullscreen flash overlay (bottom-most in HUD layer)
+    this.flashOverlay = new Graphics();
+    this.flashOverlay.visible = false;
+    this.addChild(this.flashOverlay);
+
+    // 2. Health & Shield HUD (Bottom-Left)
+    this.healthContainer = new Container();
+    this.healthContainer.position.set(24, screenH - 96);
+
+    this.healthBarBg = new Graphics();
+    this.healthBarBg.beginFill(0x0a1018, 0.75);
+    this.healthBarBg.lineStyle(2, 0x00ffff, 0.4);
+    this.healthBarBg.drawRoundedRect(0, 0, 240, 72, 10);
+    this.healthBarBg.endFill();
+    this.healthContainer.addChild(this.healthBarBg);
+
+    // Layout metrics for perfect vertical and horizontal centering
+    const iconCenterX = 26;
+    const row1CenterY = 19;
+    const row2CenterY = 53;
+
+    // Health icon - centered at (iconCenterX, row1CenterY)
+    try {
+      this.healthIcon = Sprite.from("health");
+    } catch {
+      this.healthIcon = new Sprite();
+    }
+    this.healthIcon.anchor.set(0.5, 0.5);
+    this.healthIcon.scale.set(0.04);
+    this.healthIcon.position.set(iconCenterX, row1CenterY);
+    this.healthContainer.addChild(this.healthIcon);
+
+    // Health text - vertically centered at row1CenterY
+    this.healthText = new Text("100 HP", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: this.uiCfg.healthFontSize,
+      fontWeight: "bold",
+      fill: 0xffffff,
+      letterSpacing: 0.5,
+    });
+    this.healthText.resolution = dpr;
+    this.healthText.anchor.set(0, 0.5);
+    this.healthText.position.set(45, row1CenterY);
+    this.healthContainer.addChild(this.healthText);
+
+    // Health bar fill
+    this.healthBarFill = new Graphics();
+    this.healthContainer.addChild(this.healthBarFill);
+
+    // Shield vector icon (energy crest emblem) - perfectly centered at (iconCenterX, row2CenterY)
+    this.shieldIcon = new Graphics();
+    // Outer shield rim
+    this.shieldIcon.lineStyle(1.8, 0x00ff66, 1);
+    this.shieldIcon.beginFill(0x00c853, 0.25);
+    this.shieldIcon.moveTo(iconCenterX - 8, row2CenterY - 11);
+    this.shieldIcon.lineTo(iconCenterX + 8, row2CenterY - 11);
+    this.shieldIcon.lineTo(iconCenterX + 11, row2CenterY - 8);
+    this.shieldIcon.lineTo(iconCenterX + 11, row2CenterY);
+    this.shieldIcon.quadraticCurveTo(iconCenterX + 9, row2CenterY + 8, iconCenterX, row2CenterY + 12);
+    this.shieldIcon.quadraticCurveTo(iconCenterX - 9, row2CenterY + 8, iconCenterX - 11, row2CenterY);
+    this.shieldIcon.lineTo(iconCenterX - 11, row2CenterY - 8);
+    this.shieldIcon.closePath();
+    this.shieldIcon.endFill();
+
+    // Inner high-tech deflector chevrons
+    this.shieldIcon.lineStyle(1.5, 0x69f0ae, 0.9);
+    this.shieldIcon.moveTo(iconCenterX - 5, row2CenterY - 6);
+    this.shieldIcon.lineTo(iconCenterX, row2CenterY - 1);
+    this.shieldIcon.lineTo(iconCenterX + 5, row2CenterY - 6);
+
+    this.shieldIcon.moveTo(iconCenterX - 4, row2CenterY + 1);
+    this.shieldIcon.lineTo(iconCenterX, row2CenterY + 5);
+    this.shieldIcon.lineTo(iconCenterX + 4, row2CenterY + 1);
+    this.healthContainer.addChild(this.shieldIcon);
+
+    // Shield text - vertically centered at row2CenterY
+    this.shieldText = new Text("0 SHD", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: this.uiCfg.shieldFontSize,
+      fontWeight: "bold",
+      fill: 0x00ff66,
+      letterSpacing: 0.5,
+    });
+    this.shieldText.resolution = dpr;
+    this.shieldText.anchor.set(0, 0.5);
+    this.shieldText.position.set(45, row2CenterY);
+    this.healthContainer.addChild(this.shieldText);
+
+    // Shield bar fill
+    this.shieldBarFill = new Graphics();
+    this.healthContainer.addChild(this.shieldBarFill);
+
+    this.addChild(this.healthContainer);
+    this.drawHealthBar(100, 100);
+    this.drawShieldBar(0, 100);
+
+    this.weaponContainer = new Container();
+    this.weaponContainer.position.set(screenW - 264, screenH - 96);
+    this.weaponContainer.eventMode = "static";
+    this.weaponContainer.cursor = "pointer";
+    this.weaponContainer.on("pointerdown", () => {
+      this.emit("switchWeapon");
+    });
+
+    const weaponBg = new Graphics();
+    weaponBg.beginFill(0x0a1018, 0.75);
+    weaponBg.lineStyle(2, 0xffaa00, 0.4);
+    weaponBg.drawRoundedRect(0, 0, 240, 72, 10);
+    weaponBg.endFill();
+    this.weaponContainer.addChild(weaponBg);
+
+    // Ammo icon
+    try {
+      this.ammoIcon = Sprite.from("ammo");
+    } catch {
+      this.ammoIcon = new Sprite();
+    }
+    this.ammoIcon.scale.set(0.12);
+    this.ammoIcon.position.set(12, 12);
+    this.weaponContainer.addChild(this.ammoIcon);
+
+    this.weaponNameText = new Text("UNARMED", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: this.uiCfg.weaponNameFontSize,
+      fontWeight: "bold",
+      fill: 0xffaa00,
+      letterSpacing: 0.5,
+    });
+    this.weaponNameText.resolution = dpr;
+    this.weaponNameText.position.set(55, 8);
+    this.weaponContainer.addChild(this.weaponNameText);
+
+    this.ammoText = new Text("--", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: this.uiCfg.ammoFontSize,
+      fontWeight: "bold",
+      fill: 0xffffff,
+      letterSpacing: 0.5,
+    });
+    this.ammoText.resolution = dpr;
+    this.ammoText.position.set(55, 28);
+    this.weaponContainer.addChild(this.ammoText);
+
+    // Small weapon switch hotkey / tap indicator
+    this.switchHint = new Text("[1-3 / TAP]", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: this.uiCfg.switchHintFontSize,
+      fontWeight: "bold",
+      fill: 0x88bbdd,
+      letterSpacing: 0.5,
+    });
+    this.switchHint.resolution = dpr;
+    this.switchHint.anchor.set(1, 1);
+    this.switchHint.position.set(228, 64);
+    this.weaponContainer.addChild(this.switchHint);
+
+    this.addChild(this.weaponContainer);
+
+    // 4. Toast notification (Top-Center)
+    this.toastContainer = new Container();
+    this.toastContainer.position.set(screenW / 2, this.uiCfg.toastY);
+    this.toastContainer.visible = false;
+
+    this.toastBg = new Graphics();
+    this.toastContainer.addChild(this.toastBg);
+
+    this.toastText = new Text("", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: this.uiCfg.toastFontSize,
+      fontWeight: "bold",
+      fill: 0xffffff,
+      align: "center",
+      dropShadow: true,
+      dropShadowColor: 0x000000,
+      dropShadowDistance: 1,
+      dropShadowBlur: 2,
+    });
+    this.toastText.resolution = dpr;
+    this.toastContainer.addChild(this.toastText);
+
+    this.addChild(this.toastContainer);
+
+    // 5. Keycards HUD (Top-Left)
+    this.keycardContainer = new Container();
+    this.keycardContainer.position.set(this.uiCfg.keycardBoxX, this.uiCfg.keycardBoxY);
+    this.keycardContainer.visible = false;
+
+    this.keycardBg = new Graphics();
+    this.keycardContainer.addChild(this.keycardBg);
+
+    const keycardLabel = new Text("KEYS", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: this.uiCfg.keycardLabelFontSize,
+      fontWeight: "bold",
+      fill: 0x00e5ff,
+      letterSpacing: this.uiCfg.keycardLabelLetterSpacing,
+    });
+    keycardLabel.resolution = dpr;
+    keycardLabel.position.set(this.uiCfg.keycardLabelX, this.uiCfg.keycardLabelY);
+    this.keycardContainer.addChild(keycardLabel);
+
+    this.addChild(this.keycardContainer);
+
+    // 6. Sprint Badge (Bottom-Left, directly above Health gauge)
+    this.sprintContainer = new Container();
+    this.sprintContainer.position.set(24, screenH - 126);
+    this.sprintContainer.visible = false;
+
+    this.sprintBg = new Graphics();
+    this.sprintBg.beginFill(0x0a1018, 0.85);
+    this.sprintBg.lineStyle(1.5, 0x00e5ff, 0.7);
+    this.sprintBg.drawRoundedRect(0, 0, 96, 24, 6);
+    this.sprintBg.endFill();
+    this.sprintContainer.addChild(this.sprintBg);
+
+    // High-tech lightning bolt glyph
+    this.sprintIcon = new Graphics();
+    this.sprintIcon.beginFill(0x00e5ff, 0.95);
+    this.sprintIcon.moveTo(13, 4);
+    this.sprintIcon.lineTo(7, 13);
+    this.sprintIcon.lineTo(12, 13);
+    this.sprintIcon.lineTo(9, 20);
+    this.sprintIcon.lineTo(18, 10);
+    this.sprintIcon.lineTo(13, 10);
+    this.sprintIcon.closePath();
+    this.sprintIcon.endFill();
+    this.sprintContainer.addChild(this.sprintIcon);
+
+    this.sprintText = new Text("SPRINT", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: this.uiCfg.sprintFontSize,
+      fontWeight: "bold",
+      fill: 0x00e5ff,
+      letterSpacing: 1,
+    });
+    this.sprintText.resolution = dpr;
+    this.sprintText.position.set(24, Math.max(3, 5 - Math.floor((this.uiCfg.sprintFontSize - 11) / 2)));
+    this.sprintContainer.addChild(this.sprintText);
+
+    this.addChild(this.sprintContainer);
+
+    // 7. Interaction Prompt (Center, just below crosshair)
+    this.promptContainer = new Container();
+    this.promptContainer.position.set(screenW / 2, screenH / 2 + this.uiCfg.promptOffsetY);
+    this.promptContainer.visible = false;
+
+    this.promptBg = new Graphics();
+    this.promptContainer.addChild(this.promptBg);
+
+    let interactTexture: Texture;
+    try {
+      interactTexture = Texture.from("interact_icon");
+    } catch {
+      try {
+        interactTexture = Texture.from("assets/common/interact.png");
+      } catch {
+        interactTexture = Texture.EMPTY;
+      }
+    }
+    interactTexture.baseTexture.scaleMode = SCALE_MODES.LINEAR;
+    this.promptIcon = new Sprite(interactTexture);
+    this.promptIcon.anchor.set(0.5, 0.5);
+    this.promptIcon.tint = 0x00e5ff;
+    this.promptIcon.visible = false;
+    this.promptContainer.addChild(this.promptIcon);
+
+    this.promptText = new Text("", {
+      fontFamily: "Arial, sans-serif",
+      fontSize: this.uiCfg.promptFontSize,
+      fontWeight: "bold",
+      fill: 0x00e5ff,
+      letterSpacing: 1,
+      align: "center",
+      dropShadow: true,
+      dropShadowColor: 0x000000,
+      dropShadowDistance: 1,
+      dropShadowBlur: 2,
+    });
+    this.promptText.resolution = dpr;
+    this.promptText.anchor.set(0.5, 0.5);
+    this.promptContainer.addChild(this.promptText);
+
+    this.addChild(this.promptContainer);
+
+    // 8. Dynamic Crosshair in screen center (supports target snapping and red damage indicator)
+    this.defaultCrosshairX = screenW / 2;
+    this.defaultCrosshairY = screenH / 2;
+    this.crosshairX = this.defaultCrosshairX;
+    this.crosshairY = this.defaultCrosshairY;
+    this.targetCrosshairX = this.defaultCrosshairX;
+    this.targetCrosshairY = this.defaultCrosshairY;
+
+    this.crosshairContainer = new Container();
+    this.crosshairContainer.position.set(this.crosshairX, this.crosshairY);
+
+    this.crosshairGraphics = new Graphics();
+    this.drawCrosshair(false);
+    this.crosshairContainer.addChild(this.crosshairGraphics);
+    this.addChild(this.crosshairContainer);
+
+    // 9. Mobile Map Button (Top-Right, beside Fullscreen)
+    this.mapButton = new Container();
+    this.mapButton.position.set(screenW - 140, 60);
+    this.mapButton.eventMode = "static";
+    this.mapButton.cursor = "pointer";
+
+    this.mapButtonBg = new Graphics();
+    this.drawMapButton(false);
+    this.mapButton.addChild(this.mapButtonBg);
+
+    let mapIcon: Sprite;
+    try {
+      mapIcon = Sprite.from("assets/common/map_icon.png");
+    } catch {
+      mapIcon = Sprite.from("map_icon");
+    }
+    mapIcon.anchor.set(0.5);
+    mapIcon.width = 32;
+    mapIcon.height = 32;
+    mapIcon.position.set(0, 0);
+    mapIcon.tint = 0xffffff;
+    this.mapButton.addChild(mapIcon);
+
+    this.mapButton.on("pointerdown", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      this.drawMapButton(true);
+      this.mapButton.scale.set(0.92);
+    });
+    this.mapButton.on("pointerup", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      this.drawMapButton(false);
+      this.mapButton.scale.set(1.0);
+      this.emit("toggleMinimap");
+    });
+    this.mapButton.on("pointerupoutside", () => {
+      this.drawMapButton(false);
+      this.mapButton.scale.set(1.0);
+    });
+    this.mapButton.visible = false;
+    this.addChild(this.mapButton);
+
+    // 10. Mobile Objectives Button (Top-Right, left of Map button)
+    this.objectivesButton = new Container();
+    this.objectivesButton.position.set(screenW - 200, 60);
+    this.objectivesButton.eventMode = "static";
+    this.objectivesButton.cursor = "pointer";
+
+    this.objectivesButtonBg = new Graphics();
+    this.drawObjectivesButton(false);
+    this.objectivesButton.addChild(this.objectivesButtonBg);
+
+    const objIcon = new Text("i", {
+      fontFamily: "Georgia, serif",
+      fontSize: 22,
+      fontWeight: "bold",
+      fontStyle: "italic",
+      fill: 0x00ffff,
+      dropShadow: true,
+      dropShadowColor: 0x002233,
+      dropShadowDistance: 1,
+    });
+    objIcon.resolution = dpr;
+    objIcon.anchor.set(0.5);
+    objIcon.position.set(0, -1);
+    this.objectivesButton.addChild(objIcon);
+
+    this.objectivesButton.on("pointerdown", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      this.drawObjectivesButton(true);
+      this.objectivesButton.scale.set(0.92);
+    });
+    this.objectivesButton.on("pointerup", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      this.drawObjectivesButton(false);
+      this.objectivesButton.scale.set(1.0);
+      this.emit("toggleObjectives");
+    });
+    this.objectivesButton.on("pointerupoutside", () => {
+      this.drawObjectivesButton(false);
+      this.objectivesButton.scale.set(1.0);
+    });
+    this.objectivesButton.visible = false;
+    this.addChild(this.objectivesButton);
+  }
+
+  public addKeycard(color: string, customTexture?: Texture): void {
+    const key = color.toLowerCase();
+    if (this.keycardIcons.has(key)) return;
+
+    let texture: Texture;
+    if (customTexture) {
+      texture = customTexture;
+    } else {
+      try {
+        texture = Texture.from(`keycard/key_card_${key}_1.png`);
+      } catch {
+        texture = Texture.WHITE;
+      }
+    }
+
+    const sprite = new Sprite(texture);
+    sprite.scale.set(this.uiCfg.keycardIconScale);
+    sprite.roundPixels = true;
+
+    this.keycardIcons.set(key, sprite);
+    this.keycardContainer.addChild(sprite);
+    this.keycardContainer.visible = true;
+
+    this.layoutKeycards();
+  }
+
+  public hasKeycard(color: string): boolean {
+    return this.keycardIcons.has(color.toLowerCase());
+  }
+
+  public clearKeycards(): void {
+    for (const [_, sprite] of this.keycardIcons) {
+      sprite.destroy();
+    }
+    this.keycardIcons.clear();
+    this.keycardContainer.visible = false;
+  }
+
+  private layoutKeycards(): void {
+    let currentX = this.uiCfg.keycardIconStartX;
+    for (const [_, sprite] of this.keycardIcons) {
+      sprite.position.set(currentX, this.uiCfg.keycardIconY);
+      currentX += this.uiCfg.keycardIconSpacing;
+    }
+
+    const totalWidth = Math.max(
+      this.uiCfg.keycardBoxMinWidth,
+      currentX + this.uiCfg.keycardBoxPaddingRight
+    );
+    this.keycardBg.clear();
+    this.keycardBg.beginFill(0x0a1018, 0.75);
+    this.keycardBg.lineStyle(1.5, 0x00e5ff, 0.5);
+    this.keycardBg.drawRoundedRect(0, 0, totalWidth, this.uiCfg.keycardBoxHeight, 6);
+    this.keycardBg.endFill();
+  }
+
+  public setHealth(currentHealth: number, maxHealth: number = 100): void {
+    const clampedHp = Math.max(0, Math.min(maxHealth, currentHealth));
+    this.healthText.text = `${Math.ceil(clampedHp)} HP`;
+    this.drawHealthBar(clampedHp, maxHealth);
+  }
+
+  private drawHealthBar(hp: number, maxHp: number): void {
+    this.healthBarFill.clear();
+    const ratio = Math.max(0, Math.min(1, hp / maxHp));
+    const width = 114 * ratio;
+
+    // Dark background track
+    this.healthBarFill.beginFill(0x152530, 0.85);
+    this.healthBarFill.drawRoundedRect(114, 15, 114, 8, 3);
+    this.healthBarFill.endFill();
+
+    // Red health bar (darker crimson at critical <= 25%)
+    if (width > 0) {
+      const barColor = ratio <= 0.25 ? 0xcc1111 : 0xff3344;
+
+      this.healthBarFill.beginFill(barColor, 0.95);
+      this.healthBarFill.drawRoundedRect(114, 15, width, 8, 3);
+      this.healthBarFill.endFill();
+    }
+  }
+
+  public setShield(currentShield: number, maxShield: number = 100): void {
+    const clampedShield = Math.max(0, Math.min(maxShield, currentShield));
+    this.shieldText.text = `${Math.ceil(clampedShield)} SHD`;
+    this.drawShieldBar(clampedShield, maxShield);
+  }
+
+  private drawShieldBar(shield: number, maxShield: number): void {
+    this.shieldBarFill.clear();
+    const ratio = Math.max(0, Math.min(1, shield / maxShield));
+    const width = 114 * ratio;
+
+    // Dark background track
+    this.shieldBarFill.beginFill(0x152530, 0.85);
+    this.shieldBarFill.drawRoundedRect(114, 49, 114, 8, 3);
+    this.shieldBarFill.endFill();
+
+    if (width > 0) {
+      this.shieldBarFill.beginFill(0x00e676, 0.95);
+      this.shieldBarFill.drawRoundedRect(114, 49, width, 8, 3);
+      this.shieldBarFill.endFill();
+    }
+  }
+
+  public setWeapon(weaponName: string | null, ammo: number): void {
+    if (weaponName) {
+      this.weaponNameText.text = weaponName.toUpperCase();
+      if (weaponName.toLowerCase().includes("detonator")) {
+        this.ammoText.text = `${ammo} REMAINING`;
+        (this.ammoText.style as TextStyle).fontSize = this.uiCfg.ammoDetonatorFontSize;
+      } else {
+        this.ammoText.text = `${ammo} AMMO`;
+        (this.ammoText.style as TextStyle).fontSize = this.uiCfg.ammoFontSize;
+      }
+    } else {
+      this.weaponNameText.text = "UNARMED";
+      this.ammoText.text = "--";
+      (this.ammoText.style as TextStyle).fontSize = this.uiCfg.ammoFontSize;
+    }
+  }
+
+  public adaptForMobile(): void {
+    this.isMobilePrompt = true;
+    if (this.switchHint) {
+      this.switchHint.text = "[TAP / WPN]";
+    }
+    if (this.mapButton) {
+      this.mapButton.visible = true;
+    }
+    if (this.objectivesButton) {
+      this.objectivesButton.visible = true;
+    }
+  }
+
+  public setMapButtonVisible(visible: boolean): void {
+    if (this.mapButton) {
+      this.mapButton.visible = visible;
+    }
+  }
+
+  public setObjectivesButtonVisible(visible: boolean): void {
+    if (this.objectivesButton) {
+      this.objectivesButton.visible = visible;
+    }
+  }
+
+  private drawMapButton(pressed: boolean): void {
+    this.mapButtonBg.clear();
+    const bgColor = pressed ? 0x004466 : 0x091929;
+    const borderColor = pressed ? 0x00ffff : 0x00e5ff;
+    this.mapButtonBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
+    this.mapButtonBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
+    this.mapButtonBg.drawCircle(0, 0, 26);
+    this.mapButtonBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
+    this.mapButtonBg.drawCircle(0, 0, 22);
+    this.mapButtonBg.endFill();
+  }
+
+  private drawObjectivesButton(pressed: boolean): void {
+    this.objectivesButtonBg.clear();
+    const bgColor = pressed ? 0x004466 : 0x091929;
+    const borderColor = pressed ? 0x00ffff : 0x00e5ff;
+    this.objectivesButtonBg.beginFill(bgColor, pressed ? 0.95 : 0.85);
+    this.objectivesButtonBg.lineStyle(2.5, borderColor, pressed ? 1.0 : 0.85);
+    this.objectivesButtonBg.drawCircle(0, 0, 26);
+    this.objectivesButtonBg.lineStyle(1, borderColor, pressed ? 0.6 : 0.35);
+    this.objectivesButtonBg.drawCircle(0, 0, 22);
+    this.objectivesButtonBg.endFill();
+  }
+
+  public showToast(
+    message: string,
+    borderColor: number = 0x00e5ff,
+    durationSeconds: number = 2.5
+  ): void {
+    this.toastText.text = message;
+    const paddingX = this.uiCfg.toastPadX;
+    const paddingY = this.uiCfg.toastPadY;
+    const textW = this.toastText.width;
+    const textH = this.toastText.height;
+
+    this.toastBg.clear();
+    this.toastBg.beginFill(0x060f18, 0.85);
+    this.toastBg.lineStyle(2, borderColor, 0.8);
+    this.toastBg.drawRoundedRect(
+      -textW / 2 - paddingX,
+      -paddingY,
+      textW + paddingX * 2,
+      textH + paddingY * 2,
+      8
+    );
+    this.toastBg.endFill();
+
+    this.toastText.position.set(-textW / 2, 0);
+    this.toastContainer.visible = true;
+    this.toastContainer.alpha = 1;
+    // Backward compatibility: if caller passed > 10, it's legacy frames (e.g. 150 -> 2.5s)
+    this.toastTimer = durationSeconds > 10 ? durationSeconds / 60 : durationSeconds;
+  }
+
+  public flashScreen(color: number, maxAlpha: number = 0.3): void {
+    this.flashColor = color;
+    this.flashAlpha = maxAlpha;
+    this.renderFlashOverlay();
+  }
+
+  private renderFlashOverlay(): void {
+    if (this.flashAlpha <= 0.01) {
+      this.flashOverlay.visible = false;
+      return;
+    }
+
+    this.flashOverlay.clear();
+    this.flashOverlay.beginFill(this.flashColor, this.flashAlpha);
+    this.flashOverlay.drawRect(0, 0, gameConfig.width, gameConfig.height);
+    this.flashOverlay.endFill();
+    this.flashOverlay.visible = true;
+  }
+
+  public update(delta: number): void {
+    const dt = delta / 60;
+
+    // 1. Screen flash fade
+    if (this.flashAlpha > 0) {
+      this.flashAlpha = Math.max(0, this.flashAlpha - 0.02 * delta);
+      this.renderFlashOverlay();
+    }
+
+    // 2. Toast fade out
+    if (this.toastTimer > 0) {
+      this.toastTimer -= dt;
+      if (this.toastTimer < 0.5) {
+        this.toastContainer.alpha = Math.max(0, this.toastTimer / 0.5);
+      }
+      if (this.toastTimer <= 0) {
+        this.toastContainer.visible = false;
+      }
+    }
+
+    // 3. Sprint badge pulse
+    if (this.sprintContainer && this.sprintContainer.visible) {
+      this.sprintContainer.alpha = 0.85 + Math.sin(Date.now() * 0.008) * 0.15;
+    }
+
+    // 4. Interaction prompt pulse
+    if (this.promptContainer && this.promptContainer.visible) {
+      this.promptContainer.alpha = 0.88 + Math.sin(Date.now() * 0.007) * 0.12;
+    }
+  }
+
+  public setPrompt(message: string | null, borderColor: number = 0x00e5ff): void {
+    if (!message) {
+      if (this.promptContainer.visible) {
+        this.promptContainer.visible = false;
+        this.currentPromptText = "";
+      }
+      return;
+    }
+
+    if (this.currentPromptText === message && this.promptContainer.visible) {
+      return;
+    }
+
+    this.currentPromptText = message;
+
+    const hasInteractMarker = /\[E(?:\s*\/\s*TAP)?\]/i.test(message);
+    const showIcon =
+      this.isMobilePrompt && hasInteractMarker && this.promptIcon.texture !== Texture.EMPTY;
+
+    const displayMessage = showIcon
+      ? message
+          .replace(/PRESS\s*\[E(?:\s*\/\s*TAP)?\]\s*(?:TO\s+|-\s*)?/gi, "")
+          .replace(/\[E(?:\s*\/\s*TAP)?\]\s*/gi, "")
+          .replace(/\s{2,}/g, " ")
+          .trim()
+      : message;
+
+    this.promptText.text = displayMessage;
+
+    const textW = this.promptText.width;
+    const textH = this.promptText.height;
+    const padX = this.uiCfg.promptPadX;
+    const padY = this.uiCfg.promptPadY;
+
+    let contentW = textW;
+    let contentH = textH;
+
+    if (showIcon) {
+      const iconTargetSize = Math.round(this.uiCfg.promptFontSize * 1.45);
+      const texW = this.promptIcon.texture.width || iconTargetSize;
+      const texH = this.promptIcon.texture.height || iconTargetSize;
+      const iconScale = Math.min(iconTargetSize / texW, iconTargetSize / texH);
+      this.promptIcon.scale.set(iconScale);
+
+      const iconW = texW * iconScale;
+      const iconH = texH * iconScale;
+      const gap = 8;
+
+      contentW = iconW + gap + textW;
+      contentH = Math.max(iconH, textH);
+
+      this.promptIcon.visible = true;
+      this.promptIcon.position.set(-contentW / 2 + iconW / 2, 0);
+      this.promptText.position.set(-contentW / 2 + iconW + gap + textW / 2, 0);
+    } else {
+      this.promptIcon.visible = false;
+      this.promptText.position.set(0, 0);
+    }
+
+    this.promptBg.clear();
+    this.promptBg.beginFill(0x060f18, 0.85);
+    this.promptBg.lineStyle(1.8, borderColor, 0.85);
+    this.promptBg.drawRoundedRect(
+      -contentW / 2 - padX,
+      -contentH / 2 - padY,
+      contentW + padX * 2,
+      contentH + padY * 2,
+      6
+    );
+    this.promptBg.endFill();
+
+    this.promptContainer.visible = true;
+    this.promptContainer.alpha = 1;
+  }
+
+  public clearPrompt(): void {
+    this.setPrompt(null);
+  }
+
+  public setSprinting(sprinting: boolean): void {
+    if (this.sprintContainer) {
+      this.sprintContainer.visible = sprinting;
+      if (sprinting) {
+        this.sprintContainer.alpha = 1;
+      }
+    }
+  }
+
+  private drawCrosshair(isLocked: boolean): void {
+    const size = 14;
+    const gap = isLocked ? 4 : 5;
+    const thickness = 2.5;
+    const halfThick = thickness / 2;
+    const outline = 1.2;
+
+    this.crosshairGraphics.clear();
+
+    // 1. Black outer contrast border
+    const shadowColor = 0x000000;
+    const shadowAlpha = 0.85;
+
+    // Center dot outline
+    this.crosshairGraphics.beginFill(shadowColor, shadowAlpha);
+    this.crosshairGraphics.drawCircle(0, 0, 2.5 + outline);
+    this.crosshairGraphics.endFill();
+
+    // 4 bars outline
+    this.crosshairGraphics.beginFill(shadowColor, shadowAlpha);
+    // Top
+    this.crosshairGraphics.drawRect(
+      -halfThick - outline,
+      -gap - size - outline,
+      thickness + outline * 2,
+      size + outline * 2
+    );
+    // Bottom
+    this.crosshairGraphics.drawRect(
+      -halfThick - outline,
+      gap - outline,
+      thickness + outline * 2,
+      size + outline * 2
+    );
+    // Left
+    this.crosshairGraphics.drawRect(
+      -gap - size - outline,
+      -halfThick - outline,
+      size + outline * 2,
+      thickness + outline * 2
+    );
+    // Right
+    this.crosshairGraphics.drawRect(
+      gap - outline,
+      -halfThick - outline,
+      size + outline * 2,
+      thickness + outline * 2
+    );
+    this.crosshairGraphics.endFill();
+
+    // 2. Bars and center dot: Red (0xff2222) if pointing at target that can break or take damage, Cyan (0x00ffff) otherwise
+    const crossColor = isLocked ? 0xff2222 : 0x00ffff;
+    const crossAlpha = 0.95;
+
+    this.crosshairGraphics.beginFill(crossColor, crossAlpha);
+    // Top bar
+    this.crosshairGraphics.drawRect(-halfThick, -gap - size, thickness, size);
+    // Bottom bar
+    this.crosshairGraphics.drawRect(-halfThick, gap, thickness, size);
+    // Left bar
+    this.crosshairGraphics.drawRect(-gap - size, -halfThick, size, thickness);
+    // Right bar
+    this.crosshairGraphics.drawRect(gap, -halfThick, size, thickness);
+    // Center dot
+    this.crosshairGraphics.drawCircle(0, 0, isLocked ? 2.5 : 2);
+    this.crosshairGraphics.endFill();
+
+    // 3. Star Wars targeting corner brackets when locked on target that can break or take damage
+    if (isLocked) {
+      this.crosshairGraphics.lineStyle(1.6, 0xff2222, 0.85);
+      const bDist = 18;
+      const bLen = 6;
+      // Top-Left bracket
+      this.crosshairGraphics.moveTo(-bDist, -bDist + bLen);
+      this.crosshairGraphics.lineTo(-bDist, -bDist);
+      this.crosshairGraphics.lineTo(-bDist + bLen, -bDist);
+      // Top-Right bracket
+      this.crosshairGraphics.moveTo(bDist - bLen, -bDist);
+      this.crosshairGraphics.lineTo(bDist, -bDist);
+      this.crosshairGraphics.lineTo(bDist, -bDist + bLen);
+      // Bottom-Left bracket
+      this.crosshairGraphics.moveTo(-bDist, bDist - bLen);
+      this.crosshairGraphics.lineTo(-bDist, bDist);
+      this.crosshairGraphics.lineTo(-bDist + bLen, bDist);
+      // Bottom-Right bracket
+      this.crosshairGraphics.moveTo(bDist - bLen, bDist);
+      this.crosshairGraphics.lineTo(bDist, bDist);
+      this.crosshairGraphics.lineTo(bDist, bDist - bLen);
+    }
+  }
+
+  public updateCrosshairTarget(
+    canDamage: boolean,
+    targetScreenX?: number,
+    targetScreenY?: number,
+    delta: number = 1
+  ): void {
+    if (this.isCrosshairTargetLocked !== canDamage) {
+      this.isCrosshairTargetLocked = canDamage;
+      this.drawCrosshair(canDamage);
+    }
+
+    if (canDamage && targetScreenX !== undefined && targetScreenY !== undefined) {
+      this.targetCrosshairX = Math.max(20, Math.min(gameConfig.width - 20, targetScreenX));
+      this.targetCrosshairY = Math.max(20, Math.min(gameConfig.height - 20, targetScreenY));
+    } else {
+      this.targetCrosshairX = this.defaultCrosshairX;
+      this.targetCrosshairY = this.defaultCrosshairY;
+    }
+
+    // Snappy magnetic interpolation towards target position (or default center)
+    const lerpFactor = Math.min(1, 0.45 * delta);
+    this.crosshairX += (this.targetCrosshairX - this.crosshairX) * lerpFactor;
+    this.crosshairY += (this.targetCrosshairY - this.crosshairY) * lerpFactor;
+
+    if (Math.hypot(this.targetCrosshairX - this.crosshairX, this.targetCrosshairY - this.crosshairY) < 0.5) {
+      this.crosshairX = this.targetCrosshairX;
+      this.crosshairY = this.targetCrosshairY;
+    }
+
+    this.crosshairContainer.position.set(this.crosshairX, this.crosshairY);
+  }
+
+  public getCrosshairPosition(): { x: number; y: number } {
+    return { x: this.crosshairX, y: this.crosshairY };
+  }
+
+  public isTargetLocked(): boolean {
+    return this.isCrosshairTargetLocked;
+  }
+
+  public setCrosshairVisible(visible: boolean): void {
+    if (this.crosshairContainer) {
+      this.crosshairContainer.visible = visible;
+    }
+  }
+
+  public dispose(): void {
+    this.destroy({ children: true });
+  }
+}

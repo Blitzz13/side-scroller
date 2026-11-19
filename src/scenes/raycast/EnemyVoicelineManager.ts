@@ -1,0 +1,823 @@
+import { sound, IMediaInstance, webaudio } from "@pixi/sound";
+import {
+  IEnemyVoicePool,
+  IEnemyVoicelineConfig,
+} from "../../configs/interfaces/IEnemyVoicelineConfig";
+import { enemyVoicelineConfig } from "../../configs/EnemyVoicelineConfig";
+import { RaycastEnemy } from "./RaycastEnemy";
+import { VoicelineCategory } from "../../enums/VoicelineCategory";
+import { SettingsManager } from "../../managers/SettingsManager";
+
+export { VoicelineCategory };
+
+function stopMediaInstance(inst: IMediaInstance | HTMLAudioElement): void {
+  if ("stop" in inst && typeof inst.stop === "function") {
+    inst.stop();
+  } else if ("pause" in inst && typeof inst.pause === "function") {
+    inst.pause();
+    inst.currentTime = 0;
+  }
+}
+
+function pauseMediaInstance(inst: IMediaInstance | HTMLAudioElement): void {
+  if ("stop" in inst && typeof inst.stop === "function") {
+    (inst as IMediaInstance).paused = true;
+  } else if ("pause" in inst && typeof inst.pause === "function") {
+    inst.pause();
+  }
+}
+
+function resumeMediaInstance(inst: IMediaInstance | HTMLAudioElement): void {
+  if ("stop" in inst && typeof inst.stop === "function") {
+    (inst as IMediaInstance).paused = false;
+  } else {
+    const htmlAudio = inst as HTMLAudioElement;
+    if (typeof htmlAudio.play === "function") {
+      const p = htmlAudio.play();
+      if (p && typeof p.catch === "function") {
+        p.catch(() => {});
+      }
+    }
+  }
+}
+
+interface QueuedVoiceline {
+  alias: string;
+  category: VoicelineCategory;
+  priority: number;
+  enemyId?: number;
+  sourceX: number;
+  sourceY: number;
+  timestamp: number;
+  maxAgeMs: number;
+}
+
+interface ActiveSoundHandle {
+  id: number;
+  enemyId?: number;
+  alias: string;
+  category?: VoicelineCategory;
+  spatialScale: number;
+  remainingMs: number;
+  lastStartedAt: number;
+  onFinish?: () => void;
+  mediaInstance?: IMediaInstance | HTMLAudioElement;
+  timeoutId?: ReturnType<typeof setTimeout>;
+}
+
+export class EnemyVoicelineManager {
+  private config: IEnemyVoicelineConfig;
+  private queue: QueuedVoiceline[] = [];
+  private activeHandles: Map<number, ActiveSoundHandle> = new Map();
+  private deadEnemyIds: Set<number> = new Set();
+  private nextInstanceId: number = 1;
+  private isPaused: boolean = false;
+  private settingsUnsubscribe?: () => void;
+
+  private lastVoicelineStartTime: number = 0;
+  private lastVoicelineEndTime: number = 0;
+  private lastSpottedTime: number = 0;
+  private lastSuspiciousTime: number = 0;
+  private lastGrenadeTime: number = 0;
+
+  // Standard fallback sound aliases
+  public static readonly DEFAULT_SOUND_GRENADE = "stormtrooper_grenade";
+  public static readonly DEFAULT_SOUND_HEAR_SOMETHING = "stormtrooper_hear_something";
+  public static readonly DEFAULT_SOUND_REBEL_SCUM = "stormtrooper_rebel_scum";
+  public static readonly DEFAULT_SOUND_THERE_HE_IS = "stormtrooper_there_he_is";
+
+  // Backward-compatibility aliases
+  public static readonly SOUND_GRENADE = EnemyVoicelineManager.DEFAULT_SOUND_GRENADE;
+  public static readonly SOUND_HEAR_SOMETHING = EnemyVoicelineManager.DEFAULT_SOUND_HEAR_SOMETHING;
+  public static readonly SOUND_REBEL_SCUM = EnemyVoicelineManager.DEFAULT_SOUND_REBEL_SCUM;
+  public static readonly SOUND_THERE_HE_IS = EnemyVoicelineManager.DEFAULT_SOUND_THERE_HE_IS;
+
+  private static readonly DEFAULT_SOUND_PATHS: Record<string, string> = {
+    [EnemyVoicelineManager.DEFAULT_SOUND_GRENADE]:
+      "assets/raycast/sfx/storm_trooper/grenade_grenade.mp3",
+    [EnemyVoicelineManager.DEFAULT_SOUND_HEAR_SOMETHING]:
+      "assets/raycast/sfx/storm_trooper/i_hear_something.mp3",
+    [EnemyVoicelineManager.DEFAULT_SOUND_REBEL_SCUM]:
+      "assets/raycast/sfx/storm_trooper/rebel_scum.mp3",
+    [EnemyVoicelineManager.DEFAULT_SOUND_THERE_HE_IS]:
+      "assets/raycast/sfx/storm_trooper/there_he_is.mp3",
+  };
+
+  constructor(customConfig?: Partial<IEnemyVoicelineConfig>) {
+    this.config = {
+      ...enemyVoicelineConfig,
+      ...(customConfig || {}),
+    };
+    this.config.volume = SettingsManager.getInstance().getVoicesVolume();
+    this.ensureSoundsRegistered();
+    this.settingsUnsubscribe = SettingsManager.getInstance().subscribe((settings) => {
+      this.config.volume = settings.voicesVolume;
+      this.updateActiveVolumes();
+    });
+  }
+
+  /**
+   * Resolves the voice line pool for a given enemy or fallback
+   */
+  public getVoicePool(enemy?: RaycastEnemy): IEnemyVoicePool {
+    if (enemy?.config?.voicelines) {
+      return enemy.config.voicelines;
+    }
+    const typeKey = enemy?.config?.type?.toLowerCase();
+    if (typeKey && this.config.voicePools?.[typeKey]) {
+      return this.config.voicePools[typeKey];
+    }
+    if (typeKey === "diagona" || typeKey === "dianoga") {
+      return { spotted: [], suspicious: [], grenade: [] };
+    }
+    return (
+      this.config.defaultVoicePool ||
+      this.config.voicePools?.["stormtrooper"] || {
+        spotted: [
+          EnemyVoicelineManager.DEFAULT_SOUND_REBEL_SCUM,
+          EnemyVoicelineManager.DEFAULT_SOUND_THERE_HE_IS,
+        ],
+        suspicious: [EnemyVoicelineManager.DEFAULT_SOUND_HEAR_SOMETHING],
+        grenade: [EnemyVoicelineManager.DEFAULT_SOUND_GRENADE],
+      }
+    );
+  }
+
+  /**
+   * Registers a new voice line pool for a specific enemy type identifier (e.g. "officer", "droid")
+   */
+  public registerEnemyVoicePool(
+    enemyType: string,
+    pool: IEnemyVoicePool
+  ): void {
+    if (!this.config.voicePools) {
+      this.config.voicePools = {};
+    }
+    this.config.voicePools[enemyType.toLowerCase()] = pool;
+  }
+
+  /**
+   * Ensures sound aliases are registered in @pixi/sound and preloaded
+   */
+  public ensureSoundsRegistered(): void {
+    const allPaths: Record<string, string> = {
+      ...EnemyVoicelineManager.DEFAULT_SOUND_PATHS,
+      ...(this.config.soundRegistry || {}),
+    };
+
+    for (const [alias, src] of Object.entries(allPaths)) {
+      if (!sound.exists(alias)) {
+        try {
+          sound.add(alias, { url: src, preload: true });
+        } catch {
+          try {
+            sound.add(alias, src);
+          } catch (e) {
+            console.warn(`Could not register voiceline sound alias "${alias}":`, e);
+          }
+        }
+      }
+    }
+  }
+
+  public getConfig(): IEnemyVoicelineConfig {
+    return this.config;
+  }
+
+  public setConfig(update: Partial<IEnemyVoicelineConfig>): void {
+    this.config = {
+      ...this.config,
+      ...update,
+    };
+  }
+
+  /**
+   * Set maximum concurrent voicelines that can play simultaneously.
+   */
+  public setMaxConcurrentVoicelines(count: number): void {
+    this.config.maxConcurrentVoicelines = Math.max(1, count);
+  }
+
+  /**
+   * Set minimum spacing in milliseconds between starting voicelines.
+   */
+  public setVoicelineSpacing(spacingMs: number): void {
+    this.config.voicelineSpacing = Math.max(0, spacingMs);
+  }
+
+  /**
+   * Immediately stops any sound or voiceline playing for the specified enemy,
+   * purges any queued voicelines for that enemy, and prevents any pending voicelines from playing.
+   */
+  public onEnemyDeath(enemyId: number): void {
+    this.deadEnemyIds.add(enemyId);
+
+    // 1. Purge any queued voicelines for this dead enemy
+    this.queue = this.queue.filter((q) => q.enemyId !== enemyId);
+
+    // 2. Stop any active voicelines currently playing for this dead enemy (except grenade shout mid-sentence)
+    for (const [id, handle] of Array.from(this.activeHandles.entries())) {
+      // Do NOT cut off a grenade shout mid-sentence if the enemy is blown up by the grenade
+      if (
+        handle.enemyId === enemyId &&
+        handle.category !== VoicelineCategory.GRENADE
+      ) {
+        if (handle.timeoutId) {
+          clearTimeout(handle.timeoutId);
+        }
+        if (handle.mediaInstance) {
+          try {
+            stopMediaInstance(handle.mediaInstance);
+          } catch (e) {
+            console.warn(`Failed to stop media instance for dead enemy ${enemyId}:`, e);
+          }
+        }
+        try {
+          sound.stop(handle.alias);
+        } catch {}
+
+        this.activeHandles.delete(id);
+        this.lastVoicelineEndTime = Date.now();
+      }
+    }
+  }
+
+  /**
+   * Triggered when the player throws a grenade / thermal detonator.
+   * Guarantees that a grenade reaction voiceline is shouted with emergency priority,
+   * provided there is an alive enemy capable of reacting within hearing range.
+   */
+  public onPlayerThrowGrenade(
+    playerX: number,
+    playerY: number,
+    enemies: RaycastEnemy[] = [],
+    hasLineOfFire?: (enemyX: number, enemyY: number) => boolean
+  ): void {
+    const now = Date.now();
+    const globalCooldown = this.config.globalGrenadeCooldown ?? 4000;
+    if (now - this.lastGrenadeTime < globalCooldown) {
+      return;
+    }
+
+    // 1. Find closest alive enemy around the player within grenade reaction range (not behind walls)
+    // and whose per-enemy grenade cooldown has elapsed
+    const enemyCooldown = this.config.grenadeCooldown ?? 8000;
+    const maxRange = this.config.grenadeHearingRange ?? 7.0;
+    const maxRangeSq = maxRange * maxRange;
+
+    let closestEnemy: RaycastEnemy | null = null;
+    let closestDistSq = Infinity;
+    let chosenAlias: string | null = null;
+
+    for (const enemy of enemies) {
+      if (
+        !enemy ||
+        enemy.isDead ||
+        enemy.health <= 0 ||
+        enemy.state === "dead" ||
+        this.deadEnemyIds.has(enemy.id)
+      ) {
+        continue;
+      }
+      // Check per-enemy grenade voiceline cooldown
+      if (now - (enemy.lastGrenadeTime ?? 0) < enemyCooldown) {
+        continue;
+      }
+      const dx = enemy.x - playerX;
+      const dy = enemy.y - playerY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > maxRangeSq) {
+        continue;
+      }
+
+      // Check if blocked by walls: enemy must be around the player without walls in between
+      if (hasLineOfFire && !hasLineOfFire(enemy.x, enemy.y)) {
+        continue;
+      }
+
+      // Check if this enemy has grenade voicelines
+      const pool = this.getVoicePool(enemy);
+      const grenadeLines = pool.grenade;
+      if (!grenadeLines || grenadeLines.length === 0) {
+        continue;
+      }
+
+      if (distSq < closestDistSq) {
+        closestDistSq = distSq;
+        closestEnemy = enemy;
+        chosenAlias = grenadeLines[Math.floor(Math.random() * grenadeLines.length)];
+      }
+    }
+
+    // If no alive enemy capable of reacting is around (or ready after cooldown), do not play any voiceline!
+    if (!closestEnemy || !chosenAlias) {
+      return;
+    }
+
+    this.lastGrenadeTime = now;
+    closestEnemy.lastGrenadeTime = now;
+
+    // 2. Emergency Priority: Interrupt casual chatter if at max concurrent capacity
+    if (this.activeHandles.size >= this.config.maxConcurrentVoicelines) {
+      for (const [id, handle] of Array.from(this.activeHandles.entries())) {
+        if (handle.alias !== chosenAlias) {
+          if (handle.timeoutId) clearTimeout(handle.timeoutId);
+          if (handle.mediaInstance) {
+            try {
+              stopMediaInstance(handle.mediaInstance);
+            } catch {}
+          }
+          try {
+            sound.stop(handle.alias);
+          } catch {}
+          this.activeHandles.delete(id);
+        }
+      }
+    }
+
+    // 3. Play the grenade shout immediately from the reacting enemy
+    this.playVoiceline(
+      {
+        alias: chosenAlias,
+        category: VoicelineCategory.GRENADE,
+        priority: 3,
+        enemyId: closestEnemy.id,
+        sourceX: closestEnemy.x,
+        sourceY: closestEnemy.y,
+        timestamp: now,
+        maxAgeMs: 4000,
+      },
+      playerX,
+      playerY
+    );
+  }
+
+  /**
+   * Called during enemy AI update for each alive enemy.
+   * Determines if "spotted" or "suspicious" voicelines should be triggered.
+   */
+  public onEnemyUpdate(
+    enemy: RaycastEnemy,
+    playerX: number,
+    playerY: number,
+    hasLos: boolean,
+    distance: number,
+    isBehindWall: boolean = false
+  ): void {
+    if (enemy.isDead || this.deadEnemyIds.has(enemy.id)) return;
+
+    const now = Date.now();
+    const pool = this.getVoicePool(enemy);
+
+    const seesPlayer = hasLos && enemy.isPointInVisionCone(playerX, playerY);
+
+    if (seesPlayer && distance <= enemy.config.sightRange) {
+      // Enemy sees the player
+      const justSpotted = enemy.justSpottedPlayer || !enemy.wasSeeingPlayer;
+      const cooldownElapsed = now - enemy.lastSpottedTime >= this.config.spottedCooldown;
+      const globalCooldownElapsed = now - this.lastSpottedTime >= 4000;
+
+      if ((justSpotted || cooldownElapsed) && globalCooldownElapsed) {
+        enemy.lastSpottedTime = now;
+        this.lastSpottedTime = now;
+
+        const spottedLines = pool.spotted || [];
+        if (spottedLines.length > 0) {
+          const alias =
+            spottedLines[Math.floor(Math.random() * spottedLines.length)];
+
+          this.requestVoiceline(
+            {
+              alias,
+              category: VoicelineCategory.SPOTTED,
+              priority: 2, // Medium priority
+              enemyId: enemy.id,
+              sourceX: enemy.x,
+              sourceY: enemy.y,
+              timestamp: now,
+              maxAgeMs: 3500,
+            },
+            playerX,
+            playerY
+          );
+        }
+      }
+      enemy.wasSeeingPlayer = true;
+    } else {
+      // Enemy does NOT see the player
+      enemy.wasSeeingPlayer = false;
+
+      // Suspicious sounds ("I hear something") are played ONLY if:
+      // 1. The player is not behind some kind of wall (!isBehindWall)
+      // 2. The player is closer to them (distance <= maxSuspiciousDistance)
+      const maxSuspiciousDistance = this.config.suspiciousRange ?? this.config.hearingRange ?? 3.5;
+      if (!isBehindWall && distance <= maxSuspiciousDistance) {
+        const cooldownElapsed = now - enemy.lastSuspiciousTime >= this.config.suspiciousCooldown;
+        const globalCooldownElapsed = now - this.lastSuspiciousTime >= 6000;
+
+        if (cooldownElapsed && globalCooldownElapsed) {
+          enemy.lastSuspiciousTime = now;
+          this.lastSuspiciousTime = now;
+
+          const suspiciousLines = pool.suspicious || [];
+          if (suspiciousLines.length > 0) {
+            const alias =
+              suspiciousLines[Math.floor(Math.random() * suspiciousLines.length)];
+
+            this.requestVoiceline(
+              {
+                alias,
+                category: VoicelineCategory.SUSPICIOUS,
+                priority: 1, // Normal priority
+                enemyId: enemy.id,
+                sourceX: enemy.x,
+                sourceY: enemy.y,
+                timestamp: now,
+                maxAgeMs: 4000,
+              },
+              playerX,
+              playerY
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Called when an enemy is alerted by gunfire noise, bullet near-miss, or impact.
+   * Plays a suspicious or spotted voiceline if cooldowns allow.
+   */
+  public onGunfireHeard(
+    enemy: RaycastEnemy,
+    shooterX: number,
+    shooterY: number,
+    isBehindWall: boolean = false
+  ): void {
+    if (enemy.isDead || this.deadEnemyIds.has(enemy.id)) return;
+
+    const now = Date.now();
+    const cooldownElapsed = now - (enemy.lastSuspiciousTime ?? 0) >= 3000;
+    const globalCooldownElapsed = now - this.lastSuspiciousTime >= 2500;
+
+    if (!cooldownElapsed || !globalCooldownElapsed) return;
+
+    const pool = this.getVoicePool(enemy);
+
+    // If enemy can see the shooter in their vision cone and not behind a wall, prefer a spotted line
+    const canSee = !isBehindWall && enemy.isPointInVisionCone(shooterX, shooterY);
+    if (!canSee) {
+      const dist = Math.hypot(shooterX - enemy.x, shooterY - enemy.y);
+      const maxSuspiciousDistance = this.config.suspiciousRange ?? this.config.hearingRange ?? 3.5;
+      if (isBehindWall || dist > maxSuspiciousDistance) {
+        return;
+      }
+    }
+
+    const lines = canSee && pool.spotted && pool.spotted.length > 0 ? pool.spotted : pool.suspicious;
+    if (!lines || lines.length === 0) return;
+
+    enemy.lastSuspiciousTime = now;
+    this.lastSuspiciousTime = now;
+    if (canSee) {
+      enemy.lastSpottedTime = now;
+      this.lastSpottedTime = now;
+    }
+
+    const alias = lines[Math.floor(Math.random() * lines.length)];
+    this.requestVoiceline(
+      {
+        alias,
+        category: canSee ? VoicelineCategory.SPOTTED : VoicelineCategory.SUSPICIOUS,
+        priority: 2, // Elevated priority for gunfire reactions
+        enemyId: enemy.id,
+        sourceX: enemy.x,
+        sourceY: enemy.y,
+        timestamp: now,
+        maxAgeMs: 3500,
+      },
+      shooterX,
+      shooterY
+    );
+  }
+
+  /**
+   * Request playing a voiceline, either immediately or adding to queue.
+   */
+  private requestVoiceline(
+    item: QueuedVoiceline,
+    playerX: number,
+    playerY: number
+  ): void {
+    if (item.enemyId !== undefined && this.deadEnemyIds.has(item.enemyId)) {
+      return;
+    }
+
+    const now = Date.now();
+    const canPlayImmediately =
+      item.category === VoicelineCategory.GRENADE ||
+      (this.activeHandles.size < this.config.maxConcurrentVoicelines &&
+        now - this.lastVoicelineStartTime >= this.config.voicelineSpacing);
+
+    if (canPlayImmediately) {
+      this.playVoiceline(item, playerX, playerY);
+    } else {
+      // Avoid duplicate requests of the same category in the queue
+      const existing = this.queue.find((q) => q.category === item.category);
+      if (existing) {
+        if (item.priority > existing.priority) {
+          existing.priority = item.priority;
+          existing.alias = item.alias;
+          existing.enemyId = item.enemyId;
+          existing.sourceX = item.sourceX;
+          existing.sourceY = item.sourceY;
+          existing.timestamp = item.timestamp;
+        }
+        return;
+      }
+
+      // Keep queue compact (max 3 queued lines)
+      if (this.queue.length >= 3) {
+        this.queue.shift();
+      }
+      this.queue.push(item);
+    }
+  }
+
+  /**
+   * Execute actual audio playback with concurrency tracking and spatial attenuation.
+   */
+  private playVoiceline(
+    item: QueuedVoiceline,
+    playerX: number,
+    playerY: number
+  ): void {
+    // If enemy died before this line could start, do not play
+    if (
+      item.enemyId !== undefined &&
+      this.deadEnemyIds.has(item.enemyId)
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    this.lastVoicelineStartTime = now;
+    this.config.volume = SettingsManager.getInstance().getVoicesVolume();
+
+    // Calculate spatial attenuation separately so volume slider updates scale cleanly
+    let spatialScale = 1.0;
+    if (this.config.enableSpatialAudio) {
+      const dx = item.sourceX - playerX;
+      const dy = item.sourceY - playerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const maxDist =
+        item.category === VoicelineCategory.GRENADE
+          ? Math.max(8, this.config.grenadeHearingRange)
+          : Math.max(10, this.config.hearingRange * 2);
+      const falloff = Math.max(0, 1 - distance / maxDist);
+      const minVol = this.config.minSpatialVolume ?? 0.5;
+      spatialScale = minVol + (1 - minVol) * falloff;
+    }
+
+    const effectiveVolume = this.computeVolume(spatialScale, item.category);
+
+    const instanceId = this.nextInstanceId++;
+    const onFinish = () => {
+      const h = this.activeHandles.get(instanceId);
+      if (h?.timeoutId) {
+        clearTimeout(h.timeoutId);
+      }
+      this.activeHandles.delete(instanceId);
+      this.lastVoicelineEndTime = Date.now();
+    };
+
+    const handle: ActiveSoundHandle = {
+      id: instanceId,
+      enemyId: item.enemyId,
+      alias: item.alias,
+      category: item.category,
+      spatialScale,
+      remainingMs: 3500,
+      lastStartedAt: now,
+      onFinish,
+    };
+    this.activeHandles.set(instanceId, handle);
+
+    try {
+      // Resume audioContext if browser suspended it before first gesture
+      const ctx = sound.context as webaudio.WebAudioContext | undefined;
+      if (ctx?.audioContext && ctx.audioContext.state === "suspended") {
+        try {
+          ctx.audioContext.resume();
+        } catch {}
+      }
+
+      if (!sound.exists(item.alias)) {
+        this.ensureSoundsRegistered();
+      }
+
+      const res = sound.play(item.alias, {
+        volume: effectiveVolume,
+        loop: false,
+        complete: onFinish,
+      }) as IMediaInstance | Promise<IMediaInstance>;
+
+      if (res) {
+        if (res instanceof Promise) {
+          res
+            .then((inst: IMediaInstance) => {
+              if (!this.activeHandles.has(instanceId)) {
+                try {
+                  inst?.stop?.();
+                } catch {}
+                return;
+              }
+              if (
+                item.category !== VoicelineCategory.GRENADE &&
+                item.enemyId !== undefined &&
+                this.deadEnemyIds.has(item.enemyId)
+              ) {
+                try {
+                  inst?.stop?.();
+                } catch {}
+                onFinish();
+              } else {
+                handle.mediaInstance = inst;
+                inst.volume = this.computeVolume(handle.spatialScale, handle.category);
+                if (this.isPaused) {
+                  pauseMediaInstance(inst);
+                }
+              }
+            })
+            .catch(() => {
+              onFinish();
+            });
+        } else {
+          handle.mediaInstance = res;
+          if (
+            item.category !== VoicelineCategory.GRENADE &&
+            item.enemyId !== undefined &&
+            this.deadEnemyIds.has(item.enemyId)
+          ) {
+            try {
+              res.stop();
+            } catch {}
+            onFinish();
+            return;
+          }
+          if (this.isPaused) {
+            pauseMediaInstance(res);
+          }
+        }
+      }
+
+      if (!this.isPaused) {
+        handle.timeoutId = setTimeout(() => {
+          onFinish();
+        }, handle.remainingMs);
+      }
+    } catch (err) {
+      console.warn(`Error playing voiceline "${item.alias}":`, err);
+      // Fallback to HTML5 Audio if Pixi sound encounters an issue
+      try {
+        const audioSrc =
+          this.config.soundRegistry?.[item.alias] ||
+          EnemyVoicelineManager.DEFAULT_SOUND_PATHS[item.alias];
+        if (audioSrc && typeof Audio !== "undefined") {
+          const audio = new Audio(audioSrc);
+          audio.volume = effectiveVolume;
+          audio.onended = () => onFinish();
+          handle.mediaInstance = audio;
+          if (!this.isPaused) {
+            audio.play().catch(() => onFinish());
+            handle.timeoutId = setTimeout(() => {
+              onFinish();
+            }, handle.remainingMs);
+          }
+          return;
+        }
+      } catch {}
+      onFinish();
+    }
+  }
+
+  private computeVolume(spatialScale: number, category?: VoicelineCategory): number {
+    if (this.config.volume <= 0) return 0;
+    const baseVol =
+      category === VoicelineCategory.GRENADE
+        ? Math.min(1, this.config.volume * 1.15)
+        : this.config.volume;
+    return Math.max(0, Math.min(1, baseVol * spatialScale));
+  }
+
+  private updateActiveVolumes(): void {
+    for (const handle of this.activeHandles.values()) {
+      const vol = this.computeVolume(handle.spatialScale, handle.category);
+      const inst = handle.mediaInstance;
+      if (!inst) continue;
+      try {
+        if ("stop" in inst && typeof inst.stop === "function") {
+          (inst as IMediaInstance).volume = vol;
+        } else if ("volume" in inst) {
+          (inst as HTMLAudioElement).volume = vol;
+        }
+      } catch {}
+    }
+  }
+
+  public pauseAll(): void {
+    if (this.isPaused) return;
+    this.isPaused = true;
+    const now = Date.now();
+    for (const handle of this.activeHandles.values()) {
+      if (handle.timeoutId) {
+        clearTimeout(handle.timeoutId);
+        handle.timeoutId = undefined;
+        const elapsed = Math.max(0, now - handle.lastStartedAt);
+        handle.remainingMs = Math.max(150, handle.remainingMs - elapsed);
+      }
+      if (handle.mediaInstance) {
+        try {
+          pauseMediaInstance(handle.mediaInstance);
+        } catch {}
+      }
+    }
+  }
+
+  public resumeAll(): void {
+    if (!this.isPaused) return;
+    this.isPaused = false;
+    this.config.volume = SettingsManager.getInstance().getVoicesVolume();
+    this.updateActiveVolumes();
+    const now = Date.now();
+    for (const handle of this.activeHandles.values()) {
+      if (handle.mediaInstance) {
+        try {
+          resumeMediaInstance(handle.mediaInstance);
+        } catch {}
+      }
+      handle.lastStartedAt = now;
+      if (!handle.timeoutId && handle.onFinish) {
+        const finishCb = handle.onFinish;
+        handle.timeoutId = setTimeout(() => {
+          finishCb();
+        }, handle.remainingMs);
+      }
+    }
+  }
+
+  /**
+   * Called every frame to manage queue and spaced playback.
+   */
+  public update(delta: number, playerX: number, playerY: number): void {
+    if (this.isPaused) return;
+    const now = Date.now();
+
+    // 1. Remove expired items or dead enemy items from the queue
+    for (let i = this.queue.length - 1; i >= 0; i--) {
+      const q = this.queue[i];
+      if (
+        now - q.timestamp > q.maxAgeMs ||
+        (q.enemyId !== undefined && this.deadEnemyIds.has(q.enemyId))
+      ) {
+        this.queue.splice(i, 1);
+      }
+    }
+
+    if (this.queue.length === 0) return;
+
+    // 2. Check if we can play next queued voiceline based on concurrency and spacing
+    const canPlay =
+      this.activeHandles.size < this.config.maxConcurrentVoicelines &&
+      now - this.lastVoicelineStartTime >= this.config.voicelineSpacing;
+
+    if (canPlay) {
+      // Sort queue so highest priority items play first
+      this.queue.sort((a, b) => b.priority - a.priority);
+      const nextItem = this.queue.shift();
+      if (nextItem) {
+        this.playVoiceline(nextItem, playerX, playerY);
+      }
+    }
+  }
+
+  public dispose(): void {
+    this.settingsUnsubscribe?.();
+    this.settingsUnsubscribe = undefined;
+    this.queue = [];
+    for (const handle of this.activeHandles.values()) {
+      if (handle.timeoutId) {
+        clearTimeout(handle.timeoutId);
+      }
+      if (handle.mediaInstance) {
+        try {
+          stopMediaInstance(handle.mediaInstance);
+        } catch {}
+      }
+    }
+    this.activeHandles.clear();
+    this.deadEnemyIds.clear();
+  }
+}
+
+export { EnemyVoicelineManager as RaycastEnemyVoicelineManager, EnemyVoicelineManager as StormtrooperVoicelineManager };

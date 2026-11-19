@@ -144,6 +144,19 @@ const viperDroidConfig: IEnemyConfig = {
             loop: false,
             volume: 1
         },
+        idleSound: {
+            src: "probe_droid_hovering",
+            loop: true,
+            volume: 0.6
+        },
+        shootSounds: [
+            { src: "probe_droid_shot_1", loop: false, volume: 1 },
+            { src: "probe_droid_shot_2", loop: false, volume: 1 },
+            { src: "probe_droid_shot_3", loop: false, volume: 1 },
+            { src: "probe_droid_shot_4", loop: false, volume: 1 },
+            { src: "probe_droid_shot_5", loop: false, volume: 1 },
+            { src: "probe_droid_shot_6", loop: false, volume: 1 },
+        ],
     },
     death: getExplosionConfig(),
 }
@@ -169,3 +182,13 @@ export const enemyConfigs: IEnemyConfig[] = [
     viperDroidConfig,
     atAtConfig
 ]
+
+// Re-export Raycast Enemy configurations and Viper Droid Raycast config
+export {
+    viperDroidRaycastConfig,
+    stormtrooperConfig,
+    raycastEnemyConfigs,
+    getRaycastEnemyConfig,
+} from "./RaycastEnemyConfigs";
+export { IRaycastEnemyConfig, IRaycastEnemyAnimationConfig, IRaycastEnemyAnimationSequence } from "./interfaces/IRaycastEnemyConfig";
+

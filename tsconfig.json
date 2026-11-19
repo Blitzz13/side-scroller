@@ -10,11 +10,15 @@
         "paths": {
             "mini-signals": ["./node_modules/resource-loader/typings/mini-signals.d.ts"]
         },
-        "lib": ["ES2022", "DOM"]
+        "lib": ["ES2022", "DOM"],
+        "types": ["node"],
+        "skipLibCheck": true,
+        "resolveJsonModule": true
     },
     "include": [
         "./src",
         "webpack.config.ts",
         "webpack.dev.ts",
+        "assets/cutscenes/**/*.ts"
     ]
 }

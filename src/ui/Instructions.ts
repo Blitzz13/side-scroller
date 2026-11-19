@@ -1,4 +1,5 @@
 import { BitmapText, Container, Graphics, Sprite } from "pixi.js";
+import { sound } from "@pixi/sound";
 import { Button } from "../misc/Button";
 import { defaultButtonSize } from "../configs/GameConfig";
 import { instructionsConfig } from "../configs/InstructionsConfig";
@@ -17,14 +18,11 @@ export class Instructions extends Container implements IDisposable {
         );
         content.anchor.copyFrom(instructionsConfig.contentTextConfig.anchor);
 
-        const ok = new Button(defaultButtonSize, "OK");
-
         const ammoDesc = new BitmapText("Restores Ammo", instructionsConfig.ammoDescConfig.textConfig);
         ammoDesc.position.copyFrom(instructionsConfig.ammoDescConfig.position);
 
         const healthDesc = new BitmapText("Restores Health", instructionsConfig.healthDescConfig.textConfig);
-
-        healthDesc.position.copyFrom(instructionsConfig.healthDescConfig.position)
+        healthDesc.position.copyFrom(instructionsConfig.healthDescConfig.position);
 
         const ammo = Sprite.from(instructionsConfig.ammo.texture);
         ammo.scale.copyFrom(instructionsConfig.ammo.scale);
@@ -32,11 +30,25 @@ export class Instructions extends Container implements IDisposable {
 
         const health = Sprite.from(instructionsConfig.health.texture);
         health.scale.copyFrom(instructionsConfig.health.scale);
-        health.position.copyFrom(instructionsConfig.health.position)
+        health.position.copyFrom(instructionsConfig.health.position);
 
-        ok.on("pointerdown", () => {
+        const ok = new Button(defaultButtonSize, "OK");
+        ok.eventMode = "static";
+        ok.cursor = "pointer";
+
+        const onConfirm = (e?: any) => {
+            e?.stopPropagation?.();
+            try {
+                if (sound.exists("button_click")) {
+                    sound.play("button_click", { volume: 0.45 });
+                }
+            } catch {}
             this.visible = false;
-        });
+            this.emit("confirm");
+        };
+
+        ok.on("pointerdown", onConfirm);
+        ok.on("pointertap", onConfirm);
 
         const graphics = new Graphics();
         graphics.beginFill(instructionsConfig.background.color, instructionsConfig.background.alpha);
@@ -55,7 +67,6 @@ export class Instructions extends Container implements IDisposable {
         content.x = titleText.x;
         ok.x = graphics.width / 2 - ok.width / 2;
         ok.y = graphics.height - ok.height - instructionsConfig.distanceBetweenItemsY;
-        ok.interactive = true;
 
         this.addChild(graphics);
         this.addChild(titleText);

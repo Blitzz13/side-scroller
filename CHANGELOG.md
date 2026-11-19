@@ -1,0 +1,2512 @@
+# Raycaster Changelog
+
+This document logs recent development changes and enhancements made to the Raycaster 3D engine in `side-scroller`.
+
+## [2026-11-14] - Credits Scene, Circle Iris Wipe Transition & Dev Menu Trigger
+
+### 1. Credits Scene & Translatable Config ([`src/scenes/CreditsScene.ts`](file:///D:/Projects/side-scroller/src/scenes/CreditsScene.ts), [`src/configs/CreditsConfig.ts`](file:///D:/Projects/side-scroller/src/configs/CreditsConfig.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts))
+- Added `CreditsScene` featuring `assets/cutscenes/intro/star_background.jpg`, animated twinkling stars, yellow (`0xffe81f`) centered text lines fading smoothly in and out across the full duration of `assets/sounds/end_credits_theme.mp3`.
+- Added `CREDITS_TRANSLATIONS` and `getCreditsLocale()` in `CreditsConfig.ts` for easy localization, including refined credits copy and artist attribution.
+- Registered `end_credits_theme` in `GameConfig.ts` and `SettingsManager.ts` for live volume control.
+- Added a **Skip** button (and `Escape`/`Space`/`Enter` support) that cross-fades to the final message, seeks the audio to `37s`, and waits for the track to finish before transitioning to `Scene.MainMenu`.
+
+### 2. Circle Iris Wipe & Level 3 / Dev Menu Integration ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts), [`src/enums/Scene.ts`](file:///D:/Projects/side-scroller/src/enums/Scene.ts), [`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`src/scenes/raycast/RaycastDebugMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastDebugMenu.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- Added `Scene.Credits` and an expanding circular `Graphics` mask iris wipe transition from the center of the screen when entering `CreditsScene`.
+- Updated `LevelEndScene` so completing Level 3 (`nextLevel === "credits"`) preserves the saved `currentLevel`, labels the primary button `"Credits"`, and transitions to `Scene.Credits`.
+- Added a `🎬 Credits (Iris Wipe)` button in `RaycastDebugMenu` for instant previewing from gameplay.
+
+## [2026-11-14] - Debug URL Gating, Live Audio/Voice Controls, Pause-Synced Voices & Pause Menu Polish
+
+### 1. Debug Mode URL Gating & Debug Toasts ([`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts))
+- Added `isDebugEnabled()` in `Utils.ts` to check for the `debug` query parameter in the URL (enabled when present and not `false`/`0`).
+- Gated `RaycastDebugMenu`, its desktop trigger button, mobile `DEV` button, and `` ` `` / `~` / `F2` keyboard shortcuts behind `isDebugEnabled()`.
+- Gated combat/damage/breakable debug toasts (`Neutralized ...`, `Caught in Thermal Blast!`, `Hit by Blaster Fire!`, `Smashed/Destroyed ...`) behind `showDebugToast()` (`isDebugEnabled()`), while keeping objective, barrier, access card, and extraction toasts always visible.
+
+### 2. Live Volume Control & Voice Balance ([`src/configs/SoundConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SoundConfig.ts), [`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts))
+- Added `registerDynamicMusic()` / `unregisterDynamicMusic()` on `SettingsManager` and subscribed `RaycastScene` to live settings updates so dynamic level tracks (such as Level 3 `overrideBackgroundMusic`), looping prop/trigger sounds, alert themes, and enemy hover loops respond immediately to the music volume slider while playing.
+- Added `DEFAULT_VOICES_VOLUME = 1.0`, `DEFAULT_MUSIC_VOLUME = 0.3`, and `MUSIC_VOLUME_MULTIPLIER = 0.65` in `SoundConfig.ts` and wired `getEffectiveMusicVolume()` so voices are clearly audible over music by default.
+
+### 3. Pause-Synced Voices & Pause Menu Styling ([`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/ui/InGameMenu.ts`](file:///D:/Projects/side-scroller/src/ui/InGameMenu.ts))
+- Added `pauseVoicelines()` / `resumeVoicelines()` across `RaycastTriggerManager` and `EnemyVoicelineManager` and wired them into `RaycastScene.pauseGame()` / `resumeGame()` so dialog and enemy voices pause when the pause menu opens and resume from the exact playback position with updated `voicesVolume` on unpause.
+- Updated `InGameMenu` header text color from yellow to cyan (`0x00e5ff`) to match the pause menu theme.
+
+## [2026-11-14] - Mobile/Desktop UI Config, Subtitle Size Settings, Minimap Waypoints & Level 2/3 Updates
+
+### 1. Minimap Active Objective Waypoints ([`src/plugins/minimap/`](file:///D:/Projects/side-scroller/src/plugins/minimap/), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- **Fog-Independent Objective Markers**:
+  - Added `IMinimapObjectiveMarker` and `getObjectiveMarkers` on `IMinimapDataSource` (`MinimapTypes.ts`) and wired `getActiveObjectiveMarkers()` from `RaycastScene` into `RaycastMinimap`.
+  - Resolves coordinates of the current active objective across un-triggered objective `Triggers`, unbroken `Breakables`, active `DestructableWalls`, and `LevelFinish` zones for escape/extraction objectives.
+  - Draws a pulsing gold diamond beacon with halo ring in `MinimapRenderer.drawDynamicMap` without modifying or revealing surrounding `discoveredTiles`, and added the matching `OBJ` indicator to the footer legend (`MinimapUI.ts`).
+  - Lowered the minimum minimap `cellSize` clamp from `6` to `2` in `MinimapRenderer.computeMetrics` so tall maps like Level 3 (`64x96`) fit completely inside the viewport.
+- **Level 3 Objective Key Fix**:
+  - Fixed Trigger `id=146`'s `objectiveKey` in `assets/raycast/levels/level3.json` from `"fin_yourway_to_hanger"` to `"find_your_way_to_hanger"` to match `assets/raycast/levels/objectives/level3.json`.
+
+### 2. Generic Trigger-to-Trigger Linking & Link Action Resolution ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts))
+- **Trigger Enable/Disable Lifecycle**:
+  - Added `enabled?: boolean` to `ITriggerZone` and exposed `getTriggerById` / `setTriggerEnabled` on `RaycastTriggerManager` and `RaycastMissionManager`.
+  - Triggers targeted by another trigger with `linkAction: "enable"` now initialize disabled (`enabled = false`) and are skipped in `update` and `handleInteract` until enabled.
+- **Unified Link Resolution**:
+  - Extracted `resolveLinkTargetState` in `RaycastScene.applyLinkAction` so `enable`, `disable`, and toggle actions apply uniformly to linked triggers, `DestructableWallManager` door protectors, doors, and `levelFinishZones`.
+
+### 3. Door Protector & Shield Pickup Separation ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts))
+- Skipped `DestructableWall` objects and `doorprotector` layers before pickup classification so door protectors no longer spawn duplicate/stuck pickups, and removed the now-unreachable duplicate checks in `isBreakable`.
+- Narrowed `isShield` image matching from `imgStr.includes("shield")` to `imgStr.includes("shield_unit")` so `assets/raycast/textures/shield.png` is not mistaken for `assets/raycast/pickups/shield_unit.png`.
+
+### 4. Weapon Config, Level Maps & Asset Updates ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`assets/raycast/levels/level2.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level2.json), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- Adjusted `dh17Config.muzzleFlash.offsetX` from `-420` to `-315` in `RaycastWeaponConfigs.ts`.
+- Updated `level2.json`, `level3.json`, `objectives/level3.json`, `StarWarsTileset.tsx`, Level 3 dialog/audio (`dialog.json`, `prisoner_dialog_1.mp3`), weapon sprites (`dh_17_equiped.png`, `thermal_detonator.png`), and textures (`elevator_pad.jpg`, `lever_off.png`, `lever_on.jpg`, `shield.png`).
+
+### 5. Mobile & Desktop UI Config & Subtitle Size Settings ([`src/configs/RaycastUIConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastUIConfig.ts), [`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts), [`src/ui/InGameMenu.ts`](file:///D:/Projects/side-scroller/src/ui/InGameMenu.ts), [`src/ui/RaycastLoadingOverlay.ts`](file:///D:/Projects/side-scroller/src/ui/RaycastLoadingOverlay.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/raycast/subtitles/RaycastSubtitles.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/subtitles/RaycastSubtitles.ts), [`src/scenes/raycast/objectives/ObjectivesUI.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectivesUI.ts), [`src/plugins/minimap/MinimapUI.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapUI.ts))
+- **Environment-Specific UI Configuration (`RaycastUIConfig.ts`)**:
+  - Added `IRaycastUIConfig`, `DESKTOP_RAYCAST_UI_CONFIG`, `MOBILE_RAYCAST_UI_CONFIG`, and `getRaycastUIConfig()` (preserving desktop sizing while enlarging mobile UI elements without altering `MobileControls` touch buttons).
+  - Updated `RaycastLoadingOverlay`, `RaycastHUD` (keycards `"KEYS"` badge/icons, interaction prompts, toasts, health/shield/weapon/sprint text), `RaycastSubtitles`, `ObjectivesUI`, and `MinimapUI` to consume `getRaycastUIConfig()`.
+- **Adjustable Subtitle Size Setting**:
+  - Added `subtitleScale` (`0.7`–`1.8`, step `0.1`, persisted in `localStorage`) to `SettingsManager` and a **SUBTITLE SIZE** stepper row in `InGameMenu` (both standalone Options and in-game pause menu).
+  - Subscribed `RaycastSubtitles` to `SettingsManager` for live subtitle resizing during playback.
+- **Mobile Objectives Modal Readability**:
+  - Enlarged the mobile objectives modal (`960x580`), fonts, and close button (`closeButtonRadius: 22`) in `MOBILE_RAYCAST_UI_CONFIG.objectives` with dynamic card heights in `ObjectivesUI`.
+  - Added config-driven `fontFamily`, `maxTextDpr`, `linearTextScaling` (`SCALE_MODES.LINEAR` to avoid `NEAREST` downsampling artifacts on high-DPR mobile screens), `descriptionColor`, and `descriptionDropShadow`.
+
+### 6. Mobile Control Icons, Uniform Button Sizing & Icon Prompts ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts), [`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts), [`src/ui/VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts))
+- **Mobile Control Icons & Sci-Fi Blue Theme**:
+  - Added and preloaded `fire_icon` (`fire.png`), `alt_fire_icon` (`alt_fire.png`), `interact_icon` (`interact.png`), `change_icon` (`change.png`), `run_icon` (`run.png`), `fullscreen_icon` (`fullscreen.png`), and `exit_fullscreen_icon` (`exit_fullscreen.png`) in `GameConfig.ts`.
+  - Recolored all mobile control icon PNGs (including `map_icon.png`) to `#00FFFF` cyan with preserved alpha so they match the `0x091929` / `0x00e5ff` cyber-blue button theme across `MobileControls`, `VirtualButton`, and `VirtualJoystick`.
+  - Extended `VirtualButton` with `IVirtualButtonTheme`, `setIcon()`, and `updateIconTexture()`, and wired `fullscreenchange` updates for `btnFullscreen`.
+- **Control Layout, Alt-Fire & Prompt Icons**:
+  - Removed the `<` / `>` quick-turn arrow buttons (`btnTurnLeft`, `btnTurnRight`) from `MobileControls`.
+  - Added `btnAltFire` (`alt_fire.png`) and `RaycastScene.tryAltFire()` for mobile E-11 continuous auto-fire while held.
+  - Standardized all mobile circle buttons (`btnFire`, `btnAltFire`, `btnAction`, `btnWeapon`, `btnSprint`, `btnFullscreen`, `btnMap`, `btnObjectives`, `btnDebug`, `btnPause`) to `CIRCLE_BTN_RADIUS = 40` with `CIRCLE_ICON_SIZE = 42`.
+  - Updated `RaycastHUD.setPrompt()` on mobile to strip `[E]` / `[E / TAP]` / `PRESS [E]` text and display the `interact_icon` sprite inline.
+
+### 7. Player Death Handling & Mission Failure End Screen ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts), [`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts))
+- **Player Death Lifecycle**:
+  - Added `isDead` state and `onPlayerDeath` callback to `RaycastPlayerController.takeDamage()` triggered when `health <= 0` (unless God Mode is enabled).
+  - Wired `onPlayerDeath` in `RaycastScene` to `handlePlayerDeath()`, halting game updates/shooting via `isLevelTransitioning`, disabling controls, stopping alert audio, flashing red, unlocking the pointer, and transitioning to `Scene.LevelEnd` with `{ isMissionFailed: true, failedLevel, enemiesKilled, totalEnemies }` without saving `0 HP` to `RaycastSaveManager`.
+- **Failure & Victory End Screen + Audio**:
+  - Forwarded `ILevelEndOptions` through `changeScene` and `buildScene` in `src/index.ts` (preserving `skipIntroAndCutscene` when retrying a level).
+  - Updated `LevelEndScene` to render a crimson `[ MISSION FAILED ]` / `OPERATIVE FALLEN` screen with `"You died in the name of the Rebellion. You fought valiantly, but failed."`, red-styled **Main Menu** and **Retry Mission** buttons, and `end_level.mp3` playback.
+  - Switched mission completion (`!isMissionFailed`) in `LevelEndScene` to play `end_theme.mp3`, added `"end_level"` to `MUSIC_TRACK_ALIASES` in `SettingsManager`, and switched `LevelEndScene.createSharpText()` to `SCALE_MODES.LINEAR`.
+
+## [2026-11-13] - Trigger Sound System, Lever Mechanics, Level 3 Audio & Mobile Control Fixes
+
+### 1. Tiled Trigger Sound System & Background Music Override ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts), [`src/configs/SoundConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SoundConfig.ts))
+- **Structured `Sound` Class Support**:
+  - Added `ITriggerSoundConfig` (`action`: `"start" | "stop"`, `delay`, `overrideBackgroundMusic`, `shouldLoop`, `soundName`) to `ITriggerZone` and parsed Tiled `Sound` class properties in `RaycastTriggerManager`.
+  - Added `preloadSoundAsset` and `ensureTriggerSoundLoaded` / `waitForSoundLoaded` to probe `.mp3`/`.wav` assets across `assets/raycast/sfx/` and `assets/sounds/` and await decode completion before playback, avoiding `@pixi/sound` `AudioBufferSourceNode` buffer races.
+  - Added `overrideBackgroundMusic` handling in `RaycastScene` to stop `calm_loop` (or prior overridden tracks) and prevent input handlers from restarting `calm_loop` until level reload/reset.
+  - Added `SoundConfig.ts` (`DEFAULT_SFX_VOLUME`, `SOUND_VOLUME_OVERRIDES`, `getSoundBaseVolume`) with a `water_drain` volume boost (`1.8`) scaled by the Options menu volume.
+
+### 2. Lever Texture Swapping & Sound Isolation ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts), [`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts))
+- **Lever Texture Toggle**:
+  - Added `getLeverGids` and `toggleNearbyLeverTextures` to swap adjacent `lever_on` <-> `lever_off` wall tiles when interactive triggers fire, and ensured both lever textures are preloaded in `getUsedTextureIds`.
+- **Trigger Sound Isolation & Cleanup**:
+  - Removed the hardcoded `"elevator"` fallback in `playPropSounds`.
+  - Suppressed default `door_1` playback in `openDoorAt`, `closeDoorAt`, `applyLinkAction`, `updateLevelFinishZonesStatus`, and `DestructableWallManager.onWallDeactivated` when the firing trigger already has a custom sound configured.
+  - Removed unused `onDoorProtectorDisabled` and `isFreed` barrier-gating logic from `RaycastAlly`, `RaycastAllyManager`, and `RaycastScene`.
+
+### 3. Level 3 Dialogue, Objectives & Audio Assets ([`assets/raycast/dialog/level3/dialog.json`](file:///D:/Projects/side-scroller/assets/raycast/dialog/level3/dialog.json), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json), [`assets/raycast/levels/objectives/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/objectives/level3.json))
+- Updated Level 3 dialogue lines in `prisoner_dialog_1` and `prisoner_dialog_2` to match voiceover audio.
+- Added new Level 3 audio assets (`sewer_ambiance.mp3`, `switch.mp3`, `water_drain.mp3`, `intense_background.mp3`) and updated `propertytypes.json`, `level3.json`, and `objectives/level3.json`.
+
+### 4. Mobile Touch Controls Reliability ([`src/ui/VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts), [`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts), [`src/ui/TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts), [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts))
+- Added `window` `pointerup`, `pointercancel`, and `blur` cleanup listeners to `VirtualJoystick`, `VirtualButton`, and `TouchLookArea` so pointers cannot lock or get stuck when leaving the canvas or losing focus.
+- Updated `btnWeapon` (`WPN`) in `MobileControls` to trigger on both `press` and `tap` (with a 200ms debounce) and expanded its hit area (`Circle(0, 0, 50)`) for reliable mobile weapon switching.
+
+## [2026-11-12] - Subtitle System, Dialogue Localization & Level Loading Overlay
+
+### 1. In-Game Subtitle System & Audio Synchronization ([`src/scenes/raycast/subtitles/RaycastSubtitles.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/subtitles/RaycastSubtitles.ts), [`src/scenes/raycast/subtitles/SubtitleManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/subtitles/SubtitleManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Dynamic Subtitle Display**:
+  - Implemented `RaycastSubtitles` container positioned at the bottom center of the viewport, rendered above HUD elements and below modal menus (`zIndex: 90`).
+  - Distinct speaker color coding (`0x00e5ff` cyan for the player character Tuk, `0xffb347` amber for NPCs/allies like the Prisoner).
+  - Displays speaker badges and optional character states (e.g. `PRISONER · PRIDEFUL RESIGNATION`) with text shadow and drop shadow effects.
+- **Audio Timeline Synchronization**:
+  - Connected `onVoicelineStart`, `onVoicelineProgress`, and `onVoicelineEnd` callbacks in `RaycastTriggerManager` and `ObjectiveTypes`.
+  - Driven by real playback fraction/seconds, ensuring subtitles stay strictly in sync during playback and freeze/pause correctly with the game.
+  - Automatically cleans up and hides when voicelines stop or are replaced.
+- **Custom Line Timing & Fallback Estimation**:
+  - Supports optional manual `start` and `end` timestamps (in seconds) per dialogue line in `dialog.json` for precise audio synchronization.
+  - Gracefully falls back to text-length proportional duration weighting if manual timestamps are omitted.
+
+### 2. Dialogue Data Localization Pipeline ([`assets/raycast/dialog/`](file:///D:/Projects/side-scroller/assets/raycast/dialog/))
+- **Structured Per-Level Dialogue JSON**:
+  - Organized localization-ready files under `assets/raycast/dialog/level{1,2,3}/dialog.json`.
+  - Level 1: `dont_mind_if_i_do` (Blue Keycard clearance line).
+  - Level 2: `vent_shaft`, `command_hub_here`, `find_the_defector`, and `sirens_sounded`.
+  - Level 3: `i_hate_sewers`, `prisoner_dialog_1` (multi-line extraction sequence), and `prisoner_dialog_2` (AT-ST banter).
+  - Structured with `speaker`, `isPlayer`, `characterState`, and multi-language text maps (`{ "en": "..." }`).
+
+### 3. Raycast Loading Overlay ([`src/ui/RaycastLoadingOverlay.ts`](file:///D:/Projects/side-scroller/src/ui/RaycastLoadingOverlay.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Dedicated Loading Screen UI**:
+  - Implemented `RaycastLoadingOverlay` matching the sci-fi theme (`0x05101e` cosmic navy track with glowing `0x00e5ff` cyan borders, rounded progress bar, and glow effect).
+  - Displays dynamic level sector title, status text cues, and percentage bar during map setup.
+- **Level Initialization Progress Tracking**:
+  - Incremental progress indicators during level loading: reading blueprints, parsing sector geometry, loading texture banks, pre-slicing raycast column textures, and spawning entities.
+  - Added smooth alpha fade-out transition once loading completes.
+- **Input & Update Guarding**:
+  - Suspended tick execution and mouse movement handling (`isLevelLoading`) during level asset extraction and construction to prevent camera drift or interaction hiccups.
+
+## [2026-11-11] - Options Menu, In-Game Pause System, Audio & Auto-Aim Controls, and Mobile UI Enhancements
+
+### 1. Settings & Options Manager ([`src/managers/SettingsManager.ts`](file:///D:/Projects/side-scroller/src/managers/SettingsManager.ts))
+- **Unified Game Settings Architecture**:
+  - Implemented persistent singleton `SettingsManager` saving user preferences to `localStorage` under `star_wars_game_settings`.
+  - **Game Voices Volume**: Steppable in 10% increments (0% to 100%, default 80%); dynamically updates `enemyVoicelineConfig.volume`.
+  - **Music Volume**: Steppable in 10% increments (0% to 100%, default 50%); updates `gameConfig.musicVolume` and dynamically adjusts all active/registered background music tracks (`menu_theme`, `battle_theme`, `calm_loop`, `base_alarm`, `intro_theme`, `end_theme`) via `@pixi/sound`.
+  - **Auto-Aim Toggle**: Automatically detects mobile devices via user-agent & coarse-pointer checks to enable Auto-Aim by default on touchscreens while keeping manual aim default on desktop; can be toggled on/off at any time.
+  - **Listener Subscriptions**: Dispatches change callbacks so active UI dialogues and menus automatically refresh without polling.
+
+### 2. Modern In-Game Pause & Options Modal ([`src/ui/InGameMenu.ts`](file:///D:/Projects/side-scroller/src/ui/InGameMenu.ts))
+- **Sci-Fi Star Wars Modal Design**:
+  - Semi-transparent backdrop (`0x000000`, 65% alpha) blocking mouse and touch inputs from reaching gameplay elements underneath.
+  - Cybernetic dialog panel with cyan border outlines (`0x00e5ff`) and inner glow accents.
+  - **Interactive Volume Steppers**: `[-] [ XX% ] [+]` pill buttons with hover and click feedback.
+  - **Auto-Aim Status Switch**: Visual `ENABLED` (green) / `DISABLED` (grey) toggle switch.
+  - **Dual Display Modes**:
+    - **In-Game Pause Mode**: Features `GAME PAUSED` title, with `RESUME` and `QUIT` buttons aligned cleanly to the bottom of the dialog panel.
+    - **Main Menu Standalone Mode**: Features `SETTINGS & OPTIONS` title with a single bottom `BACK` button.
+
+### 3. In-Game Pause & Gameplay State Management ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/EndlessLevel.ts`](file:///D:/Projects/side-scroller/src/scenes/EndlessLevel.ts))
+- **State Pause & Unpause Integration**:
+  - Pressing `Escape` or tapping the on-screen mobile pause button pauses the game, halts the ticker loop updates, exits desktop pointer lock, and displays `InGameMenu`.
+  - Pressing `Escape` again or clicking `RESUME` dismisses the pause menu and restores pointer lock.
+  - Clicking `QUIT` quits the level cleanly and transitions back to the main menu.
+  - Priority `Escape` key handling in `keyDownHandler` prevents gameplay movements or actions from registering while paused.
+- **Dynamic Auto-Aim Implementation**:
+  - **Enabled**: Uses a generous targeting cone (`hitRadius = 0.65`) and snaps the HUD crosshair to the targeted enemy's screen coordinates.
+  - **Disabled**: Requires strict aim alignment (`hitRadius = 0.22`), turning the crosshair red on target acquisition while keeping the reticle centered.
+
+### 4. Mobile Controls & Interaction Refinements ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts), [`src/scenes/CutsceneScene.ts`](file:///D:/Projects/side-scroller/src/scenes/CutsceneScene.ts))
+- **Dedicated Circular Mobile Pause Button**:
+  - Added on-screen `[❚❚]` pause button to both `MobileControls` and `EndlessLevel` header, styled identically to the existing circular header buttons (radius 36, dark blue fill `0x091929`, cyan border `0x00e5ff`, inner ring).
+- **Accidental Door Opening Fix**:
+  - Removed door/action trigger on quick taps in `TouchLookArea` on the right side of the screen. Door and terminal interactions on mobile now strictly require pressing the on-screen `[E]` button.
+- **Intro & Cutscene Skip Button Enhancements**:
+  - Fixed mobile touch unresponsiveness by correcting scene container `eventMode` from `"none"` to `"static"` so child touch events cascade properly.
+  - Added generous touch `hitArea` padding and unified `pointerdown`, `pointerup`, and `pointertap` handlers.
+  - Relocated the cutscene dialogue skip button (`y: 16`) to avoid overlapping the dialogue transmission window.
+  - Skipping in the cutscene now stops voice audio and reveals all text immediately, hiding the skip button so players can read at their own pace before tapping the mission banner.
+  - Unified the palette of the skip buttons, dialogue box, and mission prompt banner with matching cyan borders (`0x00e5ff`) and cosmic navy backgrounds (`0x05101e`).
+
+### 5. Main Menu Styling & Theming ([`src/scenes/MainMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/MainMenu.ts), [`src/misc/Button.ts`](file:///D:/Projects/side-scroller/src/misc/Button.ts), [`assets/cutscenes/cutscene1/config.ts`](file:///D:/Projects/side-scroller/assets/cutscenes/cutscene1/config.ts))
+- **Subtitled "A REBEL STORY"**: Renamed subtitle on the title screen to match lore branding.
+- **Button Palette Unification**:
+  - Updated `Button` component styling to match the cyan hue of "A REBEL STORY" (`0x00e5ff` text with subtle drop shadow) and the glowing cyan border (`0x00e5ff`, 2px) on cosmic dark blue fill (`0x05101e`).
+- **Code Cleanliness & Discrepancy Fixes**:
+  - Removed debug logging in `getRandomInt()` in `src/Utils.ts`.
+  - Verified clean subscription disposals and zero-error Webpack compilation.
+
+---
+
+## [2026-11-11] - Main Menu Overhaul, Mission Level Select Screen, and Progressive Unlocking
+
+### 1. Main Menu Modernization ([`src/scenes/MainMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/MainMenu.ts))
+- **Dynamic "Continue" Action**:
+  - Automatically queries `RaycastSaveManager.loadProgress()`. When previous gameplay progress is detected, displays a prioritized `Continue` button resuming the player's saved level.
+  - Dynamically hides `Continue` on fresh installations or when no progress exists.
+- **Campaign "New Game" Action**:
+  - Clears prior save data in `RaycastSaveManager` and launches the full narrative campaign starting from Level 1 (triggering the Star Wars crawl and briefing sequence).
+- **Streamlined Menu Layout**:
+  - Replaced legacy disjoint "Play" (Endless) and "Raycast 3D" buttons with a clean hierarchy: `Continue` (conditional), `New Game`, and `Level Select`.
+  - Added Star Wars stylized logo and rebel infiltration subtitle with responsive spacing.
+
+### 2. Dedicated Mission Level Select Screen ([`src/scenes/LevelSelectScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelSelectScene.ts))
+- **Interactive Square Mission Tiles (250 × 250)**:
+  - Formatted mission cards into a 4-card grid: Level 1 (*Detention Block*), Level 2 (*Imperial Facility*), Level 3 (*Imperial Hangar*), and *Endless Space Assault*.
+  - Configured safe asset cache lookup (`Assets.cache.has`) to cleanly render placeholder blueprint screenshot slots without triggering network 404 image fetch errors.
+- **Sector Progression & Lockout System**:
+  - **Level 1 & Endless Mode**: Always unlocked and immediately accessible to players.
+  - **Level 2 & Level 3**: Progressively locked until the preceding sector has been cleared (or player's current save is at/beyond the sector).
+  - **Locked Feedback**: Displays dimmed frame, padlock graphical overlay, `LOCKED` badge, and horizontal vibration / shake animation upon tapping locked sectors.
+- **Mobile Readability & High-DPI Sharpness**:
+  - Enlarged level titles to `20px` bold uppercase (`900` weight) with drop shadows.
+  - Set `resolution: 2` across all canvas text elements for crisp rendering on high-DPI mobile devices.
+
+### 3. Endless Level Instructions Modal & Audio State Cleanup ([`src/scenes/EndlessLevel.ts`](file:///D:/Projects/side-scroller/src/scenes/EndlessLevel.ts), [`src/ui/Instructions.ts`](file:///D:/Projects/side-scroller/src/ui/Instructions.ts), [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts))
+- **Instructions Moved to Endless Level Load**:
+  - Relocated instructions overlay from the title screen directly into the Endless level startup sequence.
+  - Pauses game systems (`Ticker.shared.speed = 0`, background corridor scroll, enemy/pickup spawns) with an input-blocking modal backdrop until the player clicks `OK`.
+- **Audio Overlap Resolution**:
+  - Guaranteed `menu_theme` is cleanly stopped prior to playing `battle_theme` or starting raycast missions.
+
+---
+
+## [2026-11-10] - Mobile 120 FPS Engine Performance Optimizations
+
+### 1. Zero-`discard` Fragment Shaders & Hardware TBDR Early-Z Restoration
+- **Eliminated Mobile Pipeline Stalls (`floorCeiling.frag` & `skybox.frag`)**:
+  - Removed all `discard;` instructions across the fragment shaders. On mobile Tile-Based Deferred Renderers (Mali, Adreno, Apple GPU), `discard` forced the hardware rasterizer out of `OPAQUE` Early-Z / Forward Pixel Kill (FPK) mode into `PUNCH_THROUGH` / Late-Z, causing fragment stalls across all ~3.7M framebuffer pixels.
+  - Transparent ceiling regions now write alpha `0.0` when a skybox is active, cleanly revealing the background skybox mesh using hardware blending.
+  - On indoor levels without a skybox (Level 1 & Level 2), `floorCeilingMesh.state.blend = false` makes floor and ceiling rendering a pure hardware opaque pass.
+
+### 2. Per-Column Solid Wall Occlusion Culling (`uWallBoundsTex`)
+- **1280x1 Dynamic Occlusion Texture**:
+  - Packed the CPU-calculated per-column top and bottom solid wall bounds (`wallTop[i]`, `wallBottom[i]`) into an ultra-compact `1280 × 1` RGBA texture (`uWallBoundsTex`).
+  - Frag shaders perform an immediate single-tap early-out check at the top of `main()`, skipping heavy perspective raymarching, math divisions, and dual atlas lookups for the 70%–90% of screen pixels occluded behind corridor walls.
+
+### 3. Half-Screen Skybox Quad Optimization
+- **Restricted Mesh Geometry During Gameplay**:
+  - Skybox mesh quad (`skyboxGeom`) now spans only the top ceiling half of the screen (`0` to `height * 0.5`, UV `0.0` to `0.5`) during normal gameplay, eliminating ~1.84M redundant CubeMap fragment invocations per frame on the bottom floor plane.
+  - Automatically expands to a full-screen quad when toggling debug skybox-only mode (`F8` / Datapad).
+
+### 4. Selective Tile & Spritesheet VRAM Loading
+- **Level-Specific Asset Ingestion**:
+  - `loadLevel()` now scans the active map layers first to collect `usedTileIds` and only loads, uploads (`baseTexture.update()`), and slices 1px column textures for tiles actually present in the level, preventing unused ~2048x2048 textures from consuming ~240 MB VRAM on Level 1.
+  - `RaycastStationaryObjectManager.initSpritesheets()` now only loads spritesheets required by objects in the current level and uploads each sheet texture once rather than per frame.
+
+### 5. Display Graph & Mobile Compositor Overhead Reduction
+- **Lazy-Attached Sprite Pools**:
+  - Wall column slices, thin walls, and object sprite pools are now instantiated without immediately populating container child lists, only attaching to the scene graph upon first display to drastically reduce `sortChildren()`, `updateTransform()`, and traversal overhead.
+- **Mobile Resolution & Stats Capping**:
+  - Mobile touch devices now cap DPR framebuffer resolution to `1.5`, providing clean nearest-neighbor scaling without pushing 4K-tier fragment counts.
+  - Disabled `pixi-stats` 2D DOM canvas overlay by default on mobile devices to prevent 120 Hz compositor synchronization stalls (enabled on desktop or via `?stats` query parameter).
+
+---
+
+## [2026-11-10] - Mobile In-Game Debug Datapad, Skybox Shader & Config Decoupling, Enemy Drop Fixes, and Asset Optimizations
+
+### 1. In-Game Mobile & Desktop Debug Datapad ([`src/scenes/raycast/RaycastDebugMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastDebugMenu.ts))
+- **Touch-Friendly In-Game Datapad UI**:
+  - Implemented an on-screen cyberpunk datapad modal overlay engineered specifically for mobile touch screens and desktop testing.
+  - Added dedicated floating circular `[DEV]` toggle button in the top-right header via [`MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts).
+  - Supported desktop hotkeys: <kbd>`</kbd> (Backquote / Tilde), <kbd>F2</kbd>, and <kbd>Esc</kbd> to open and close the datapad.
+  - **Full Input Isolation**: Completely suppresses character locomotion, camera rotation, virtual joystick drags, and weapon firing while the debug datapad is active, preventing accidental movement or firing during touch interaction.
+- **Tabbed Interface Architecture**:
+  - **`🌌 SKYBOX & VISTA`**:
+    - **Live Badge Readout**: Real-time display of current camera Yaw (degrees), Skybox Yaw offset, and Zoom magnification factor.
+    - **Zoom Controls**: Quick preset buttons (`1.0x`, `1.5x`, `2.0x`, `2.5x`, `3.0x`, `3.5x`) and fine increment steps (`-0.1`, `+0.1`).
+    - **Wall Snapping**: Instant cardinal direction snap buttons: North (`0°`), East (`90°`), South (`180°`), and West (`270°`).
+    - **Fine Yaw Adjustment**: Calibrated single-degree and multi-degree step controls: `[-15°]`, `[-5°]`, `[-1°]`, `[+1°]`, `[+5°]`, `[+15°]`.
+    - **Copy Configuration**: One-tap button copying the active `{ zoom, yaw, pitch }` JSON structure directly to the system clipboard for immediate persistence into code.
+  - **`⚡ CHEATS & LEVEL WARP`**:
+    - **God Mode**: Toggleable full invulnerability against all laser damage and environmental hazards.
+    - **Refill Health & Shield**: Instantly restores maximum shields and health pools.
+    - **Refill All Ammo**: Tops off ammunition reserves across all weapon types.
+    - **Unlock All Weapons**: Grants full arsenal access (Blaster, Scatter Blaster, Heavy Repeater, Concussion Rifle).
+    - **Grant All Keycards**: Grants Blue, Red, and Yellow security clearance cards.
+    - **Cycle Door Mode**: Toggles door behavior between Normal, Always Open, and Proximity trigger modes.
+    - **Eliminate All Nearby Enemies**: Area-of-effect elimination clearing all hostile targets within a 15-tile radius around the player.
+    - **Instant Level Warping**: Direct teleportation buttons to Level 1, Level 2, and Level 3 without returning to the title menu.
+
+### 2. Dedicated Skybox Shader Pipeline & Dual-Mesh Architecture ([`src/scenes/raycast/shaders/skybox.vert`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/skybox.vert), [`src/scenes/raycast/shaders/skybox.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/skybox.frag))
+- **Mobile Register Pressure Optimization**:
+  - Previously, CubeMap sampling (`samplerCube`), 2D cylindrical/equirectangular sampling (`sampler2D`), floor/ceiling raymarching, texture atlas unpacking, and perspective trigonometry were all combined into a single monolithic fragment shader ([`floorCeiling.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.frag)).
+  - On mobile tile-based deferred renderers (TBDR GPUs like Mali and Adreno), this heavy register allocation inflated VGPR usage and degraded framerates.
+- **Dual-Mesh Rendering System** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **Background Skybox Mesh (`zIndex: 0`)**: Powered by dedicated [`skybox.vert`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/skybox.vert) and [`skybox.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/skybox.frag) shaders. Samples CubeMap or panoramic vistas cleanly with minimal arithmetic and zero overhead. Automatically disabled and skipped on indoor levels.
+  - **Foreground Floor/Ceiling Mesh (`zIndex: 1`)**: Dedicated floor/ceiling shader using only 2 samplers (`uMapTexture` and `uAtlas`). Executes raymarched floor and ceiling planes and issues `discard;` on empty/sky ceiling tiles (`ceilTexId == 0`), exposing the background skybox mesh beneath with perfect hardware early-Z clipping.
+
+### 3. Skybox Configuration Decoupling ([`src/configs/SkyboxConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SkyboxConfig.ts))
+- **Decoupled from Tiled Level Maps**:
+  - Extracted skybox parameters out of Tiled JSON map custom properties ([`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json)) and [`RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts) into an independent TypeScript configuration module [`src/configs/SkyboxConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SkyboxConfig.ts).
+  - Prevents Tiled map re-exports from overwriting, clobbering, or deleting visual skybox calibration (`zoom`, `yaw`, `pitch`, `textureKey`).
+  - Set default Level 3 skybox rotation to `yaw: 270.0°`, correctly orienting the open hangar blast doors and exterior vistas.
+
+### 4. Enemy Weapon & Pickup Drop Fix ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts))
+- **Resolved Weapon Drop Regression**:
+  - Restored proper weapon and loot drop propagation upon enemy defeat.
+  - Verified that enemy death handlers trigger pickup manager drop tables correctly at the enemy's world coordinates before despawning the enemy sprite.
+
+### 5. Asset Cleanup & Dead Code Removal
+- **Removed Obsolete 2D Skybox Assets**:
+  - Deleted ~19 MB of unneeded legacy textures:
+    - [`assets/common/hanger.jpg`](file:///D:/Projects/side-scroller/assets/common/hanger.jpg)
+    - [`assets/common/hanger.webp`](file:///D:/Projects/side-scroller/assets/common/hanger.webp)
+    - [`assets/common/hanger2.webp`](file:///D:/Projects/side-scroller/assets/common/hanger2.webp)
+    - [`assets/common/imperial_hanger.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger.jpg)
+    - [`assets/common/imperial_hanger_360.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_360.jpg)
+    - [`assets/common/imperial_hanger_back.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_back.jpg)
+    - [`assets/common/imperial_hanger_front.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_front.jpg)
+    - [`assets/common/imperial_hanger_seamless.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_seamless.jpg)
+    - [`test_cubemap_render.png`](file:///D:/Projects/side-scroller/test_cubemap_render.png)
+- **Dead Code Cleanup**:
+  - Removed obsolete fallback string checks and legacy skybox branching from [`RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) and [`SkyboxConfig.ts`](file:///D:/Projects/side-scroller/src/configs/SkyboxConfig.ts).
+
+## [2026-10-22] - Hangar Skybox Scale Calibration & Perspective Correction
+
+### 1. Skybox Zoom & Portal Scaling ([`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- **Why the Skybox Appeared "Way Too Big"**:
+  - At `zoom = 1.8`, only vertical texture coordinates $V \in [0.28, 0.50]$ were sampled on the ceiling hemisphere, causing the blast door opening to consume 63% of screen width and 96% of screen height. Background forklifts and crates appeared disproportionately large compared to foreground 3D sprites.
+- **Perspective Calibration**:
+  - Scaled `skyboxZoom` to `3.5` in both Level 3 code configuration and map properties.
+  - At `zoom = 3.5`, vertical sampling expands to $V \in [0.077, 0.50]$, revealing the full curved industrial ceiling arches, crane beams, and hanging chains overhead.
+  - The central blast door occupies ~32% of screen width and ~48% of screen height, rendering as a distant atmospheric portal rather than an overwhelming foreground graphic.
+  - Retains perfect 1:1 square pixel aspect ratio without any stretching or squashing.
+- **Asset Registration & Redundancy** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Registered both [`hanger.webp`](file:///D:/Projects/side-scroller/assets/common/hanger.webp) and [`hanger.jpg`](file:///D:/Projects/side-scroller/assets/common/hanger.jpg) to provide seamless fallback support.
+
+## [2026-10-22] - True 360° x 180° Equirectangular Hangar Skybox ([`hanger.webp`](file:///D:/Projects/side-scroller/assets/common/hanger.webp))
+
+### 1. High-Fidelity 2:1 Equirectangular Panorama Integration
+- Activated [`hanger.webp`](file:///D:/Projects/side-scroller/assets/common/hanger.webp) ($2880 \times 1440$, 2:1 aspect ratio) as the default Level 3 skybox:
+  - Canonical 360° equirectangular skybox featuring curved overhead industrial ceiling arches, crane beams, and hanging chains in the zenith.
+  - Center ($U = 0.50$): Giant hexagonal blast door looking out at jungle, satellite dish, and atmospheric fog.
+  - Flanks: Interior elevated control booths with glowing amber and cyan control rooms, side maintenance bays with parked shuttles, and smoking exhaust vents.
+  - Bottom: Radial circular metal deck grating.
+- **Aspect Ratio & Perspective Tuning** ([`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json)):
+  - Configured `zoom: 1.8` to showcase the massive structural ceiling arches and overhead crane in the ceiling hemisphere ($V \in [0.28, 0.50]$) while retaining the 1:1 square pixel aspect ratio.
+  - Centered open blast doors looking North (`centerU: 0.5`) with full wrap-around continuity.
+- **Asset Preload & Bundle Emission** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added `hanger` to Pixi's preloaded assets manifest bundle and verified clean webpack compilation.
+
+## [2026-10-22] - Skybox Zoom Control & Expansive Hangar Field of View
+
+### 1. Configurable Zoom & FOV Expansion ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts))
+- **Cause of "Too Zoomed In" View**:
+  - The base 1:1 repeat rate mapped only ~48.7% of the image height across the screen (and only ~24.3% in the ceiling hemisphere), cutting off the high roof girders, overhead crane, and hanging chains while over-magnifying the blast door window.
+- **Aspect-Preserving Zoom Scaling**:
+  - Added `zoom` factor to [`RaycastSkyboxConfig`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts#L1-L10) and Tiled map property `skyboxZoom` (defaulted to `1.7` for Level 3).
+  - Multiplies both horizontal and vertical scale synchronously by `zoom`:
+    $$\text{finalRepeatX} = \text{userRepeatX} \times \text{zoom}$$
+    $$\text{finalRepeatY} = \text{userRepeatY} \times \text{naturalRepeatY} \times \text{zoom}$$
+  - Preserves the exact 1:1 square pixel aspect ratio while expanding the visible field of view by $1.7\times$.
+  - The entire blast door frame, overhead crane beams, hanging chains, and side columns are now in view without telephoto cropping.
+- **Dynamic North Centering**:
+  - Added automatic offset calculation (`baseOffsetX = centerU - 0.25 * finalRepeatX`) so that modifying `zoom` automatically keeps the blast door centered North without requiring manual offset adjustments.
+
+## [2026-10-22] - Seamless 360° Cylindrical Panorama ([`imperial_hanger_seamless.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_seamless.jpg))
+
+### 1. Integrated Seamless $4128 \times 1024$ Panoramic Skybox
+- Activated [`imperial_hanger_seamless.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_seamless.jpg) as the primary skybox for Level 3:
+  - Complete 360-degree cylindrical panorama with wrap-around boundaries.
+  - Center ($U = 0.50$): Giant open blast door looking out at jungle and mountain base.
+  - Flanks & Rear ($U \in [0.75, 1.0] \cup [0.0, 0.25]$): Interior hangar walls, elevated control booths, hazard blast doors, shuttle, and consoles.
+- **Cardinal Direction Alignment**:
+  - Configured `offsetX: 0.25` so that walking North in Level 3 centers the open jungle bay directly ahead, looking South centers the interior shuttle and control bay behind the player, and looking East/West reveals the hangar side walls.
+- **1:1 Aspect Ratio Calibration**:
+  - Automatically calculates $\text{naturalRepeatY} = \frac{1.3495}{6.2832} \times \frac{4128}{1024} \times \frac{720}{1280} \approx 0.4870$, matching horizontal and vertical pixel densities ($1.4437$ screen px / img px) for an exact 1:1 square pixel aspect ratio without stretching.
+
+## [2026-10-22] - Stitched 360° Front/Back Hangar Skybox & Zero-Duplication Panorama
+
+### 1. Dual-View 360° Cylindrical Stitching ([`assets/common/imperial_hanger_360.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_360.jpg), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Front & Back Stitching Without Duplication**:
+  - Combined [`imperial_hanger_front.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_front.jpg) ($2752 \times 1536$, looking forward at open blast door and jungle) and [`imperial_hanger_back.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_hanger_back.jpg) ($2752 \times 1536$, looking backward at closed blast door, control booths, shuttle, and welding sparks) into a single continuous $5504 \times 1536$ 360-degree cylinder texture.
+  - Eliminated the 4x duplication: Front spans the forward $180^\circ$ hemisphere, and Back spans the rear $180^\circ$ hemisphere. The player sees the front view once and the back view once when rotating in a full circle.
+- **Dynamic Runtime & Cached Loading**:
+  - Added [`createStitchedSkyboxTexture(frontKey, backKey)`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts#L2194) in `RaycastScene` to dynamically stitch arbitrary front/back image pairs via an offscreen HTML5 canvas if needed, while prioritizing the pre-stitched $5504 \times 1536$ asset for zero-overhead GPU loading.
+  - Preloaded `imperial_hanger_360`, `imperial_hanger_front`, and `imperial_hanger_back` in [`GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts).
+
+### 2. Perfect 1:1 Aspect Ratio Calibration ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts))
+- **Zero-Distortion Aspect Ratio**:
+  - Calibrated vertical scale formula:
+    $$\text{naturalRepeatY} = \frac{\text{userRepeatX} \times \text{hFov}}{2\pi} \times \frac{\text{imgW}}{\text{imgH}} \times \frac{\text{screenH}}{\text{screenW}} = \frac{1.3495}{6.2832} \times \frac{5504}{1536} \times \frac{720}{1280} \approx 0.4329$$
+  - With `repeatX: 1.0`, vertical pixel density matches horizontal pixel density to 5 decimal places ($1.0828$ screen px / img px), yielding an exact 1:1 square pixel aspect ratio with zero stretching.
+- **True Cardinal Direction Alignment**:
+  - **North ($U = 0.25$)**: Center of `imperial_hanger_front.jpg` (open blast door looking out at jungle and landing pad).
+  - **East ($U = 0.50$)**: Junction of Front right wall and Back left wall (steel columns and consoles).
+  - **South ($U = 0.75$)**: Center of `imperial_hanger_back.jpg` (interior blast doors, illuminated control booths, shuttle).
+  - **West ($U = 0.00 / 1.00$)**: Junction of Back right wall and Front left wall (steel columns and doorway).
+
+
+
+### 1. Eliminated Distortion & Auto-Preserved 1:1 Pixel Aspect Ratio ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Cause of Stretching**:
+  - The previous projection mapped 100% of the image height into only the top half of the screen ($coord.y < 0.5$, 360px), while 360° of horizontal rotation mapped across the full image ($77.3^\circ$ viewport $\approx 21.4\%$ of image width). This caused horizontal elements to stretch by over $9.2\times$ relative to vertical elements, making cranes, chains, and consoles look flattened and wide.
+- **Aspect Ratio Calibration**:
+  - `setSkybox` now automatically calculates the natural horizontal repeat based on texture dimensions, screen aspect ratio ($16:9$), and camera field of view ($hFov \approx 77.3^\circ$):
+    - `naturalRepeatX = (2 * PI / hFov) * (screenAspect / imgAspect)`
+  - With `repeatX: 1.0`, horizontal pixel density matches vertical pixel density with a 1:1 aspect ratio, rendering circular fixtures, chains, and vehicles without distortion.
+
+### 2. Perspective Horizon Alignment & Full Screen Mapping ([`src/scenes/raycast/shaders/floorCeiling.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.frag))
+- **True Horizon Centering**:
+  - Centered vertical UV mapping at the 3D world horizon: `skyV = clamp((coord.y - 0.5) * uSkyboxRepeat.y + 0.5 + uSkyboxOffset.y, 0.0, 1.0)`.
+  - When looking at eye level ($coord.y = 0.5$), the skybox renders its exact horizon ($V = 0.5$).
+  - In ceiling areas ($coord.y < 0.5$), only the upper half of the image (hangar ceiling, crane, roof beams) is displayed, preventing the floor of the image from appearing overhead.
+  - In open / floorless areas ($coord.y > 0.5$), the lower half of the image (ground plates, deck) displays continuously without seams.
+- **North-Facing Alignment**:
+  - Calibrated `offsetX: 0.35` for Level 3 so the giant open hangar blast door looking out at the jungle is centered directly ahead when the player looks North.
+
+## [2026-10-22] - 360° Cylindrical Panoramic Skybox & Per-Level Configuration System
+
+### 1. Cylindrical Panoramic 3D Skybox Shader ([`src/scenes/raycast/shaders/floorCeiling.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.frag))
+- **Continuous 360° Panoramic Projection**:
+  - Enhanced the GPU floor & ceiling fragment shader with horizontal 360-degree cylindrical panoramic projection:
+    - Calculates the camera ray angle in world space via `atan(rayDir.y, rayDir.x)`.
+    - Normalizes the horizontal panorama UV coordinate to $[0, 1]$ with repeat and offset support: `fract((angle / 6.28318530718 + 0.5) * uSkyboxRepeat.x + uSkyboxOffset.x)`.
+    - Normalizes the vertical UV coordinate across the ceiling half-screen: `clamp((coord.y / 0.5) * uSkyboxRepeat.y + uSkyboxOffset.y, 0.0, 1.0)`.
+  - As the player rotates, the skybox smoothly scrolls in sync with mouse look and camera yaw.
+  - Areas without ceiling tiles (such as Level 3's open hangar) naturally expose the high-resolution hangar backdrop overhead, while indoor corridors with ceiling tiles preserve their respective ceiling textures.
+
+### 2. Level Configuration & Registry Architecture ([`src/configs/RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts))
+- **`RaycastSkyboxConfig` & `RaycastLevelConfig` Interfaces**:
+  - Provides declarative configuration options: `texture`, `repeatX`, `repeatY`, `offsetX`, `offsetY`, and `skyboxOnly`.
+- **Hybrid Configuration Pipeline**:
+  - Evaluates Tiled map custom properties first (`skybox`, `skyboxRepeatX`, `skyboxRepeatY`, `skyboxOffsetX`, `skyboxOffsetY`, `skyboxOnly`), allowing map designers to configure or disable (`"none"`, `"null"`) skyboxes directly in Tiled JSON files without touching code.
+  - Falls back to `RAYCAST_LEVEL_CONFIGS` code registry in [`RaycastLevelConfig.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastLevelConfig.ts).
+  - Preloaded `assets/common/imperial_hanger.jpg` as the default skybox for Level 3 ("Level 3 - Imperial Hangar").
+
+### 3. Dynamic Skybox Integration in Scene ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- Added `imperial_hanger` to Pixi's preloaded asset manifest in [`GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts).
+- Configured wrap mode `WRAP_MODES.REPEAT` and linear filtering `SCALE_MODES.LINEAR` for smooth texture sampling without seam artifacts.
+- Added public methods `setSkybox(config)` and `clearSkybox()` for runtime skybox changes.
+- Integrated automatic skybox setup into `loadLevel(levelName)`.
+- Configured `"skybox": "assets/common/imperial_hanger.jpg"` in root properties of [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json).
+
+
+
+## [2026-10-21] - High-Resolution AT-ST, TIE Fighter & TIE Bomber Sprite Scaling & Proportions
+
+### 1. Updated Decoration Scale & Reference Heights ([`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts))
+- **Normalized High-Resolution Dimensions**:
+  - The newly updated texture atlases replaced the low-resolution images (`54x102`, `46x66`, `67x61`) with high-resolution spritesheets up to `4268x1647`. Because the 3D projection formula calculates `spriteHeight = baseHeight * scale * (texH / referenceHeight)`, the old `referenceHeight` values caused sprites to render ~16x larger than intended (over 30 world tiles tall).
+  - **AT-ST Walker**:
+    - Updated `referenceHeight` from `102` to `1615` (matching the new `towards.png` frame height).
+    - Preserved `scale: 2.3` and `hitRadius: 0.65`, restoring the walker to its canonical 2.3-tile height (~2.3x human height) with accurate collision bounds.
+  - **TIE Fighter**:
+    - Updated `referenceHeight` from `66` to `1056` (matching the new `towards.png` frame height).
+    - Set `scale: 1.8` and `hitRadius: 0.68`, restoring the fighter to a proportional 1.8-tile height and 1.3-to-1.7 tile wingspan.
+  - **TIE Bomber**:
+    - Calibrated `referenceHeight` to `710` (matching the standard side/diagonal frame height) and scaled up `scale` to `1.8` (with `hitRadius: 0.85`).
+    - Eliminates the perspective underscaling that previously occurred from the rear and side view angles, establishing an imposing ~1.7–1.9 tile height and ~3.1–3.4 tile width matching the stature of the TIE Fighter.
+
+### 2. Synchronized Asset Metadata ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx))
+- Corrected fallback image paths in `RaycastScene.ts` (tiles 55, 56, 57) from `assets/raycast/enemies/` to `assets/raycast/decorations/`.
+- Updated image paths and sheet dimensions in `StarWarsTileset.tsx` to match the new high-resolution decoration files.
+
+
+
+## [2026-10-21] - Ally Prisoner Speed Calibration, Jitter-Free Animation Hysteresis, Wall Collision & Command Range Tuning
+
+### 1. Speed Pacing & Companion Movement Tuning ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Naturally Paced Follow Speed**:
+  - Calibrated base movement speed down from `0.024` to `0.016` (player run speed is `0.020`). The prisoner now trails smoothly behind the player at a natural companion walking pace instead of sprinting ahead or repeatedly overtaking.
+  - Reduced catchup speed from `0.038` to `0.022`, triggered only when the player is more than `4.8` tiles away.
+  - Adjusted arrival `stopDistance` to `1.8` tiles and collision body radius `hitRadius` to `0.25` for comfortable corridor navigation.
+
+### 2. Elimination of Animation Start/Stop Jitter ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts))
+- **State Hysteresis Loop**:
+  - Added distance hysteresis between stopping and resuming movement:
+    - While in motion, the prisoner continues moving until `distToPlayer <= 1.8` (`stopDistance`).
+    - While idle/stopped, the prisoner remains standing until `distToPlayer >= 2.6` (`resumeDistance`) or line of sight is broken.
+  - Prevents continuous single-frame toggling between walking and standing frames when the player hovers near the stopping radius.
+- **Continuous Motion State Persistence**:
+  - Waypoint transitions and minor axis sliding during path traversal no longer clear `isMoving` for single frames.
+  - Pixi's 4-frame directional walking animation loops continuously and smoothly without stuttering or repeatedly resetting to frame 0.
+
+### 3. Wall Collision Integrity & Full A* Pathfinding Navigation ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Corrected `tileTypeFlags` Enum Matching**:
+  - Replaced faulty `tileTypeFlags[idx] === 1` checks with `tileTypeFlags[idx] === 2` (`TILE_DOOR`). In `RaycastScene`, `TILE_WALL = 1` and `TILE_DOOR = 2`; testing `1` had previously caused the ally and A* pathfinder to treat every solid wall as an open door.
+  - Fixed A* `isWalkable`, `smoothPath`, `tryMove`, and door detection so walls are recognized as impenetrable solids.
+- **Thick Capsule Clearance & Anti-Corner-Clipping**:
+  - Implemented `isThickLineClear(..., radius = 0.25)` testing character body clearance along travel vectors and path segments.
+  - Prevents path smoothing (`smoothPath`) from cutting corners across doorways and wall corners.
+  - Allies now consistently use full A* navigation when moving between rooms and corridors, only switching to direct pursuit when the player is close ($\le 2.2$ tiles) with clear line-of-sight.
+- **Circle-to-AABB Wall & Thin Wall Collision**:
+  - Updated `tryMove` to use precise circle-to-AABB distance clamping against solid tiles and closed doors, combined with thin wall bounding box checks and two-axis sliding.
+
+### 4. Compact Command Proximity & Line-of-Sight Check ([`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Intimate Interaction Range**:
+  - Reduced command radius from `3.5` tiles down to `1.8` tiles, and tightened aiming angle to $\cos(\theta) \ge 0.72$.
+  - Players must now be standing close and looking directly at the prisoner to view HUD prompts or toggle follow commands.
+- **Occlusion Check**:
+  - Added `hasLineOfSight` verification to `tryInteractWithAlly` and `getInteractionPrompt` so players cannot interact with or command the prisoner through solid walls.
+
+
+
+## [2026-10-20] - Fix Prisoner Spritesheet Texture, Default Non-Following State & Stair Teleportation
+
+### 1. Fix Prisoner Spritesheet Metadata Texture ([`assets/raycast/enemies/prisoner.json`](file:///D:/Projects/side-scroller/assets/raycast/enemies/prisoner.json), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Corrected Underlying Image Reference**:
+  - In `prisoner.json`, line 847 was erroneously set to `"image": "implerial_officer.png"`, causing Pixi to bind all prisoner animation frames to the Imperial Officer spritesheet texture instead of [`assets/raycast/enemies/prisoner.png`](file:///D:/Projects/side-scroller/assets/raycast/enemies/prisoner.png).
+  - Corrected `prisoner.json` metadata `image` to `"prisoner.png"`.
+  - In `RaycastAllyManager.initSpritesheet`, explicitly preloads `assets/raycast/enemies/prisoner.png` as `baseTexture` and binds it across all spritesheet texture frames for guaranteed visual fidelity.
+
+### 2. Default Non-Following Behavior Upon Liberation ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **Wait by Default**:
+  - When the security barrier is deactivated, the prisoner is freed (`isFreed: true`), but now defaults to **not following** (`isFollowing: false`).
+  - Displays dialogue prompt: `[+] Prisoner: 'The cell barrier is down! Press [E] when you want me to follow.'`
+  - The prisoner remains in the cell/area until the player looks at him and presses **`E`** to issue the follow command (`[E] COMMAND: FOLLOW ME`).
+
+### 3. Stair Traversal Teleportation ([`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Synchronized Floor Transitions**:
+  - Added `RaycastAllyManager.teleportFollowingAllies(...)`, invoked directly by `RaycastScene.setPlayerPosition` whenever the player uses a staircase or level transition.
+  - Automatically transports any freed, following allies directly to clear ground behind or beside the player on the new floor/landing, resets pathfinding waypoints, and updates facing orientation to match the player.
+
+
+
+## [2026-10-20] - Rescued Prisoner Ally NPC System with Dynamic Follow & Interaction
+
+### 1. Dedicated Friendly Companion Architecture ([`src/scenes/raycast/RaycastAlly.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAlly.ts), [`src/scenes/raycast/RaycastAllyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastAllyManager.ts))
+- **`RaycastAlly` Class**:
+  - Extends `RaycastDirectionalObject` to inherit 8-directional trigonometry, billboard projection, occlusion masking with Z-buffer, and texture frame updates.
+  - Initialized with [`assets/raycast/enemies/prisoner.json`](file:///D:/Projects/side-scroller/assets/raycast/enemies/prisoner.json) (`scale: 0.7`, `referenceHeight: 69`, matching human scale).
+  - Supports 8-directional standing idle animations and fluid 4-frame walking sequences across all cardinal and diagonal angles.
+- **`RaycastAllyManager` Class**:
+  - Manages ally lifecycle, parsing from Tiled map `Allies` layers (e.g. tile GID 55 in [`level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json)), spawning, rendering, and pathfinding coordination.
+  - Fully integrated into `RaycastScene` rendering and update loops.
+
+### 2. Security Barrier Liberation & Automated Following
+- **Automatic Liberation Trigger**:
+  - In `applyLinkAction`, when door protectors or security barriers (e.g. object 77 / 82 in `level3.json`) are disabled, `onDoorProtectorDisabled` is called.
+  - The prisoner transitions from imprisoned to freed (`isFreed: true, isFollowing: true`), emits audio feedback, displays a celebratory dialogue toast (`[+] Prisoner: 'The security barrier is down! Lead the way!'`), and immediately begins following the player.
+- **Following & Navigation AI**:
+  - When following, uses direct pursuer navigation when line-of-sight is unobstructed, and smoothed `AStarPathfinder` waypoint routing through winding corridors.
+  - Automatically opens non-locked doors in his path (`onAllyOpenDoor`).
+  - Halts smoothly when within stop distance ($2.0$ tiles) and faces the player; yields backward if the player steps directly into his position ($< 0.85$ tiles).
+  - Dynamically increases to catchup speed ($0.038$) if the player sprints ahead ($> 5.5$ tiles).
+
+### 3. Contextual Dialogue & Command Toggle via "e/E" ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts))
+- **Look-at Aim Detection**:
+  - Tests interaction range ($3.5$ tiles) and view alignment ($\cos(\theta) > 0.65$) to ensure the player is looking at the ally.
+- **Dynamic HUD Prompts**:
+  - Displays `[!] SECURITY BARRIER ACTIVE - DISABLE FIRST` if the prisoner is still behind active forcefields.
+  - Displays `[E] COMMAND: WAIT HERE` when the ally is following.
+  - Displays `[E] COMMAND: FOLLOW ME` when the ally is holding position.
+- **Command Toggle via "e/E"**:
+  - Pressing `E` while looking at the prisoner toggles between waiting in place (`[!] Prisoner: 'Holding position here.'`) and following (`[+] Prisoner: 'Right behind you!'`), accompanied by tactical radio audio.
+
+### 4. Minimap Tactical Tracking ([`src/plugins/minimap/MinimapRenderer.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapRenderer.ts), [`src/plugins/minimap/MinimapTypes.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapTypes.ts))
+- Rescued allies are rendered on the minimap as distinct bright green radar blips (`0x22cc44`), distinguishing them from red hostile enemies and cyan player arrows.
+
+
+
+## [2026-10-20] - Fix Vehicle Visual Scale & Laser Hitbox Alignment for AT-ST, TIE Fighter & TIE Bomber
+
+### 1. Visual Scale Correction (`referenceHeight` & `scale`) ([`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts))
+- **Mathematical Root Cause of "Tiny" Sprites**:
+  - The 3D raycasting sprite projection formula computes:
+    $$\text{spriteHeight} = \text{baseHeight} \times \text{scale} \times \frac{\text{texH}}{\text{referenceHeight}}$$
+  - Previously, `referenceHeight` was hardcoded to `300` for `at_st` and `250` for `tie_fighter` and `tie_bomber`, while actual sprite frame heights (`texH`) in their decoration spritesheets were only `102px` (`at_st`), `66px` (`tie_fighter`), and `61px` (`tie_bomber`).
+  - This drastically shrank them on screen:
+    - TIE Fighter rendered at only $1.8 \times (66 / 250) = 0.47\times$ wall height (less than half wall height) and $0.33$ tiles wide.
+    - TIE Bomber rendered at only $1.8 \times (61 / 250) = 0.44\times$ wall height and $0.48$ tiles wide.
+    - AT-ST rendered at only $1.8 \times (102 / 300) = 0.61\times$ wall height (smaller than a stormtrooper) and $0.32$ tiles wide.
+- **Accurate Reference Dimensions & Scale**:
+  - `at_st`: Set `referenceHeight: 102`, `scale: 2.3`. Renders at a towering $2.3\times$ wall height (nearly $3.3\times$ stormtrooper height), with an authentic $1.22$ to $1.60$ tile visual width across all 8 directions.
+  - `tie_fighter`: Set `referenceHeight: 66`, `scale: 1.9`. Renders at $1.9\times$ wall height and $1.32$ (front) to $1.81$ (diagonal) tiles wide.
+  - `tie_bomber`: Set `referenceHeight: 61`, `scale: 1.8`. Renders at $1.8\times$ wall height and a broad $1.98$ (front) to $2.63$ (diagonal) tiles wide for its dual ordnance/cockpit pod hull.
+  - Added `at_at` entry (`referenceHeight: 262`, `scale: 3.5`, `hitRadius: 1.25`, `spritesheet: "assets/at_at.json"`) for full walker compatibility.
+
+### 2. Laser Hitbox Alignment & Blocking Discrepancy ([`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Mathematical Root Cause of "Block Laser Bolts in Wider Area"**:
+  - In `findClosestHit`, ray hits against stationary objects test perpendicular distance: $\text{perpDist} \le \text{hitRadius}$.
+  - Previously, `hitRadius` was hardcoded to `0.95` (diameter $1.90$ tiles) for all vehicles.
+  - While visual models were shrunken to only $0.32$ – $0.48$ tiles wide, their invisible laser blocking collider spanned $1.90$ tiles wide (almost $6\times$ wider than the visible sprite!).
+  - As a result, laser bolts fired near vehicles were intercepted by invisible air, and enemies standing clearly in sight behind or near vehicles could not be targeted.
+- **Tightened Hit Radii Matching Visual Proportions**:
+  - `at_st`: `hitRadius` set to `0.65` (diameter $1.30$ tiles), exactly matching the $1.22$ – $1.33$ tile visual width.
+  - `tie_fighter`: `hitRadius` set to `0.68` (diameter $1.36$ tiles), aligning with front and side wings ($1.32$ – $1.38$ tiles).
+  - `tie_bomber`: `hitRadius` set to `0.85` (diameter $1.70$ tiles), matching the twin pod body.
+  - In `parseMapObjects`, any custom `scale` set on a map layer or object now scales `hitRadius` proportionally.
+- **In-Flight Laser Collision & Cover System**:
+  - Added `stationaryObjectManager` collision detection to `RaycastLaserManager.update` for both player and enemy laser projectiles in flight.
+  - Parked AT-ST walkers and TIE craft now act as real tactical cover from enemy blaster fire.
+
+### 3. Sprite Sheet Frame Matching & Map Filter Expansion ([`src/scenes/raycast/RaycastStationaryObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObject.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- Extended `RaycastStationaryObject.initFromSpritesheet` animation candidate prefixes to support `${p}_down`, `${p}_left`, and `${p}_up`.
+- Added `at_at` / `atat` to `RaycastScene` walls layer and texture map exclusion filters to prevent stationary vehicles from being treated as standard solid grid walls.
+
+
+
+## [2026-10-20] - Fix Door Protector Link Actions & Prevent Unmarked Doors From Locking Offline
+
+### 1. Door Protector Semantics in Link Actions ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Separated Security Barrier Actions from Elevator Door Lockout**:
+  - Previously, `applyLinkAction` treated all linked objects identically: when `action === "disable"` was received (e.g. from Trigger 73, Trigger 67, or Wall 75 deactivating a security barrier/waterfall), the code deactivated the barrier but then erroneously locked the door behind it shut and added it to `disabledDoors`, causing the door to display `[!] Door Offline - Elevator / Terminal Required` and preventing the player from opening it.
+  - Added `isDoorProtector` detection by checking `DestructableWallManager` registration and map object layer names containing `"protector"` or `"barrier"`.
+  - For door protectors, `normAction === "disable"` properly deactivates the barrier, ensures the door is removed from `disabledDoors`, and opens the door (`openDoorAt(gx, gy)`). Door protectors are never locked offline.
+
+### 2. Guarded Initial Controlled Door Locking (`initControlledDoors`) ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Strictly Limited Initial Lockout to Waitable Triggers**:
+  - `initControlledDoors()` now strictly skips any non-waitable triggers (`!isWaitable`) and explicitly ignores objects that are door protectors or security barriers.
+  - Standard doors and protector doors are never placed in `disabledDoors` on level load unless explicitly tied to an active countdown elevator mechanism.
+
+### 3. Contextual Feedback for Active Barriers in Door Interaction ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- In `checkAndInteractDoor`, if a player interacts with a door while an active `DoorProtector` is guarding that doorway, the game now provides clear contextual feedback: `[!] Security Barrier Active - Disable Barrier First` rather than the misleading `Door Offline` message.
+
+
+## [2026-10-20] - Fix Door Opening on Timer Finish & Stopping Prop Sounds After Wait Timer
+
+### 1. Waitable Trigger Link Action Resolution & Door Opening ([`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **`linkAction` Defaulting**:
+  - In `RaycastTriggerManager.parseMapTriggers`, `linkAction` now initializes to empty `""` instead of hardcoded `"disable"`.
+  - For waitable triggers (`wait.shouldWait: true`), if no explicit `action` is defined in Tiled, `linkAction` now defaults to `"enable"` (previously it was defaulting to `"disable"`, causing wait triggers to call `closeDoorAt` and lock the door shut upon completion).
+  - Also added parsing for direct `action` and `linkaction` properties on trigger objects in addition to nested `link.action`.
+- **Door Opening Execution on Wait Complete**:
+  - In `RaycastScene.handleTriggerWaitComplete`, wait completion explicitly ensures `"enable"` action is applied to linked objects (`trigger.linkIds`).
+  - Calls `applyLinkAction(trigger.linkIds, "enable", trigger)`, which removes the door key from `disabledDoors` and invokes `openDoorAt(gx, gy)`.
+  - `openDoorAt` sets `doorStates[doorKey] = 0.01` and `doorStatesFlat[flatIdx] = 0.01`, which `updateDoors` smoothly animates to `1.0` (fully open).
+- **Consolidated Wait Completion Lifecycle**:
+  - Added `completeTriggerWait` helper in `RaycastTriggerManager` shared by both per-frame `update` and `setTimeout`, guaranteeing the `[✓] Operation Complete!` toast, objective completion, callback invocation, and `hasTriggered = true` state.
+
+### 2. Looping Elevator Sound Teardown & Prop Sound Decoupling ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Decoupled Sound Playback from `applyLinkAction`**:
+  - Removed `playPropSounds` call from inside `applyLinkAction`. Previously, `handleTriggerWaitComplete` stopped the sound but then called `applyLinkAction`, which immediately restarted the elevator audio in an infinite loop.
+  - Sound playback for triggers is now handled cleanly in `handleTriggerFired` (looping for wait countdowns, single shot for instant triggers).
+- **Guaranteed Sound Teardown on Wait Completion**:
+  - Enhanced `stopTriggerPropSounds(key, soundName)`: stops the registered `SoundInstance` in `activePropSounds` and also invokes Pixi sound's global `sound.stop(soundAlias)` to terminate all playing audio instances.
+  - In `handleTriggerWaitComplete`, explicitly stops the trigger ID, linked object IDs, all aliases in `trigger.soundOnTrigger`, and Pixi sound alias `"elevator"`.
+  - In `playPropSounds`, protected against late-resolving promises: if the wait countdown completes before the sound promise resolves, the resulting instance is stopped immediately instead of registered to play.
+
+
+## [2026-10-20] - Fix Waitable Door Enabling Lifecycle & Phantom Enemy Spawning in Doors
+
+### 1. Phantom Stormtrooper Stuck in Door Fix ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`assets/raycast/levels/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/level3.json))
+- **Why It Happened**:
+  - In `level3.json`, object 131 (an empty bounding-box rectangle used to target the elevator door at `x: -1216, y: 2816`) was inadvertently placed on the `PositionedEnemies` layer.
+  - In Tiled, object 131 had no `gid` (sprite/tile image), no `type`, and no `name`, rendering as an invisible/transparent rectangle on top of the door graphics.
+  - In `RaycastEnemyManager.ts`, any object layer containing `"enem"` was scanned for enemies; objects without a `gid` previously fell back to `const typeName = obj.type || obj.name || "stormtrooper"`. Because `type` and `name` were blank, the game defaulted it to `"stormtrooper"` and spawned an enemy directly inside the elevator door tile.
+  - Once spawned inside the doorway threshold, the enemy AI pinch protection immediately forced the door open.
+- **Fix**:
+  - Moved object 131 from `PositionedEnemies` to `PositionedObjects` in `level3.json`.
+  - Updated `RaycastEnemyManager.parseMapEnemies` so that objects without a `gid` require an explicit enemy `type` or `name` before spawning. Non-enemy shapes, bounding boxes, or empty rectangles on enemy layers are now safely skipped.
+
+### 2. Waitable Door Locking & Enabling Lifecycle ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts))
+- **Initial State Door Locking (`initControlledDoors`)**:
+  - Implemented `initControlledDoors()` in `RaycastScene.loadLevel`: doors linked to triggers with `wait.shouldWait: true` or `linkAction: "enable"` now automatically start in `disabledDoors` as locked closed (`state = 0`).
+  - Player cannot open the door before activating the trigger; pressing `[E]` shows toast `[!] Door Offline - Elevator / Terminal Required`.
+  - Enemy AI pathfinding and door interaction are also barred from opening disabled closed doors.
+- **Trigger Wait Countdown & Completion Execution**:
+  - For waitable triggers, `handleTriggerFired` now plays the looping spatial prop sound (`elevator.wav`) and maintains the door's locked closed state throughout the countdown.
+  - If player presses `[E]` on the door during countdown, displays `[⏳] Operation in progress, please wait...`.
+  - Upon countdown completion (`handleTriggerWaitComplete`), `applyLinkAction(..., "enable")` runs: removes the door from `disabledDoors` and opens the door (`openDoorAt(gx, gy)`).
+  - Clarified door semantics in `applyLinkAction`: `"enable"` unlocks and opens doors; `"disable"` locks doors shut.
+
+## [2026-10-19] - Waitable Triggers, Objective Prompt Messages, Prop Sound Playback & Bounding Box Door Disabling
+
+### 1. Interactive Waitable Triggers & Live Countdown Prompts ([`src/scenes/raycast/objectives/RaycastTriggerManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastTriggerManager.ts), [`src/scenes/raycast/objectives/RaycastMissionManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/RaycastMissionManager.ts), [`src/scenes/raycast/objectives/ObjectiveTypes.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/objectives/ObjectiveTypes.ts))
+- **Live Countdown & Objective Message Prompts**:
+  - Interactive triggers (`shouldBePressed = true`) parse custom `displayMessage` / `message` properties and link to level objectives (`isObjective`, `objectiveKey`).
+  - Displays context-aware HUD prompts: `[E] PRESS [E] - <OBJECTIVE_TITLE>` or `[E] PRESS [E] TO ACTIVATE` in bright cyan (`0x00e5ff`).
+  - When a trigger uses the `Wait` property (`wait.shouldWait: true` and `waitTimeInSeconds > 0`), the trigger enters an active wait state.
+  - While running, the prompt dynamically updates in amber (`0xffaa00`) with a real-time countdown: `[⏳] <ACTION>... (Ns)` or `[⏳] PLEASE WAIT... (Ns)`.
+  - Added `getActivePromptColor()` across `RaycastTriggerManager` and `RaycastMissionManager` so the HUD accurately renders amber countdowns during active operations.
+  - Interacting with an active wait trigger shows feedback toast `[⏳] Operation in progress, please wait...` without resetting the timer.
+  - On countdown completion, fires `onTriggerWaitComplete`, marks the objective complete, displays `[✓] Operation Complete!` toast, and reverts linked mechanisms.
+
+### 2. Prop Sound Playback with Spatial Falloff & Wait Looping ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Audio Extraction from Linked Props & Triggers**:
+  - Implemented `extractSoundName` and `normalizeSoundName` to read sound effects from linked objects (`sound`, `soundOnTrigger`, `sfx`, `audio`) or from the trigger definition.
+  - Defaults to `"elevator"` sound effect when `wait.shouldWait` is active on an elevator or mechanical door trigger.
+- **Spatial Falloff & Distance Attenuation**:
+  - Implemented `playPropSounds` to calculate spatial volume falloff between player position and the center of the linked prop or trigger: `Math.max(0.05, Math.min(1.0, 1.0 - dist / 15)) * 0.7`.
+- **Looping & Teardown Lifecycle**:
+  - Loops waitable sounds for the duration of the wait countdown and stores the active sound instance in `this.activePropSounds`.
+  - On wait completion, stops the looping sound via `stopTriggerPropSounds` and plays a door/completion chime (`door_1`).
+  - Cleans up all active prop sounds on scene destroy and level transitions (`loadLevel`).
+
+### 3. Disabling Doors & Barriers within Limits of Linked Objects ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Bounding Box Object Coverage**:
+  - Updated `applyLinkAction` to calculate full rectangular grid limits `[minGx..maxGx] x [minGy..maxGy]` from the linked object's dimensions and Tiled tile/shape coordinates (`x, y, width, height, gid`, plus `currentMapOffsetX, currentMapOffsetY`).
+  - All door tiles located anywhere within those bounds are disabled / enabled simultaneously.
+- **Door Locking Mechanism & Override Protection**:
+  - Tracked disabled doors in `this.disabledDoors: Set<string>`.
+  - When disabled (`normAction === "disable"`), doors are forced open via `this.openDoorAt(gx, gy)` and locked in the open state.
+  - Guarded both player interaction (`checkAndInteractDoor`) and enemy pathfinding/door opening (`checkAndInteractEnemyDoor`) against closing or altering disabled doors while an active mechanism holds them open.
+  - On wait timer expiration (`handleTriggerWaitComplete`), releases the override (`this.disabledDoors.delete(key)`) and automatically closes the doors (`this.closeDoorAt(gx, gy)`).
+  - Also toggles any `DestructableWall` security barriers within the linked object bounds.
+
+### 4. Level 3 Objective Manifest ([`assets/raycast/levels/objectives/level3.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/objectives/level3.json))
+- Created complete objective definition JSON for Level 3 containing:
+  - `find_way_out`: "Find a Way Out - Search the detention area for an exit route"
+  - `fix_the_water`: "Drain the Water - Restore drainage flow to lower sewage water levels"
+  - `turnOnTheWalker`: "Activate the Walker - Power up the AT-ST walker mechanism"
+  - `disable_hanger_shield`: "Disable Hangar Shield - Shut down security barrier to access landing bay"
+  - `escape`: "Escape - Board the Imperial transport or reach the extraction zone"
+
+## [2026-10-19] - Level 3 Assets, Thin Wall Alignment Auto-Orientation & Object Link Infrastructure
+
+### 1. Thin Wall & Door Protector Alignment & Rotation Fixes ([`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/raycast/DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Rotation Auto-Determination from Alignment**:
+  - **Problem**: When map objects on `DoorProtectors` layers were updated in Tiled from class `DestructableWall` to `Tile`, Tiled stripped explicit `"rotation": "horizontal"` properties because `Tile` types only defined `align`. Because `DestructableWallManager.parseMapDoorProtectors` previously initialized `let rotation = "vertical"`, all barriers defaulted to vertical rotation regardless of their alignment. This caused barriers with `align="top"` or `align="bottom"` (e.g. command center shields in `level2.json` and prison cell fences in `level3.json`) to fail alignment checks and fall back to vertical center (`x + 0.5`).
+  - **Fix**: Initialized `rotation = ""` in `DestructableWallManager.ts`. When `rotation` is unset, `DestructableWall` automatically detects `"horizontal"` orientation when `align` is `"top"`, `"bottom"`, `"north"`, `"south"`, `"up"`, or `"down"`, and `"vertical"` when `align` is `"left"`, `"right"`, `"west"`, or `"east"`.
+- **Neighbor-Based Orientation Inference for Centered Barriers**:
+  - If a barrier's rotation is unset and its alignment is `"center"` or `"-"`, `DestructableWallManager` now inspects neighboring solid wall tiles in the `Walls` layer (`(gridX ± 1, gridY)` vs `(gridX, gridY ± 1)`). If flanked by walls horizontally, it orients horizontally; if flanked vertically, it orients vertically.
+- **Alignment Normalization**:
+  - Normalized `"-"` and empty string values to `"center"` in [`DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts).
+- **`ThinWalls` Tile Layer Alignment Support**:
+  - Updated `thinWallsLayers` processing in [`RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) to read layer-level and tile metadata `align` properties (`left`, `right`, `top`, `bottom`, `center`), adjusting boundary coordinates (`x1`, `y1`, `x2`, `y2`) accordingly.
+  - Added adjacent solid wall checks when a single thin wall tile has no neighboring thin wall tiles to automatically infer `"horizontal"` vs `"vertical"` orientation.
+
+### 2. Level 3 Asset Pipeline & Configuration ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx))
+- **Asset Registration in `GameConfig.ts`**:
+  - Imported and preloaded all required Level 3 environment textures and audio assets:
+    - Textures: `sewer_waterfall` (spritesheet JSON & PNG), `sewer_door.jpg`, `sewer_wall.jpg`, `sewer_ceiling.jpg`, `worn_sewer_wall.jpg`, `worn_sewer_ceiling.jpg`, `worn_piped_wall.jpg`, `worn_grilled_wall.jpg`, `worn_stairs_up.jpg`, `worn_stairs_down.jpg`, and `lever_off.png`.
+    - SFX: `elevator.wav`.
+    - Characters & Vehicles: `prisoner` (JSON & PNG), `at_st` (JSON & PNG), `tie_fighter` (JSON & PNG), and `tie_bomber` (JSON & PNG).
+- **Tileset Configuration for Sewer Door**:
+  - Updated tile `id="50"` (`sewer_door.jpg`) in `StarWarsTileset.tsx` with `tileType="door"` and `open="Up"` properties, ensuring it is properly parsed into `doorStates` and animated as a vertical sliding door.
+
+### 3. Pre-Sliced Column Texture Bounds & Dimension Clamping ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Texture Error Frame Bounds Fix**:
+  - **Problem**: Encountered `Uncaught (in promise) Error: Texture Error: frame does not fit inside the base Texture dimensions: X: 0 + 1 = 1 > 76 or Y: 0 + 64 = 64 > 17` during level load when non-wall tiles (such as pickups or stationary spritesheets) were included in wall column pre-slicing.
+  - **Fixes**:
+    - Filtered non-wall tiles (`PickupItem`, `Enemy`, and stationary object spritesheets) out of the level `textureMap`.
+    - Added strict type guard `cached instanceof Texture` in `tryCached` to avoid treating spritesheets as single wall textures.
+    - Clamped column slice widths and heights to `Math.min(texture.width, baseW - frameX)` and `Math.min(texture.height, baseH - frameY)` to guarantee every 1px column slice strictly fits within the base texture bounds.
+
+### 4. Tiled Object Linking & Waitable Barrier State Control ([`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/raycast/DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- **Tiled Object Link Parsing**:
+  - Extended `extractLinkIds` and property parsing to support Tiled's native object linking feature (link lists of object references `{ type: "object", value: id }` and link property objects `{ action, linkIds }`).
+- **Dynamic Wall Activation API**:
+  - Implemented `getWallById(id)` and `setWallActiveById(id, active)` on `DestructableWallManager` to dynamically activate/deactivate door protectors and security barriers via external triggers, levers, or waitable elevator timers.
+- **Dual-Link Barrier & Finish Zone Status**:
+  - Enhanced `DestructableWall.bindBreakables` to resolve link connections bidirectionally (breakables linking to walls, and walls linking to breakables).
+  - Updated `RaycastScene.updateLevelFinishZonesStatus` to evaluate both remaining breakable targets and linked destructible walls before unlocking the level exit.
+
+## [2026-10-16] - Tactical Minimap / Automap Plugin & Mobile HUD Map Button
+
+### 1. Reusable Tactical Minimap & Automap Plugin ([`src/plugins/minimap/RaycastMinimap.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/RaycastMinimap.ts), [`src/plugins/minimap/index.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/index.ts))
+- **Modular Plugin Architecture**:
+  - Implemented `RaycastMinimap` as an independent, decoupled plugin implementing `IDisposable`.
+  - Logically decomposed the monolithic plugin into dedicated, high-cohesion modules:
+    - [`MinimapTypes.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapTypes.ts): Enums (`MinimapTileType`), data provider contracts (`IMinimapDataSource`), options (`IRaycastMinimapOptions`), and layout metrics (`IMinimapViewportMetrics`).
+    - [`MinimapDiscovery.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapDiscovery.ts): Fog-of-war exploration state, 180-ray radial line-of-sight raycaster, and persistent seen object tracker.
+    - [`MinimapRenderer.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapRenderer.ts): Static floor/wall/stairwell/thin-wall rendering and dynamic layer drawing (doors, item badges, hostiles, and player chevron).
+    - [`MinimapUI.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/MinimapUI.ts): Datapad Holomap modal window frame, header stats, close button, and legend footer bar.
+    - [`RaycastMinimap.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/RaycastMinimap.ts): Streamlined high-level controller coordinating UI, discovery, and renderer layers.
+    - [`index.ts`](file:///D:/Projects/side-scroller/src/plugins/minimap/index.ts): Central barrel re-export preserving 100% backward compatibility.
+  - Connects to any map data provider via `IMinimapDataSource` interface (`mapWidth`, `mapHeight`, `mapFlat`, `tileTypeFlags`, `doorStatesFlat`, `lockedDoors`, `unlockedKeycardDoors`, `thinWalls`, `levelFinishZones`, `player`, `activeEnemies`, `levelName`).
+- **Fog-of-War Room & Corridor Discovery**:
+  - Implemented dynamic line-of-sight raycasting exploration (`updateDiscovery`). Unexplored sectors remain completely hidden in dark fog (`0x040810`).
+  - As the player enters rooms and corridors, radial rays (180 rays up to 14 tiles) scan along line of sight:
+    - Rays reveal walkable corridor grids (`0x0a1624`) and solid walls (`0x152c3f`).
+    - Closed doors block sight, keeping rooms behind them hidden in darkness until opened. Open doors allow sight rays to pass through, revealing the room inside.
+    - Thin wall barriers are revealed when adjacent cells are discovered.
+  - Header displays a real-time exploration gauge: `EXPLORED: XX%` based on discovered walkable sector tiles.
+- **Persistent Seen Objects Tracking**:
+  - Any objects the player sees (pickups, keycards, terminals, holotables, exit zones) are recorded in `discoveredObjects` and **remain permanently marked on the minimap**, even when the player travels to distant rooms.
+  - Color-coded badges and icons:
+    - **Keycards**: Bright glowing badge in the keycard's color (Blue, Red, Yellow) with a pulsing aura.
+    - **Health**: Green medical cross icon inside a circular pill badge.
+    - **Shields**: Cyan deflector shield crest badge.
+    - **Weapons**: Amber blaster icon badge.
+    - **Ammo / Detonators**: Orange ammo crate badge.
+    - **Stationary Terminals & Holotables**: Cyan diamond terminal badge.
+    - **Exit Zones**: Pulsing emerald green finish marker.
+    - **Stairs (Up & Down)**:
+      - Distinct architectural stairwell rendering: replaces generic wall fill with high-tech step treads (horizontal step stripes) and direction chevrons (▲ for UP stairs in bright cyan `0x00e5ff`, ▼ for DOWN stairs in violet/purple `0xc084fc`).
+      - Persistent discovery: when the player discovers the stairwell, it remains permanently marked on the map with glowing pulsing accents.
+      - Legend updated with dedicated `STAIRS (▲/▼)` entry.
+  - When a pickup is collected by the player, it is cleanly removed from the active ground items map.
+- **Enemies on Discovered Map**:
+  - Enemies are displayed as radar blips only when within discovered map sectors.
+- **Zero-Lag Discovery Loop**:
+  - Runs continuous lightweight position-delta checks in `tick()`, updating exploration in real time during gameplay so opening the map with `"M"` or the mobile button displays up-to-date discovered terrain instantly with 60fps performance.
+
+### 2. Desktop Controls ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts))
+- Pressing `"m"` (or `"M"`) toggles the tactical automap datapad on and off.
+- Pressing `"Escape"` while the minimap is open immediately closes it.
+
+### 3. Mobile Map Button Integration & HUD Enhancements ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts), [`src/ui/HUD.ts`](file:///D:/Projects/side-scroller/src/ui/HUD.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`assets/common/map_icon.png`](file:///D:/Projects/side-scroller/assets/common/map_icon.png))
+- **`map_icon.png` Recolored, Brightened & Centered**:
+  - Rebuilt [`assets/common/map_icon.png`](file:///D:/Projects/side-scroller/assets/common/map_icon.png): replaced pitch-black pixels with a vibrant Star Wars sci-fi cyber cyan/blue palette (pin head in glowing ice blue `rgb(180, 245, 255)`, map folds in neon cyber cyan `rgb(0, 229, 255)`).
+  - Centered visual mass: adjusted vertical geometry by -2px offset, aligning the center of mass to `(24.53, 24.86)` dead-center within the 50x50 icon canvas.
+- **MobileControls Map Button Styling** ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts)):
+  - Redesigned `btnMap` with a high-tech Star Wars cyber blue background (`0x091929`), glowing cyan border (`2.5px 0x00e5ff`), and concentric inner cyber ring (`31px radius, 0.35 alpha`).
+  - Added tactile scale animation (`scale.set(0.92)` on press, `1.0` on release).
+- **RaycastHUD & HUD Styling** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/ui/HUD.ts`](file:///D:/Projects/side-scroller/src/ui/HUD.ts)):
+  - Applied matching dual-ring sci-fi cyber styling and tactile scale response to `RaycastHUD.mapButton` and `HUD.addMapButton`.
+  - Prevented button duplication in `RaycastScene` when `MobileControls` is instantiated on mobile.
+
+### 4. Wall Layer Enforcement (Sprites in Walls Layer Are Strictly Solid Walls)
+- **Problem**: When a door sprite (e.g. `metal_door.jpg` with `tileType === "door"`) was placed on the `Walls` layer (such as decorative blast door panels at `(11, 16)` and `(11, 32)` in `level1.json` or `(16, 19)` in `level2.json`), `RaycastScene` registered the cell into `doorStates` and assigned `RaycastScene.TILE_DOOR` based on tile ID property alone. This allowed players and enemies to open dead-end wall panels.
+- **Fix** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Removed door registration from `wallsLayers` parsing loop.
+  - Made `RaycastScene.TILE_DOOR` assignment strictly conditional on `doorKey in this.doorStates` (doors originating from the dedicated `Doors` layer).
+  - Any tile placed on the `Walls` layer (and not defined in `Doors`) is strictly classified as `RaycastScene.TILE_WALL`, rendering as a solid wall texture that cannot be opened, interacted with, or bypassed by enemies.
+
+### 1. Keycard Security Doors Protected from Enemy Access
+- **Removed Alert Security Override on Keycard Doors** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Issue**: In `checkAndInteractEnemyDoor` and `isCellWalkable`, an alert override `(!this.isAlertActive)` allowed enemies to open and pathfind through locked security doors requiring keycards whenever a base alert was triggered. Consequently, enemies anywhere on the map were walking up to red and blue keycard doors (e.g. doors `(20, 29)`, `(12, 4)`, `(7, 9)` in `level2.json`) and opening them without possessing keycards.
+  - **Fix**: Removed `!this.isAlertActive` bypasses. Doors requiring keycards are now strictly impassable to enemies when closed, regardless of whether a base alert is sounding.
+- **Keycard Door Requirement Permanence** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Previously, unlocking a door with a keycard permanently deleted its entry from `this.lockedDoors`. If the player later manually closed the door with `[E]`, enemies approaching the closed door would treat it as an ordinary door and open it.
+  - Now, `this.lockedDoors[key]` is retained permanently, while an `unlockedKeycardDoors` set tracks initial unlock feedback. When the door is closed, enemies can never open it. If the door is currently wide open, entities can walk through the physical doorway.
+- **Pathfinding & Movement Guards Against Keycard Doors** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - In `tryMoveEnemy`, `getNextPathStep`, and doorway lookahead approach checks, added guards verifying that doors in `lockedDoors` are never triggered to open by enemies and do not cause enemies to enter a stationary `isWaitingForDoor` state.
+- **Reachable Wave Spawner Spawn Point Prioritization** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - When picking the active wave spawn point, the manager now strictly filters for spawn points with a valid BFS path (`bfsDist > 0`), ensuring reinforcement waves never spawn in sectors blocked off by closed keycard doors.
+
+## [2026-10-15] - Time-Based Delta Timers Conversion (Seconds)
+
+### 1. Frame-to-Time Conversion across Enemies, Waves, HUD, and Weapon Views
+- **Delta-Time Conversion in Seconds (`dt = delta / 60`)**:
+  - Replaced all legacy frame counters across the Raycaster engine with real elapsed time in seconds (`dt = delta / 60`), guaranteeing consistent AI timing, wave pacing, and UI animations regardless of display refresh rate (60Hz, 120Hz, 144Hz, 240Hz, or variable delta).
+- **Enemy Wave Spawner Timers** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Updated `IEnemyWaveConfig` to use `spawnIntervalSeconds: number` (1.15s) and `waveCooldownSeconds: number` (10.0s).
+  - Maintained backward compatibility via deprecated `spawnIntervalFrames` and `waveCooldownFrames` aliases.
+  - Converted `waveCooldownTimer`, `spawnIntervalTimer`, and `bfsUpdateTimer` (renamed from frame counter, updating every 0.25s) to decrement in seconds using `dt`.
+  - Converted A* repath staggering (`pathCooldown`) to seconds (`0.35s + (id % 6) * 0.05s`, ~0.35s - 0.60s) decremented by `dt`.
+- **Enemy AI Timers** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Converted `lostSightDuration` across all enemy configs to seconds (`4.0s` for Stormtroopers, Officers, and Commandos; `3.0s` for Droids and Dark Troopers). Added auto-detection fallback: values `> 30` are automatically converted from legacy frames (`val / 60`).
+  - Added `stepOutDuration` (seconds) with backward-compatible `stepOutFrames` getter/setter and fallback conversion.
+  - Converted `painTimer` (~0.13s), `shootingTimer` (~0.20s), `meleeTimer` (~0.36s), `shieldTimer` (2.0s), `shieldCooldownTimer` (3.0s), `stepSoundTimer` (0.36s), `advanceTimer`, and `clearanceTimer` to count down with `dt`.
+  - Converted Diagona aquatic predator state timers (`diagonaAnimTimer`, `diagonaSubmergedTimer`, `diagonaBlinkTimer`, and `diagonaBlinkDuration`) to seconds with `dt`.
+- **HUD Toast & Screen Notifications** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Updated `showToast(message, borderColor, durationSeconds: number = 2.5)`. Legacy frame inputs (e.g. `150`, `180`, `200`) are automatically divided by 60.
+  - Toast fade-out now smoothly transitions over the final 0.5s of display time using `dt = delta / 60`.
+- **Weapon View Muzzle Flash** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Converted `flashTimer` to seconds (~0.08s), decremented by `dt = delta / 60`.
+
+## [2026-10-15] - Diagonal Movement Pursuit, Lookahead Path Smoothing & Alert Reinforcement Spawns
+
+### 1. Diagonal Movement Pursuit & Smooth Path Smoothing
+- **Direct Diagonal Pursuit When Clear Line of Fire** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Issue**: In `chase` state, enemies always prioritized `pathNextStep` grid waypoints over direct `playerX, playerY` pursuit even when standing in open rooms with direct line of sight and line of fire. Consequently, enemies moved rigidly in cardinal or stepped lines along grid cell centers instead of bee-lining directly on the diagonal towards the player.
+  - **Fix**: When `seesPlayer && lof && !inDoorway`, enemies now pursue `playerX, playerY` directly across the Euclidean diagonal vector in 2D space (halting if within `minDistance` for ranged combat). Cardinal grid waypoints from `pathNextStep` are reserved for corridor/doorway traversal or when line of sight is obstructed.
+- **A* Pathfinder Diagonal Neighbor Prioritization** ([`src/plugins/pathfinding/AStarPathfinder.ts`](file:///D:/Projects/side-scroller/src/plugins/pathfinding/AStarPathfinder.ts)):
+  - In `getValidNeighbors`, diagonal neighbors are now generated before cardinal neighbors so that on equal cost/heuristic ties, true diagonal shortcuts across open rooms are naturally selected rather than cardinal zigzags.
+- **Expanded Waypoint Follower Lookahead** ([`src/plugins/pathfinding/AStarPathfinder.ts`](file:///D:/Projects/side-scroller/src/plugins/pathfinding/AStarPathfinder.ts)):
+  - In `AStarPathFollower.advance`, increased lookahead shortcutting from `currentIndex + 2` to `currentIndex + 8`. Enemies in open rooms now skip intermediate tile-center nodes and pursue directly to room corners and door approaches while still strictly respecting `isCrucial` doorway entrance nodes.
+- **Matched Clearance Offset for Path Smoothing** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Reduced side clearance offsets in `isSegmentClear` from `0.30` to `0.20` to accurately reflect the enemy's physical collision radius (`0.24`), enabling string-pulling path smoothing to smoothly cut diagonal paths across open rooms without being falsely blocked by wide margins.
+- **BFS Diagonal Step Preference** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - In `getNextPathStep`, updated diagonal candidate evaluation from `nDist < bestDist` to `nDist <= bestDist`. On equal BFS distance ties in open spaces, enemies now step diagonally rather than strictly following cardinal lines.
+
+### 2. Alert Reinforcement Spawns & Security Door Overrides
+- **Root Cause of Wave Spawns Not Appearing**:
+  - In `level2.json`, when the alert officer is encountered in the command room `(18.2, 32.2)`, all surrounding entrances (`(12, 25)`, `(20, 29)`, `(7, 31)`, `(15, 34)`) require a Blue Keycard.
+  - When the player opened `(12, 25)` and entered, the door automatically closed behind them.
+  - Because `lockedDoors["12,25"]` was never deleted upon unlocking, and enemies were strictly forbidden from opening any keycard door, the closed door re-locked itself against enemies.
+  - The closest spawn point `(26.5, 28.5)` was blocked by locked door `(20, 29)` (distance ~10 tiles) and could not pathfind through `(12, 25)` (distance ~32 tiles) either. Newly spawned wave troopers were completely locked out, unable to pathfind into the room, and stood frozen outside where the player never saw them.
+- **Permanent Keycard Door Unlocking** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - In `tryInteractDoor`, when access is granted with a keycard, `delete this.lockedDoors[key]` is executed so the security door remains permanently unlocked and passable once breached.
+- **Base Alert Security Door Override for Imperial Forces** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - In `checkAndInteractEnemyDoor` and `isCellWalkable`, Imperial enemies now have base security clearance during active base alerts (`this.isAlertActive`), allowing them to open locked doors in their own facility to respond to the alarm and pursue the intruder.
+- **Reachable Wave Spawner Spawn Point Selection** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Updated wave spawn point selection in `update` to utilize `this.bfsDistGrid` path distance instead of pure Euclidean distance through solid walls, guaranteeing the active wave spawn point has a connected, reachable path to the player.
+- **Spawn Point Persistence** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Ensured `this.enemySpawnPoints` in `parseMapEnemies` preserves previously set spawn points instead of re-initializing to an empty array.
+  - Synced spawn points from `RaycastScene` directly after `parseMapEnemies` initialization.
+
+### 3. Continuous Endless Reinforcement Waves During Alert
+- **Endless Wave Progression** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Updated `IEnemyWaveConfig.maxWaves` to be optional and defaulted to `Infinity` so reinforcement waves continue indefinitely as long as the base alarm is sounding.
+  - Added an active enemy concurrency threshold (`enemyThreshold: 20`) to prevent infinite entity accumulation / performance drops if the player idles without engaging.
+- **Wave Announcement Banner** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Updated toast banner on new wave arrival to display `[!] Imperial Reinforcements! (Wave ${wave})` (omitting finite `/maxWaves` denominator for continuous waves).
+
+### 1. Root Cause Resolution: `doorStatesFlat` Typed Array Sentinel Bug
+- **Bug Analysis**:
+  - `this.doorStatesFlat = new Float64Array(totalCells);` in [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) defaulted all cells to `0`.
+  - In [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), multiple routines checked if a cell was a door using: `if (doorStatesFlat[idx] !== undefined)`.
+  - Because typed array indexing never returns `undefined` for allocated indices, `doorStatesFlat[idx] !== undefined` evaluated to `true` for **every single tile on the entire map**!
+  - **Cascading Failures**:
+    1. **A* Wall Clipping**: In `isCellWalkable`, solid walls (`tile > 0`) checked `doorStatesFlat[idx] !== undefined` and returned `true`. A* treated all solid walls (including door jambs) as unlocked doors and routed paths directly through solid wall corners into rooms.
+    2. **Permanent Wall Jamming**: Colliding with any wall in `tryMoveEnemy` triggered `if (doorState !== undefined) { enemy.isWaitingForDoor = true; }`. In `RaycastEnemy.ts`, `isWaitingForDoor` suppressed all feelers and unstick logic, causing enemies to freeze against wall corners waiting for solid walls to "open".
+    3. **Suppressed Stationary Attack Stance**: `findDoorOnSegment` and `nearestDoorDist` evaluated every enemy's own tile as a door, permanently setting `shootingThroughDoor = true` and `inDoorway = true` across the map. Consequently, `canStopAndAttack` could never become `true`, forcing enemies to stay in `chase` and charge directly into the player's face instead of stopping to shoot at weapon range.
+- **Fix**:
+  - Initialized `doorStatesFlat` with `NaN` in [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) via `this.doorStatesFlat.fill(NaN)`.
+  - Passed `this.tileTypeFlags` to `this.enemyManager.update(...)`.
+  - Added robust `isDoorTile(flatIdx, doorStatesFlat)` method in [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts) which checks `tileTypeFlags[flatIdx] === 2 (TILE_DOOR)` and `!Number.isNaN(doorStatesFlat[flatIdx])`.
+  - Replaced all unchecked `doorStatesFlat[...] !== undefined` and raw door indexing across `RaycastEnemyManager.ts` (`checkLineOfSight`, `findDoorOnSegment`, `findRayWallDistance`, `tryMoveEnemy`, `updateBfsGrid`, `getNextPathStep`, `isCellWalkable`, `getDoorwayAxis`, `nearestDoorDist`, `isCrucialDoorNode`, and door opening checks) with `isDoorTile`.
+  - Added `!Number.isNaN(doorState)` guard to [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts).
+
+### 2. Clean Room Arrival & Stop-and-Shoot Distance Enforcement
+- **Arrival at Last Known Position** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - When pursuing the player's last known location (`!seesPlayer && this.hasTarget`), if distance to `(lastKnownPlayerX, lastKnownPlayerY)` is less than `0.6` tiles, the enemy halts (`isMoving = false`), clears path followers, and holds position while searching until `searchTimer` expires or the player re-emerges.
+  - Prevents spiratic walking, corner wall charging, and jittering once reaching the room.
+- **Ranged Safety Distance in Chase State** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - If a ranged enemy in `chase` state is within `minDistance` (e.g. 2.0 - 2.2 tiles) with clear line of fire, they hold position rather than walking into the player.
+  - In `attack` state, enemies remain stationary to fire and backpedal if the player encroaches inside `minDistance`.
+
+## [2026-10-15] - Stop-and-Shoot Weapon Range Combat, Configurable Lost Sight Timer & Doorway Unsnagging
+
+### 1. Stop-and-Shoot Weapon Range Combat
+- **Instant Stationary Firing Stance in Weapon Range** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Root Cause of Enemies Walking into the Player**: Previously, `cleanFiringPosition` required `reachedCombatSlot` (`distToCombatPos < 0.65`). Because `combatPos` was computed from the player's dynamic position every frame, moving or strafing caused `distToCombatPos` to rarely drop below 0.65 tiles. As a result, ranged enemies remained trapped in `chase` state and continued walking towards the player's coordinates while firing on the move, rather than stopping in weapon range.
+  - Replaced restrictive formation slot distance requirements with clean line-of-fire clearance (`canStopAndAttack`):
+    - Enemies within weapon range (`dist <= attackRange`) with direct line of sight and line of fire (`los && lof`), who are not shooting through a closed door or standing within a doorway threshold (`nearestDoorDist >= 1.2`), immediately transition to `state = "attack"`.
+    - Upon entering `attack` state, movement is halted (`isMoving = false`), pathfinding waypoints are cleared (`pathFollower.clear()`), and the enemy fires on cooldown with full accuracy.
+  - **Tactical Back-Stepping**: If the player closes to within `minDistance` (e.g. 2.0 tiles for Stormtroopers), the enemy executes controlled backward steps to maintain shooting distance without charging forward.
+
+### 2. Configurable Lost Sight Search Timer (`lostSightDuration`)
+- **Configurable Enemy Target Search Duration** ([`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Added `lostSightDuration?: number` (ticks/frames, default: 180 = ~3.0s at 60fps) to `IRaycastEnemyConfig`.
+  - Configured tailored search durations across all enemy archetypes:
+    - `Stormtrooper`: 180 ticks (3.0s)
+    - `Viper Probe Droid`: 150 ticks (2.5s)
+    - `Imperial Officer`: 240 ticks (4.0s)
+    - `Imperial Commando`: 240 ticks (4.0s)
+    - `Phase 1 Dark Trooper`: 240 ticks (4.0s)
+    - `Dianoga`: 180 ticks (3.0s)
+- **Clean Disengagement & Return to Idle** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - When line of sight is broken, enemies pursue to the player's last known position (`lastKnownPlayerX`, `lastKnownPlayerY`) for the duration of `lostSightDuration`.
+  - When `searchTimer` reaches zero, the enemy clears target memory (`hasTarget = false`), clears path followers (`pathFollower.clear()`), stops moving (`isMoving = false`), and cleanly transitions to `state = "idle"`.
+  - Idle enemies without active targets do not run background A* queries towards the player through solid walls.
+
+### 3. Corridor Approach Flocking & Doorway Unsnagging
+- **Corridor Single-File Flocking** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Root Cause of Stopping at Door Sides**: In narrow approach hallways outside doorways, unconstrained 2D flocking separation previously pushed trailing enemies laterally into wall jambs. When the player moved out of sight around the corner, the stuck enemy lost line of sight and froze against the wall.
+  - Expanded `getDoorwayAxis` check radius from 1.4 to 2.5 tiles. Throughout the entire approach and departure corridor, lateral separation forces are suppressed (`pushX = 0` or `pushY = 0`), keeping multiple pursuing enemies in neat single file without pushing anyone into jamb walls.
+- **Doorway Jamb Unsnagging & Feelers** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Added `±60°` (`±Math.PI / 3`) feelers near doorways so enemies who contact a wall jamb can peel around the corner directly into the door opening.
+  - When stuck near a doorway (`nearestDoorDist < 1.8`), stuck nudging steers towards the center of the doorway opening (`nearestDoorCell`) rather than towards the enemy's obstacle-adjacent cell center.
+  - Raised stuck frame path-clear threshold from 10 to 25 frames to allow natural corner peeling without discarding paths.
+- **Ahead-of-Time Enemy Door Opening** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Enemies look ahead up to 1.5 tiles towards `nearestDoorCell` and open closed unlocked doors before contact, ensuring unimpeded door transit.
+
+## [2026-10-14] - Modular A* Pathfinding Plugin, Alert Wave Spawner, Fluid Diagonal Navigation & Direct Range Combat
+
+### 1. Modular A* Pathfinding Engine Plugin
+- **Reusable TypeScript Plugin Architecture** ([`src/plugins/pathfinding/AStarPathfinder.ts`](file:///D:/Projects/side-scroller/src/plugins/pathfinding/AStarPathfinder.ts), [`src/plugins/pathfinding/index.ts`](file:///D:/Projects/side-scroller/src/plugins/pathfinding/index.ts)):
+  - Built an independent, 100% TypeScript A* pathfinding and path-following plugin with clean interfaces (`IAStarGrid`, `AStarNode`, `AStarPathFollower`). Completely decoupled from the raycast engine for easy reuse across 2D/3D scenes.
+  - **Diagonal Movement & Corner Snag Prevention**: Evaluates 8-directional neighbor transitions with Euclidean heuristic and diagonal corner-cutting prevention (`canTraverse`).
+  - **Raycast Path Smoothing (`smoothPath`)**: Optimizes raw grid paths using line-of-fire clearance raycasts to skip intermediate nodes and construct direct straight-line vectors across open rooms.
+  - **Cardinal Doorway Approach (`isCrucialDoorNode`)**: Forces paths through doors and approach tiles to remain cardinally aligned, guaranteeing enemies enter door frames straight on without grazing side door jambs.
+  - **Predictive Waypoint Following (`AStarPathFollower`)**: Implements pure pursuit waypoint lookahead and automatic advance with a 0.35 arrival radius and line-of-sight shortcutting.
+
+### 2. Base Alert Wave Spawner & Persistent Alert Audio
+- **Enemy Spawn Points & Wave Spawner System** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Parses enemy spawn points from `Spawns` object and tile layers (`level2.json`) without rendering spawn indicator tiles as visible in-game geometry.
+  - When the base alarm triggers, selects the closest enemy spawn point to the player and spawns reinforcement waves of Stormtroopers in controlled periodic intervals (e.g. 3 waves, 2-3 enemies per wave, 12s cooldown).
+  - Wave spawning triggers regardless of remaining map enemy counts, preventing soft-locks if stray enemies are missed.
+  - **Persistent Combat Audio & Alarm**: Alert siren (`base_alarm`) and battle theme (`battle_theme`) persist until the level is finished or the player dies, preventing premature reversion to calm music. Added HUD alert toast and red screen flash notifications on wave arrivals.
+  - **Proximity Alert Awareness Radius**: Nearby enemies within 24 tiles (`ALERT_AWARENESS_RADIUS`) automatically awaken and pathfind towards the player upon alert.
+
+### 3. Anti-Jam Pass-Through & Fluid Diagonal Steering
+- **Enemy Jamming & Doorway Deadlock Elimination** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Removed hard enemy-to-enemy physical collisions and queuing deadlocks from `tryMoveEnemy`. Enemies can now freely pass through each other in narrow corridors and doorways, completely resolving doorway bottleneck pileups.
+  - **Open-Room Flocking Separation**: Implemented a gentle separation pass (`minSpacing = 0.55`) in open spaces, ensuring stationary shooting enemies maintain natural personal space without overlapping sprites.
+  - **Automated Enemy Door Interaction**: Enemies look ahead up to 2.5 tiles along their path and trigger door opening for closed normal doors (`checkAndInteractEnemyDoor`), while strictly respecting keycard-locked doors.
+- **Natural Diagonal Movement Feelers** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Replaced rigid single-axis Manhattan movement with multi-angle feelers (`±15°`, `±30°`, `±45°`, `±60°`, `±75°`, `±90°`) and axis-dominant sliding. Enemies smoothly slide along walls and round corners diagonally.
+
+### 4. Immediate Stop-and-Shoot on Range Entry & Combat Stance
+- **Direct Attack Range Transition** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Fixed an issue where enemies walked all the way to the player's coordinate and froze instead of shooting from range.
+  - Defined direct `inAttackRange = dist <= this.config.attackRange && los && lof`. The instant an enemy has line of sight and line of fire within weapon range, it cancels movement (`isMoving = false`), clears path waypoints (`pathFollower.clear()`), and immediately enters `attack` state to fire on cooldown.
+  - Enemies only pursue forward if the player is genuinely out of weapon range (`dist > attackRange`) or concealed behind a wall (`!los || !lof`).
+  - Excluded attacking and in-range enemies from redundant A* pursuit paths to `(playerX, playerY)` in `RaycastEnemyManager`.
+- **Removed Artificial Delays & Doorway Invalidation**:
+  - Removed `isNearDoor` from invalidating attack stance or blocking shooting; being near a door frame no longer prevents enemies from firing.
+  - Removed forced 30-frame step-out delays when enemies spot the player in range, and tuned initial reaction delay to a crisp 180ms.
+- **Combat Tracking & Tactical Repositioning**:
+  - Enabled continuous combat awareness (`hasCombatAwareness`) so enemies keep tracking and aiming directly at the player without losing sight when the player strafes.
+  - If the player approaches closer than `minDistance` (e.g. 2.0 tiles), the enemy executes tactical back-steps while continuously firing.
+
+### 5. Doorway Pile-Up Fix (Alerted Enemies Not Entering Rooms)
+- **Wall-Aware Formation Steering** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Root Cause**: When an enemy outside a room glimpsed the player through the doorway (but was still out of weapon range), it steered in a straight line to its formation slot instead of following its A* path. The slot was on the far side of the wall, so the enemy walked into the wall next to the door, slid sideways along it with the movement feelers, and piled up with the others without ever entering.
+  - Added `isStraightLineClear()` (center line plus ±0.3 body-width rays). Enemies now steer straight to their formation slot only when that line is wall-free and they are not near a door; otherwise they follow the A* path through the doorway.
+- **Path Clearance & Search Budget** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Widened the path smoothing/shortcut clearance from ±0.20 to ±0.30 tiles (the enemy collision radius is 0.24), so shortcuts no longer clip door jambs.
+  - Raised the A* `maxIterations` from 1500 to 5000 so distant alerted enemies can still find long detours through doorways.
+
+### 6. Doorway Breach & Clean Firing Positions
+- **Clean Firing Position Verification** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Root Cause of Door Frame Bunching**: When enemies in a corridor glimpsed the player through an open doorway, their single center ray hit the player, causing them to immediately enter stationary `attack` stance at the door frame. Slight player movements broke this narrow sight wedge, triggering rapid jitter between `chase` and `attack` against the door jamb.
+  - Introduced `cleanFiringPosition`: enemies only enter stationary firing stance if they are within attack range, have full visibility (both shoulders see the player), are **not shooting through a doorway** (`doorOnSightLine === null`), and are **not standing within a doorway frame** (`nearestDoorDist >= 1.3`).
+  - Added a 30-frame hysteresis counter (`shoulderVisibilityLostTimer`) before exiting `attack` mode due to partial shoulder obstruction, eliminating single-frame state jitter.
+- **Suppressive Moving Fire on the Move**:
+  - Extracted centralized firing logic (`tryFireAtPlayer`) shared by both `attack` and `chase` states.
+  - Enemies breaching corridors and doorways continuously lay down suppressive fire on the move (`0.6x` accuracy multiplier) while following their A* path through the door, creating intense combat pressure without freezing outside rooms.
+- **Doorway-Aware Flocking & Hunter Cap** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Replaced the wide 2.2-tile door separation blackout zone with `isInsideDoorway` (checked strictly on the doorway tile itself). Personal space separation (`minSpacing = 0.55`) remains active in corridors and outside doorways, preventing enemies from stacking at door jambs.
+  - Implemented `findDoorOnSegment` using DDA to detect when a sight line crosses any door tile.
+  - Integrated thin walls into A* pathfinding and BFS distance grids (`thinWallBlockedCells`), preventing impossible path calculations through security barriers.
+  - Capped active alert hunters to the nearest 12 candidates (plus reinforcement waves and enemies with existing combat engagement), preventing 60+ distant enemies from causing facility-wide bottleneck jams.
+
+### 7. Manual Door Toggle & Doorway Bee-Line Funneling
+- **Manual Door State Toggling & Motion Reversal** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **Root Cause of Doors Stuck Open & Looping Audio**: Previously, `checkAndInteractDoor` only allowed toggling when `currentState === 0` (closed) or `currentState === 1` (open), ignoring any in-motion state. Simultaneously, `checkDoorAt` in `RaycastEnemyManager` ran a distant 2.5-tile lookahead across 4 waypoints every frame that immediately reopened any closing door (`currentState < 0`) and replayed `door_1` audio the exact moment the player pressed `[E]`.
+  - **Seamless Motion Reversal**: Player can now press `[E]` to toggle doors from any state: doors opening or open (`currentState > 0`) reverse immediately to closing (`-Math.max(0.05, currentState)`), and doors closing or closed (`currentState <= 0`) reverse to opening (`Math.max(0.05, Math.abs(currentState))`).
+  - **Enemy Door Opening Constraints & Pinch Protection**: Enemies can no longer cancel or reopen closing doors from the outside (`distToCenter >= 0.65`). Added physical pinch protection: if an enemy is physically trapped within the doorway threshold (`distToCenter < 0.65`), the closing door safely reverses to open, preventing trapped entities or soft-locks.
+  - Closed doors require enemies to be directly adjacent (`dist <= 1.15`) along their movement vector, eliminating distant pre-triggers.
+- **Doorway Corridor Flocking Blackout & Bee-Line Funneling** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Doorway Separation Blackout**: Replaced the 1-tile door cell check with `isNearDoorway(ex, ey, 1.8)` in the flocking separation pass. Enemies in the approach corridor outside doorways no longer shove each other laterally into door frames.
+  - **Doorway Center Line Bee-Line Alignment**: When enemies approach within `1.6` tiles of a doorway, their movement target coordinate is snapped directly to the doorway centerline (`doorX + 0.5` for North/South passages, `doorY + 0.5` for East/West passages).
+  - **Suppression of Sideways Wall-Sliding**: In `RaycastEnemy.ts:moveTowards`, wide feelers (60°, 75°, 90°) and secondary single-axis feelers are suppressed within `1.6` tiles of doorways. Instead of sliding sideways along outer corridor walls into blind spots when blocked, enemies advance in single file straight through the doorway.
+  - When in the doorway approach zone (`nearestDoorDist < 1.6 || shootingThroughDoor || inDoorway`), enemies strictly follow their A* path through the door center, preventing formation slots on the far side of walls from pulling enemies into outer wall corners.
+
+### 8. Room Breach, Doorway Clearance & Formation Combat
+- **Room Penetration & Formation Combat Stance** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **Root Cause of Door Threshold Bunching**: Previously, alerted enemies in `chase` mode switched to stationary `attack` stance the exact microsecond they stepped 1.3 tiles past a door frame. Because `attackRange` was ≤ 5.5 and line of fire was clear into the room, every enemy entering the doorway immediately cleared their path and permanently froze in place at the room entrance.
+  - **Formation Slot Arrival Requirement**: Ranged enemies now continue advancing in `chase` mode through doorways into rooms while laying down suppressive fire. They only settle into stationary `attack` stance once they reach their assigned tactical formation slot (`distToCombatPos < 0.65`) and are safely clear of the door threshold (`nearestDoorDist >= 1.8`), or if obstructed (`stuckFrames > 30`).
+  - **Doorway Zone Steer vs. Room Formation Steer**: When outside a room (`shootingThroughDoor === true`), enemies strictly follow their A* path through the door. Once inside the room (`shootingThroughDoor === false`), they steer directly towards their distinct formation slots (`combatPos`), fanning out naturally across the room instead of stacking.
+- **Directional Flocking Separation & Doorway Path Cleanliness** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Directional Passage Separation**: Replaced the 1.8-tile total separation blackout with directional corridor separation (`getDoorwayAxis`). In doorway corridors, lateral push (`pushX` for NS passages, `pushY` for EW passages) is suppressed to prevent wall-jamming, while longitudinal push remains active to keep approaching enemies in clean single-file queues without collapsing into a single point.
+  - **Removed Destructive Target Clobbering**: Removed path target coordinate overwriting in `RaycastEnemyManager`, allowing A* waypoints to smoothly direct entities through doorways and deep into rooms.
+
+---
+
+## [2026-10-12] - True 3D Perspective Opening Crawl Shader & Galaxy Background
+
+### 1. Authentic Star Wars 3D Opening Crawl Shader & Alignment
+- **Hardware-Accelerated 3D Projective Crawl** ([`src/scenes/raycast/shaders/starWarsCrawl.vert`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/starWarsCrawl.vert), [`src/scenes/raycast/shaders/starWarsCrawl.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/starWarsCrawl.frag), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts)):
+  - Replaced disjoint per-line affine scaling with a full WebGL `Mesh` running dedicated projective 3D shaders.
+  - Generates the crawl text onto a high-resolution offscreen canvas with **justified text paragraphs**—producing clean, perfectly straight vertical margins.
+  - Fragment shader applies optical perspective transformation: horizontal trapezoidal taper ($u = 0.5 + (x - 0.5) / (h \cdot \text{taper})$), non-linear vertical foreshortening ($v = \text{scroll} - K / h$), smooth distance fog at the vanishing horizon, and soft bottom edge entry fade.
+  - Provides genuine cinematic 3D motion where the entire text plane recedes into deep space as a single unified parchment.
+- **Cosmic Star Background** ([`assets/cutscenes/intro/star_background.jpg`](file:///D:/Projects/side-scroller/assets/cutscenes/intro/star_background.jpg)):
+  - Integrated high-res galaxy star background image loaded via Pixi `Assets.load()`.
+  - Overlaid with subtle randomized twinkling dynamic star particles for depth and life.
+- **Audio Timing & Blue Card Separation**:
+  - Decoupled `audioStartTime` from the blue card phase so setting `audioStartTime: 0` plays `intro_theme.mp3` immediately at $t = 0$.
+  - Blue card duration is fully independent and smoothly fades to reveal the galaxy background and fanfare logo.
+- **Cinematic Logo Receding Curve & Zero-Delay Slow Crawl Entry** ([`assets/cutscenes/intro/config.ts`](file:///D:/Projects/side-scroller/assets/cutscenes/intro/config.ts), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts)):
+  - Replaced the front-loaded hyperbolic shrink with a film-accurate power curve $(1 - 0.95 p)^{1.6}$: the logo stays large, bold, and readable during the opening blast, receding majestically and smoothly into deep space without vanishing abruptly in the first second.
+  - Added `crawlStartDelay` (default ~4.8s) so the crawl can start promptly while the logo is receding in the background, decoupling crawl timing from total logo duration.
+  - Primed `crawlScroll` directly at the bottom screen edge on crawl start, eliminating the multi-second blank screen pause when scrolling at slower speeds (`crawlSpeed: 0.023`). The text now emerges smoothly and immediately into view.
+- **Dynamic Intro JSON Integration & Layout** ([`assets/cutscenes/intro/intro.json`](file:///D:/Projects/side-scroller/assets/cutscenes/intro/intro.json), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts)):
+  - Removed all hardcoded text: all lines, titles, and paragraphs are dynamically loaded from `intro.json`.
+  - Title screen logo renders `STAR` on line 1, `WARS` on line 2, and the story title (`A REBEL STORY`) below it.
+  - Scrolling crawl text renders episode header and story paragraphs without repeating the story name.
+  - **Restricted Skip Controls**: Disabled stage mouse clicking and Space/Enter keys so skipping is strictly triggered by pressing `Escape` or clicking the interactive `[SKIP [ESC]]` button.
+- **Cinematic Camera Tilt Down & Fade to Black** ([`assets/cutscenes/intro/config.ts`](file:///D:/Projects/side-scroller/assets/cutscenes/intro/config.ts), [`src/scenes/StarWarsIntroScene.ts`](file:///D:/Projects/side-scroller/src/scenes/StarWarsIntroScene.ts)):
+  - Added camera rotation/tilt down at 1:16 (`cameraPanDownStartTime: 76.0`): the cosmic galaxy background and stars pan majestically upward with parallax depth as the musical theme transitions into its descending brass motif.
+  - Added smooth fade to black starting at 1:22 (`fadeToBlackStartTime: 82.0`): a dark overlay seamlessly transitions the scene into pure black as the final chords resolve, concluding at song end (~89.36s) before advancing to Cutscene 1.
+
+---
+
+## [2026-10-12] - Prologue Cutscene System with Holodeck, Hologram Glitch & Transmission UI
+
+### 1. Level 1 Prologue Cutscene Flow
+- **Prologue Cutscene Scene & Configuration** ([`src/scenes/CutsceneScene.ts`](file:///D:/Projects/side-scroller/src/scenes/CutsceneScene.ts), [`assets/cutscenes/cutscene1/config.ts`](file:///D:/Projects/side-scroller/assets/cutscenes/cutscene1/config.ts)):
+  - Built dedicated `CutsceneScene` inheriting from `BaseScene`.
+  - Added fully-typed and documented configuration in `assets/cutscenes/cutscene1/config.ts` allowing granular customization of hologram coordinates, scale, anchor, fade-in speed, resting alpha, tint, glitch parameters, dialog box positioning and style, line timings, typewriter speed, and call-to-action prompts.
+- **Holodeck Background & Mon Mothma Hologram Animation**:
+  - Sets `assets/cutscenes/ship_holodeck.png` as crisp 1280x720 background canvas with `SCALE_MODES.NEAREST` and `MIPMAP_MODES.OFF`.
+  - Renders `assets/cutscenes/mon_hologram.png` with configurable floor projector disc emitter glow and smooth fade-in animation.
+  - Implemented randomized periodic hologram glitch animation bursts: triggers position jitter, alpha flicker, color tint shifts, scale distortion, and cybernetic horizontal slice scanlines across the hologram sprite.
+- **Holonet Transmission Dialog Box & Audio Synchronization** ([`assets/cutscenes/cutscene1/prologue_dialog.json`](file:///D:/Projects/side-scroller/assets/cutscenes/cutscene1/prologue_dialog.json), [`assets/cutscenes/cutscene1/prologue_dialog.mp3`](file:///D:/Projects/side-scroller/assets/cutscenes/cutscene1/prologue_dialog.mp3)):
+  - Cybernetic glassmorphism dialog terminal on the right side of the screen with glowing header and live transmission beacon.
+  - Plays `prologue_dialog.mp3` with `@pixi/sound` and reveals the 4 dialogue lines in synchronization with the spoken audio via a typewriter effect.
+  - Color-codes speakers (Mon Mothma in cyan, Tuk in amber).
+  - **Dynamic Multi-Line Height & Auto-Scroll (Overlap Fix)** ([`src/scenes/CutsceneScene.ts`](file:///D:/Projects/side-scroller/src/scenes/CutsceneScene.ts)):
+    - Replaced hardcoded vertical spacing with dynamic height calculation (`layoutDialogue()`) measuring speaker title height and wrapped text height per message.
+    - Guaranteed speaker labels and dialogue text never overlap regardless of dialog box width/height or font size.
+    - Added rectangular content mask and smooth viewport auto-scrolling (plus mouse wheel support) when the dialogue exceeds the dialog box height.
+- **Mission Start Transition to Level 1**:
+  - Once dialogue audio finishes, displays a glowing, pulsing call-to-action banner: `"CLICK ANYWHERE TO START MISSION"` (`[ OR PRESS ENTER / SPACE ]`).
+  - Clicking anywhere on screen (or pressing Space / Enter) transitions smoothly to `assets/raycast/levels/level1.json`.
+  - Includes a developer/player-friendly `SKIP [ESC]` option.
+- **Scene Router & Asset Manifest Integration** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts), [`src/enums/Scene.ts`](file:///D:/Projects/side-scroller/src/enums/Scene.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`tsconfig.json`](file:///D:/Projects/side-scroller/tsconfig.json)):
+  - Registered `Scene.Cutscene` in `Scene` enum and `buildScene`.
+  - Intercepts requests to load `level1` in `changeScene` to play the cutscene before entering `level1`, passing a skip flag on mission start to transition directly to `RaycastScene`.
+  - Added cutscene images and audio to `GameConfig.ts` manifest bundles.
+
+---
+
+## [2026-10-12] - Clean Tileset Slicing Pipeline & Removal of Redundant `ensureWallTextureSliced`
+
+### 1. Unified Tileset Texture Loading & Cleanup
+- **Tileset Alignment with Tile ID 39** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Updated fallback destroyed wall tile ID for grilled walls from `37` to `39` to match the newly added tile in `StarWarsTileset.tsx` (`id="39"` -> `grilled_wall_destroyed.jpg`).
+- **Removed Redundant `ensureWallTextureSliced` Logic** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Removed `ensureWallTextureSliced()` method and all its call sites in `loadLevel()` and `handleWallBlockDestroyed()`.
+  - Removed temporary `knownDestroyedWalls` hardcoded map in `loadLevel()`.
+  - Because `StarWarsTileset.tsx` defines both tile `20` (`computer_panel_destroyed.jpg`) and tile `39` (`grilled_wall_destroyed.jpg`), they are naturally discovered by `parseTiledMap()` and `loadLevel()`, loaded via `Assets.load()`, and pre-sliced into `columnTextures` uniformly alongside all other wall textures.
+
+---
+
+## [2026-10-11] - Destroyed Wall Texture Loading & Raycast Render Glitch Fix
+
+### 1. Missing Destroyed Wall Tile in StarWarsTileset & Texture Mapping
+- **Added `grilled_wall_destroyed.jpg` Tile Definition** ([`StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Added tile ID `37` for `assets/raycast/textures/grilled_wall_destroyed.jpg` with `tileType="thickWall"` to `StarWarsTileset.tsx`.
+  - Previously, `StarWarsTileset.tsx` omitted tile 37, preventing `loadLevel()` from including `grilled_wall_destroyed.jpg` in `textureMap`. As a result, the texture was never loaded or pre-sliced, leaving `this.columnTextures[37]` undefined.
+- **Automatic Fallback Texture Mapping in `loadLevel`** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added explicit fallback mapping in `loadLevel()` for known destroyed wall tiles (tile 20 `computer_panel_destroyed` and tile 37 `grilled_wall_destroyed`) to guarantee their textures are loaded even if omitted from tilesets.
+  - Added fallback image loaders for `grilled_wall_destroyed` and `computer_panel_destroyed`.
+  - Added `ensureWallTextureSliced(tileId)` method in `RaycastScene` that dynamically fetches, loads, and pre-slices any missing destroyed wall column textures if not already prepared.
+  - Hooked `ensureWallTextureSliced` after `parseMapBreakables` in `loadLevel()` and inside `handleWallBlockDestroyed()` as an extra safeguard.
+
+### 2. Render Scene Untextured Sprite Ghosting Glitch Fix
+- **Sprite Visibility Cleanup on Untextured Column Slices** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - In `renderScene()`, when `slices` is undefined for a given `wallType`, `sprite.visible = false` was previously omitted. Pooled sprites retained old textures, UVs, and positions from adjacent walls or previous frames, rendering a frozen, glitchy slice quad when the mouse moved.
+  - Added `sprite.visible = false` to the fallback branch to guarantee no corrupted quad geometry or ghosted textures render on screen.
+
+---
+
+
+## [2026-10-11] - Crisp Pixel-Art Nearest-Neighbor Filtering for Decorations and Walls
+
+### 1. Root Cause Resolution for Blurry Lines & Seams in Decorations and Walls
+- **Texel-Center UV Pinning on 1px Slices** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - **Root Cause**: Wall columns, decorations (tables, chairs, power cells), and pickups are rendered by slicing textures into 1-pixel-wide vertical strips. Previously, slices spanned standard boundaries from `x / W` to `(x + 1) / W`. When rasterized across screen pixels, floating-point evaluation along the quad edges bled into neighboring texels (`x - 1` or `x + 1`), generating vertical line seams down every column.
+  - **Solution**: Explicitly pinned texture coordinate U-values on all 4 quad vertices to the exact texel center: `u = (x + 0.5) / realWidth` (`uvsFloat32[0] = uvsFloat32[2] = uvsFloat32[4] = uvsFloat32[6] = u`). This guarantees `dU/dx = 0`, completely preventing horizontal derivative mipmap triggers and eliminating all border texel bleeding.
+  - Applied texel-center UV pinning to pre-sliced wall textures (`columnTextures`), dynamic door and thin wall slices, pickup slices, breakable furniture debris, and thermal detonators.
+
+### 2. Complete Mipmap Disabling Across Engine
+- **Global and Texture-Specific Mipmap Deactivation** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts), [`src/scenes/raycast/RaycastStationaryObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObject.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts)):
+  - **Root Cause**: PixiJS defaults `BaseTexture.defaultOptions.mipmap` to `MIPMAP_MODES.POW2`. Even with `SCALE_MODES.NEAREST`, mipmap generation produces downsampled, pre-filtered mip levels with linear averaging. When close to walls or decorations, high UV screen derivatives triggered GPU mipmap selection, sampling blurry lower-resolution levels rather than level 0.
+  - Set `BaseTexture.defaultOptions.mipmap = MIPMAP_MODES.OFF` globally in `src/index.ts`.
+  - Explicitly set `baseTexture.mipmap = MIPMAP_MODES.OFF` and called `.update()` on all loaded textures, spritesheets, dynamic column textures, and floor/ceiling atlas/map textures.
+  - Enhanced `enforceNearestScaleMode()` to scan `Assets.cache` and enforce `mipmap = MIPMAP_MODES.OFF` alongside `SCALE_MODES.NEAREST`.
+
+### 3. Canvas MSAA Elimination & Pixelated CSS Scaling
+- **Disabled WebGL MSAA Antialiasing** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Configured PixiJS `Application` with `antialias: false`. WebGL hardware multi-sample antialiasing was blending adjacent 1px column polygon edges, producing faint vertical line seams across surfaces.
+- **Pixelated Canvas CSS Styling** ([`src/style.css`](file:///D:/Projects/side-scroller/src/style.css)):
+  - Added `image-rendering: -moz-crisp-edges`, `image-rendering: -webkit-crisp-edges`, `image-rendering: pixelated`, and `image-rendering: crisp-edges` to `canvas`, ensuring browser viewport scaling preserves sharp pixel art without bilinear blur.
+
+### 4. Integer Snapping & Sprite `roundPixels`
+- **Subpixel Coordinate Snapping** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Enabled `roundPixels: true` across all sprites in `spritePool`, `thinWallSpritePool`, and `objectSpritePool`, as well as laser and weapon view sprites.
+  - Snapped wall slice `sprite.y` to `Math.floor(drawStart)` and `sprite.height` to integer pixels `Math.max(1, Math.ceil(drawEnd) - Math.floor(drawStart))` to eliminate fractional coordinate rasterization jitter.
+
+---
+
+
+## [2026-10-11] - Player Spawn Point Filtering, Sound Alias Array Normalization & Texture Loader Fixes
+
+### 1. Player Spawn Filtering vs Enemy Spawns
+- **Filtered Spawns Layer to Player Spawn Points** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Fixed an issue in `level2.json` where enemy spawn tiles (GID 39 / tile 38) and other entity spawn locations in the `Spawns` layer overwrote the player's position, placing the player at the last enemy spawn point instead of the designated player spawn point (GID 28 / tile 27 `player_spawn.webp` at 16, 18).
+  - Added strict player spawn verification: now exclusively positions the player if the tile or object matches `tileId === 27`, `player_spawn`, or `player`, while explicitly ignoring enemy spawns (`tileId === 38`, `enemy_spawn`, `enemy`).
+
+### 2. Audio Engine Alias Collision & InvalidStateError Fix
+- **Sound Alias Array Normalization & Safe Sound Stopping** ([`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **Root Cause**: In `@pixi/sound`'s asset loader plugin, sound aliases are extracted using `alias[0]`. Passing string aliases like `"base_alarm"`, `"battle_theme"`, and `"button_click"` resulted in all `"b..."` sounds registering under the single-character alias `'b'`. This triggered WebAudio's `InvalidStateError: Failed to set the 'buffer' property on 'AudioBufferSourceNode'` due to conflicting concurrent buffer assignments, and caused `@pixi/sound`'s `Assertion failed: No sound matching alias 'base_alarm'`.
+  - Normalized all manifest asset aliases into string arrays (`alias: [string]`) in `loadGameAssets()`, ensuring all sounds register under their complete, unique alias strings.
+  - Guarded all `sound.stop()` calls (`calm_loop`, `battle_theme`, `base_alarm`) with `sound.exists(alias)` to prevent assertion warnings during alert switches and scene disposal.
+
+### 3. Sub-frame Spritesheet 404 Skip in Level Loader
+- **Skip Standalone Fetch for Sub-frame Tiles** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Filtered out sub-frame sprite tiles that exist only inside spritesheets (such as `key_card_blue.png`, `key_card_green.png`, `key_card_red.png`, `viper_droid_default_1.png`) from being loaded as standalone raycast wall textures in `loadLevel()`, eliminating 404 network fetch errors.
+
+---
+
+## [2026-10-11] - Shield Pickup Radius Expansion, Positioned Enemy Billboard Cube Fix, Alert Music Loop & Nearest Filtering
+
+### 1. Shield Pickup Radius Enlargement
+- **Shield Pickup Reach Extended** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Added explicit `pickupRadius: 1.1` to `raycastShieldPickupConfig` in `RaycastPickupConfigs.ts`.
+  - Added fallback pickup radius `1.1` for shield items across `RaycastPickupManager.checkPlayerPickups()`, `spawnPickup()`, and Tiled object/tile layer item parsing.
+  - Allows players to comfortably collect shields placed on top of tables and desks even when blocked by furniture physical collision bounds (radius ~0.75).
+
+### 2. Positioned Enemy Spritesheet Cube Billboard Fix
+- **Excluded Enemy Layers and Types from Billboard Rendering** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - **Root Cause**: `RaycastPickupManager` and `RaycastBreakableManager` filtered object layers without excluding layers with `"enemy"` or `"enemies"`. In `level2.json`, `PositionedEnemies` objects with GID 24 fell through pickup and breakable checks and were pushed into `staticObjects`, rendering the raw spritesheet (`implerial_officer.png` / `imperial_commando.png`) as a 3D billboard cube at the enemy spawn location.
+  - Added exclusion filter in `RaycastPickupManager` and `RaycastBreakableManager` to ignore layers named `enemy` or `enemies`.
+  - Added strict guard checks in `RaycastPickupManager` (both tile and object loops) and `RaycastBreakableManager` skipping objects with `type === "Enemy"`, `tileClass === "Enemy"`, or matching enemy image/name identifiers.
+
+### 3. Looping Alert Music & Base Alarm SFX
+- **Battle Theme & Base Alarm Playback on Repeat** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Implemented `triggerAlertAudio()` and `stopAlertAudio()` on `RaycastScene`.
+  - Hooked `enemyManager.setOnAlertCallback()` in `loadLevel()`.
+  - When an enemy alert is triggered (`triggerAlert: true`):
+    - Stops calm ambient background music (`calm_loop.mp3`).
+    - Loads and plays `assets/sounds/battle_theme.mp3` on repeat (`loop: true`).
+    - Loads and plays `assets/sounds/base_alarm.mp3` on repeat (`loop: true`).
+  - Added alert state management (`isAlertActive`) to avoid duplicate concurrent audio instances.
+  - Cleanly stops alarm and battle music on level transitions and scene disposal.
+
+### 4. Direct SCALE_MODES.NEAREST Enforcement for Textures & Decorations
+- **Pixelated Texture Filtering Guaranteed** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts)):
+  - Directly sets `baseTexture.scaleMode = SCALE_MODES.NEAREST` on all loaded textures, fallback textures, and sliced 1px column textures across `RaycastScene`, `RaycastPickupManager`, `RaycastBreakableManager`, and `RaycastStationaryObjectManager`.
+  - Added `enforceNearestScaleMode()` in `RaycastScene` to ensure all cached textures and spritesheet frames in Pixi's `Assets.cache` have nearest-neighbor filtering applied.
+  - Disabled canvas context image smoothing (`imageSmoothingEnabled = false`) in `extractTexturePixels` and `updateFloorCeilingTextures`.
+  - Explicitly sets `SCALE_MODES.NEAREST` on dynamic door and thin wall column texture reassignments in `renderScene()`.
+
+---
+
+## [2026-10-11] - Enemy Custom Item Drops, Destructible Enabling Walls & Level 2 Integration
+
+### 1. Enemy Class, Custom Loot Drops & Alert Sound Hooks
+- **Enemy Custom Item Drops (`itemDrop`)** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts), [`assets/raycast/levels/StarWarsTileset/propertytypes.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/propertytypes.json)):
+  - Added support for the Tiled `Enemy` class member `itemDrop` (of property type `PickupItem`), allowing level designers to specify custom loot drops for designated enemies instead of standard ammunition/weapon drops.
+  - Parsed `itemDrop` in `RaycastEnemyManager.parseMapEnemies()` and implemented `spawnCustomItemDrop()` on enemy death to spawn specific items: keycards (`red_keycard`, `blue_keycard`, `green_keycard`), weapons (with designated weapon types and ammunition counts), ammo (including thermal detonators), shields, and health.
+  - Configured `level2.json`'s Imperial Officer (object 39) to drop a Red Keycard upon defeat to enable progression through locked security doors.
+- **Enemy Alert Event Infrastructure (`triggerAlert`)** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added `triggerAlert` property support for the `Enemy` class in both object and tile layers.
+  - Implemented `triggerAlertEvent()` and `onAlertTriggered` callback on `RaycastEnemy`, automatically dispatched when an enemy spots the player or is alerted to gunfire/disturbances.
+  - Connected sound playback check for `enemy_alert` or `alert_${type}` aliases, ready for upcoming audio assets.
+
+### 2. Enabling Destructible Walls & Grilled Wall Level Finish Integration
+- **Destructible Wall Enabling Logic (`isEnabling`)** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts), [`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Implemented the `isEnabling` property across `DestructableWall` and `RaycastBreakable` solid wall blocks. When `isEnabling = true`, destroying the wall activates linked entities (such as level exit triggers) rather than removing barriers.
+  - Added list-based `linkIds` parsing in `RaycastBreakableManager` via `extractLinkIds()`.
+- **Level Exit Gating via Enabling Walls** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Parsed `LevelFinish` trigger zones with their object IDs and initialized them as disabled (`enabled: false`) if linked to an unbroken enabling wall (such as object 37 in `level2.json` linked to level finish 38).
+  - Approaching a locked level exit displays `[!] EXIT LOCKED - DESTROY SECURITY BARRIER` on the HUD.
+  - Upon destroying the enabling wall, `handleWallBlockDestroyed()` unlocks the linked `LevelFinishZone`, triggers audio feedback (`door_1`), and displays `[★] Exit Sector Unlocked!`.
+- **Grilled Wall Textures & Dynamic Destroyed Pairing** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Added intact `grilled_wall.jpg` (tile 36, type `DestructableWall`) and destroyed `grilled_wall_destroyed.jpg` (tile 37) to `StarWarsTileset.tsx` and preloaded them in `GameConfig.ts`.
+  - Replaced hardcoded destroyed tile ID assignment in `RaycastBreakableManager` with dynamic texture base name matching (`${baseName}_destroyed`), correctly swapping intact grilled walls with `grilled_wall_destroyed.jpg` in real time.
+- **Level 2 Registration** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Registered `level2` pointing to `./assets/raycast/levels/level2.json`, retaining `test_level` for test environment loading.
+
+---
+
+## [2026-10-11] - 8-Directional Stationary Objects, ISB Holotable & Level Mirroring Fix
+
+### 1. Base 8-Directional Object Architecture & ISB Holotable Integration
+- **Abstract 8-Directional Base Class** ([`src/scenes/raycast/RaycastDirectionalObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastDirectionalObject.ts)):
+  - Extracted common 8-directional trigonometric calculations, angular difference wrapping, and sector classification (`towards`, `towards_left_diagonal`, `left`, `away_left_diagonal`, `away`) into a reusable base class.
+  - Built-in sector hysteresis (default 5.0°) preventing sprite flickering along diagonal boundary angles.
+  - **Symmetric 8-Directional Sector Boundaries & Jitter Elimination**: Fixed a boundary definition bug where the 112.5° sector threshold was omitted and `awayBound` (157.5°) was used as the upper bound for `left`, creating an unstable negative-hysteresis oscillation between 157.5° and 162.5° that caused sprites to rapidly snap back and forth between side and diagonal angles while standing still. Implemented 4 distinct, symmetric sector thresholds (22.5°, 67.5°, 112.5°, 157.5°) with discrete forward/backward hysteresis deadbands.
+  - Integrated bilateral symmetry handling via horizontal sprite flipping (`isFlipped = deg > 0` when viewed from the object's right-hand side).
+  - Zero-allocation 3D perspective projection and per-column wall occlusion masking in `render3D()`.
+- **Stationary 8-Directional Props** ([`src/scenes/raycast/RaycastStationaryObject.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObject.ts), [`assets/raycast/decorations/isb_holotable.json`](file:///D:/Projects/side-scroller/assets/raycast/decorations/isb_holotable.json)):
+  - Implemented `RaycastStationaryObject` extending `RaycastDirectionalObject` to support multi-angle decorations.
+  - Added support for the ISB Holotable with waist-high standing proportions (`referenceHeight = 142`, `scale = 0.55`, `hitRadius = 0.45`, `anchor = "floor"`).
+- **Stationary Object Management** ([`src/scenes/raycast/RaycastStationaryObjectManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastStationaryObjectManager.ts)):
+  - Added centralized manager for spritesheet preloading, parsing Tiled tile and object layers, player collision circles (`checkCollision`), targeting raycast detection (`findClosestHit`), and depth-sorted rendering.
+- **RaycastEnemy Refactoring** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Refactored `RaycastEnemy` to extend `RaycastDirectionalObject`, inheriting angle calculation, sector categorizing, and sprite flipping.
+  - Simplified `RaycastEnemyManager.render()` from ~170 lines down to delegating directly to `enemy.render3D()`.
+- **Manager Exclusions & Scene Wiring** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Excluded `isb_holotable` from `RaycastBreakableManager` and `RaycastPickupManager` to prevent false recognition as breakable wooden tables or 1D billboard items.
+  - Integrated `RaycastStationaryObjectManager` into `RaycastScene` lifecycle: level loading, movement collision blocking in `tryMove()`, weapon targeting occlusion in `getAimTarget()`, and Z-buffer occlusion rendering in `renderScene()`.
+  - Added tile ID 32 definition to StarWarsTileset fallback and level maps.
+
+### 2. Level Coordinate & Camera Orientation Mirroring Parity Fix
+- **Camera Plane Vector & Strafe Formula Alignment** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **Root Cause**: The camera plane perpendicular calculation (`planeX = info.dirY * fov`, `planeY = -info.dirX * fov`) and strafe movement vector (`strafeDirX = dirY`, `strafeDirY = -dirX`) had inverted signs relative to Tiled 2D cartesian coordinates (where +Y is south/down). This caused maps to render horizontally mirrored relative to Tiled map designs.
+  - Corrected camera plane vectors: `planeX = -dirY * fov`, `planeY = dirX * fov`.
+  - Corrected strafe direction vectors: `strafeDirX = -dirY`, `strafeDirY = dirX`.
+  - Inverted mouse rotation angle sign (`Math.cos(angle)`, `Math.sin(angle)`) to preserve intuitive counter-clockwise/clockwise camera turning.
+  - Restored true 1:1 spatial parity between Tiled map layouts and the in-game first-person view.
+
+### 3. High-Resolution Water Texture Asset
+- **Enhanced Dirty Water Texture** ([`assets/raycast/textures/dirty_water.jpg`](file:///D:/Projects/side-scroller/assets/raycast/textures/dirty_water.jpg)):
+  - Replaced dirty water floor texture with a higher resolution asset for improved visual fidelity in flooded subterranean sectors.
+
+---
+
+## [2026-10-03] - Thermal Detonator Evasion AI & Grenade Shout Occlusion Filtering
+
+### 1. Enemy Tactical Thermal Detonator Evasion & Flee AI
+- **Active Explosive Proximity Threat Detection** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - Exposed `activeDetonators` getter on `ThermalDetonatorManager`.
+  - In `RaycastEnemy.update()`, hostiles scan for live thermal detonators within threat radius (`explosionRadius + 1.2` tiles) with unblocked line of sight.
+- **Dynamic Flee & Cornered Rushing Behaviors** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Ranged hostiles (Stormtroopers, Officers, Commandos) break firing stance and sprint away from the active detonator (`tx = x + awayX * 4.0, ty = y + awayY * 4.0`) to escape the blast zone.
+  - Cornered hostiles (stuck against walls for >2 frames) or dedicated melee units (Phase 1 Dark Troopers) turn aggressively towards the player instead of running into obstacles.
+  - Submerged Dianoga creatures detect nearby detonators, accelerating underwater stalking speed (to 0.038) or surfacing to retaliate.
+
+### 2. Grenade Reaction Radius & Wall-Occlusion Shout Filtering
+- **Grenade Callout Range Tuning** ([`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/configs/interfaces/IEnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IEnemyVoicelineConfig.ts)):
+  - Reduced `grenadeHearingRange` from 25.0 tiles down to a focused 7.0 tiles.
+- **Line-of-Fire Wall Occlusion Check** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Wired `hasLineOfFire` validation into `onPlayerThrowGrenade()`. Hostiles behind walls, closed doors, or partitions no longer trigger "Grenade!" vocal callouts.
+  - Filtered out dead or dying enemies (`state === "dead"`) from vocalizing reactions to grenades.
+
+---
+
+## [2026-10-02] - Water Surface Footstep Acoustics & Room-Partition Alert Dampening
+
+### 1. Water Floor Surface & Dynamic Splashing Footstep SFX
+- **Floor Surface Material Detection** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Added `getSurfaceTypeAt(x, y)` in `RaycastScene` to query floor tile metadata and image names for surface properties (`"default"` vs `"water"`).
+- **Wet Footstep Sound Effects** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`assets/raycast/sfx/wet_step_1.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/wet_step_1.mp3), [`assets/raycast/sfx/wet_step_2.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/wet_step_2.mp3)):
+  - Registered `wet_step_1` and `wet_step_2` in the sound manifest.
+  - Extended `RaycastPlayerController.updateFootsteps()` and `playFootstep()` to alternate wet slosh sound effects when traversing flooded water floors.
+- **Tileset & Level Integration** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx), [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json)):
+  - Added tile ID 31 (`dirty_water.jpg`) as a floor tile with custom property `surface = "water"`.
+
+### 2. Inter-Room Acoustic Isolation & Strict Line-of-Fire Alerting
+- **Strict Line-of-Fire Checks for Gunfire & Impact Alerts** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Enforced `hasLineOfFire()` check on `onPlayerShoot()`, `onLaserImpact()`, and detonator explosions. Hostiles separated by solid walls or closed doors in adjacent rooms are no longer alerted by gunshots through barriers.
+- **Dianoga Voiceline Exclusion** ([`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Configured empty voice pools (`spotted: []`, `suspicious: []`, `grenade: []`) for Dianoga enemies to prevent organic sewer creatures from shouting Imperial trooper voicelines.
+
+### 3. Suspicious Voiceline Occlusion & Distance Tuning
+- **Hearing Range Threshold Tuning** ([`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/configs/interfaces/IEnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IEnemyVoicelineConfig.ts)):
+  - Reduced `hearingRange` and `suspiciousRange` from 7.0 to 3.5 tiles.
+- **Wall Occlusion Filtering** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Suspicious voicelines ("I hear something", "Show yourself") are blocked if the player is occluded behind walls (`!isBehindWall`), preventing enemies from talking to players through solid room barriers.
+
+---
+
+## [2026-09-28] - Vision Cones, Gunfire Acoustic Alertness, Target Acquisition Aim Ramp & Non-Lethal Warning Fire
+
+### 1. Directional Vision Cones (Field of View / FOV)
+- **Configurable Angular Vision Cones** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Implemented `isPointInVisionCone(targetX, targetY)` using normalized vector dot products against enemy facing direction (`minDot = cos(halfAngleRad)`).
+  - Replaced 360-degree omniscient peripheral sight with realistic angular vision cones (default 120° for Stormtroopers, Officers, Commandos, and Dark Troopers; 140° for Dianoga).
+  - Enemies can now be snuck up on from behind or flanked around corners.
+  - **Viper Probe Droid Exemption**: The Viper Probe Droid is explicitly configured with a 360° omnidirectional optic sensor suite and is exempt from cone restrictions.
+- **Dynamic Vision Cone Management API** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added runtime adjustment methods: `setEnemyVisionCone(enemyId, angle)`, `setAllEnemiesVisionCone(angle)`, and `setVisionConeByType(type, angle)` with built-in immunity for Viper Probe Droids.
+
+### 2. Gunfire Acoustics & Ballistic Alert System
+- **Gunshot Acoustic Awareness** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Firing firearms triggers `onPlayerShoot(playerX, playerY, weaponType, thinWalls)`. Enemies within direct hearing range (up to 25.0 tiles) alert and turn towards the gunshot origin.
+  - Geometry-aware wall occlusion applies a 45% dampening penalty when obstacles block sound, requiring closer proximity to alert hostiles behind thick partitions.
+- **Near-Miss Ballistic Trajectory Feelers** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Blaster bolts passing within 2.5 tiles of unaware enemies alert them via point-to-segment distance feelers, waking them into chase/search states.
+- **Projectile & Detonator Impact Alerting** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Wired `onLaserImpactAlert` in `RaycastLaserManager` to alert hostiles within 14.0 tiles when laser bolts impact walls, doors, or furniture.
+  - Thermal detonator area explosions alert all enemies within a 20.0 tile radius.
+- **Acoustic Suspicion Voicelines** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Unseen enemies hearing gunfire or near-misses shout atmospheric suspicion voicelines ("I hear something", "He must be here", "Show yourself").
+
+### 3. Target Acquisition Inaccuracy Ramp & Reaction Delays
+- **Initial Target Acquisition Reaction Delays** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Added `initialReactionDelay` (500ms–750ms), preventing frame-zero instant shots when the player first rounds a corner into sight.
+- **Continuous Sight Ramp & Shot Counter** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added continuous sight tracking (`timeTargetVisible`) and shot counter (`shotsFiredAtTarget`).
+  - Added `getTargetAcquisitionMultiplier()`: initial hit chance starts with a steep penalty (`initialAccuracyMultiplier` 0.15–0.25) and ramps up over 2.0s–3.0s of sustained line-of-sight.
+- **Cover Memory Reset** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Breaking line of sight behind walls or cover for >1.0s (`sightLostTimer`) completely resets target tracking and shot counts, rewarding peek-shooting and tactical repositioning.
+- **Star Wars Canon Accuracy Rebalancing** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Re-tuned base accuracy across all enemies to match canon combat feel:
+    - **Imperial Stormtrooper**: Base accuracy reduced to `0.35` (down from 0.65), initial multiplier `0.15`, 750ms reaction delay.
+    - **Imperial Officer**: Base accuracy `0.40` (down from 0.70), initial multiplier `0.20`, 600ms reaction delay.
+    - **Imperial Commando**: Base accuracy `0.45` (down from 0.70), initial multiplier `0.25`, 500ms reaction delay.
+    - **Viper Probe Droid**: Base accuracy `0.40` (down from 0.65), initial multiplier `0.20`, 600ms reaction delay.
+    - **Phase 1 Dark Trooper**: Base accuracy `0.60` (down from 0.85), initial multiplier `0.25`, 600ms reaction delay.
+    - **Dianoga**: Base accuracy `0.55` (down from 0.85), initial multiplier `0.25`, 600ms reaction delay.
+
+### 4. Non-Lethal Cosmetic Misses & Guaranteed First-Shot Warning
+- **Non-Lethal Laser Collision Filtering (`canHitPlayer`)** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Root Cause & Fix**: Previously, every enemy laser projectile was lethal, checking `distToPlayer < 0.42`. When enemies rolled a "miss" and aimed slightly wide, players strafing or dodging walked directly into the off-target lasers and took damage, making enemies feel falsely accurate.
+  - Added `canHitPlayer` property to `ActiveLaser` and `fireEnemyLaser`. Whenever the AI rolls a miss (`isHit === false`), the laser bolt is flagged `canHitPlayer = false`.
+  - Non-lethal lasers travel, spark, impact walls, and play near-miss audio, but can never damage the player regardless of movement.
+- **Guaranteed First-Shot Warning** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - The very first ranged shot after acquiring sight is unconditionally forced to be a warning shot (`shotsFired < 1 => isHit = false`, `canHitPlayer = false`), guaranteeing zero damage upon initial enemy detection.
+  - Melee hostiles also whiff/hesitate on their first strike when acquiring the player.
+- **Safe Warning Shot Offset Spread** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Wide miss offsets (0.85 to 1.6 tiles off-target) ensure warning shots visibly and audibly bypass the player and impact the environment.
+- **Voiceline Race Condition Fix** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Added `justSpottedPlayer` single-frame flag to resolve a timing bug where `enemy.wasSeeingPlayer` was overwritten before `EnemyVoicelineManager` checked it, guaranteeing spotted reaction voicelines fire properly.
+- **Runtime Accuracy Tuning API** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added `setEnemyAccuracyRamp()`, `setAllEnemiesAccuracyRamp()`, and `setAccuracyRampByType()`.
+
+---
+
+## [2026-09-27] - Dianoga Sewer Creature Implementation
+
+### 1. Dianoga Subterranean Lurker Enemy Architecture
+- **Multi-Phase Behavioral State Machine** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Implemented Dianoga creature AI with state machine phases: `hidden` (fully submerged in waste water), `emerging` (dramatic rising sequence), `peeking` (stationary eyestalk observation), `stalking` (silent submerged tracking with visible eye), `full_emerging` (full-body surface reveal), `surfaced` (coiled aggressive posture), `biting` (ambush strike), and `hiding` (retreating underwater).
+- **Procedural Eyestalk Animation & Random Blinking** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Integrated randomized organic eye-blinking cycles transitioning between open-eye observation (`idle_1`) and eyelid blink (`idle_2`).
+- **Player Gaze & Proximity Triggering** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Emerging triggers when the player looks in the Dianoga's direction within forward field-of-view, approaches within 2.8 tiles, or damages it with weaponry.
+- **Ambush Melee Bite Strike** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Heavy melee bite attack delivering 18 damage at close range (1.35 tiles) with custom attack timing.
+- **Audio & Sound FX Suite** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Registered sound effects: `diagona_coming_out` (water bubbling and surfacing), `diagona_attack` (violent jaw snap), `diagona_damage_1` (flesh impact screech), and `diagona_die` (death gurgle).
+- **Spritesheet & Tile Integration** ([`assets/raycast/enemies/diagona.json`](file:///D:/Projects/side-scroller/assets/raycast/enemies/diagona.json), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Created spritesheet animation mapping for `hiding_last`, `coming_out`, `idle_1`, `idle_2`, `hiding`, `full_come_out`, `full_idle`, `attack`, and `death_1`.
+  - Added tile ID recognition (tiles 29 and 30 in `StarWarsTileset.tsx` and `test_level.json`) to spawn Dianoga enemies from map data.
+  - Registered `RaycastEnemyType.DIAGONA` in enemy enums and configuration registries.
+
+---
+
+## [2026-09-22] - Dynamic Damage Crosshair & Enemy Target Snapping
+
+### 1. Dynamic HUD Crosshair with Damage State Indication
+- **Centralized Crosshair Architecture** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Migrated the crosshair renderer from `RaycastWeaponView` into `RaycastHUD`, ensuring the targeting reticle stays layered above weapons and directly controlled by the HUD.
+  - **Damage Target Indicator**: The crosshair dynamically transitions from default cyan (`0x00ffff`) to bright blaster red (`0xff2222`) whenever pointing at a target within line-of-sight that can break or take damage (active living enemies, unbroken breakables, and destructible wall blocks).
+  - **Star Wars Targeting Corner Brackets**: When locked on a damagable/breakable target, the reticle spawns high-tech red corner brackets and an enlarged center bead for instant visual acquisition.
+
+### 2. Enemy Target Magnetic Snapping & Return to Center
+- **Smooth Magnetic Enemy Snapping** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Extended `RaycastEnemy` and `RaycastEnemyManager.render()` to record exact projected screen coordinates (`screenX`, `screenY`) for all visible enemies each frame.
+  - When an enemy enters the weapon's aim cone, the crosshair smoothly and magnetically snaps directly to the enemy's torso/chest on screen, tracking their movement in real time.
+  - When the enemy is neutralized or the player looks away, the crosshair automatically glides back to the default center position (`gameConfig.width / 2, gameConfig.height / 2`) and resets to cyan.
+- **Unified Target Acquisition** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Created `RaycastScene.getAimTarget()`, unifying target detection across live crosshair tracking and blaster firearm firing in `tryShoot()`. Ensuring 100% visual parity between where the crosshair locks and where laser bolts fly.
+
+---
+
+## [2026-09-22] - Mobile GPU Floor/Ceiling Precision Fix, 120 FPS Fillrate Optimization, & Unified Diagonal Movement
+
+### 1. Mobile GPU Fragment Shader Precision (`highp float`)
+- **Shader Float Precision Upgrade** ([`src/scenes/raycast/shaders/floorCeiling.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.frag)):
+  - Replaced hardcoded `precision mediump float;` with conditional high precision:
+    ```glsl
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
+    precision highp float;
+    #else
+    precision mediump float;
+    #endif
+    ```
+  - **Root Cause & Fix**: On desktop GPUs, `mediump` is automatically promoted to 32-bit `highp` (`fp32`), but mobile GPUs (Qualcomm Adreno, ARM Mali) execute `mediump` strictly in 16-bit half precision (`fp16`) with only 10 bits of mantissa. At typical world coordinates ($X, Y \in [16, 64]$), `fp16` quantization step sizes are $0.03125$ units—corresponding to **8 full texels** on a $256 \times 256$ texture. When walking diagonally, both coordinates changed continuously across scanlines, causing floor and ceiling textures to discretely step, staircase, and snap left/right. Compiling with `highp` restores 24-bit mantissa precision, providing sub-texel smoothness (<0.001 texel) on all mobile devices.
+
+### 2. High-DPI Mobile GPU Fillrate & 120 FPS Optimization
+- **PixiJS Canvas Resolution Cap** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Adjusted canvas backing resolution from `Math.min(window.devicePixelRatio || 1, 3)` to `Math.min(window.devicePixelRatio || 1, 2)`.
+  - **100 FPS vs 120 FPS Discrepancy Explained**:
+    - Modern flagship phones have QHD+/4K displays with device pixel ratios between $2.75$ and $3.5$. A cap of `3` scaled the $1280 \times 720$ canvas buffer to a massive $3840 \times 2160$ (8.3 million pixels per frame).
+    - Running per-pixel perspective raycasting (`floorCeiling.frag` with 2 texture lookups per pixel) across 8.3 million pixels at 120 FPS required shading nearly **1 billion fragments/second**, saturating mobile GPU fillrate and dragging performance down to ~100 FPS.
+    - Older or 1080p phones had a native DPR of $2.0$ ($2560 \times 1440 = 3.68$ million pixels—less than 45% the workload), allowing them to hit a locked 120 FPS.
+    - Capping `resolution` at `2` cuts GPU fragment load by 56% on flagship phones while retaining full 1440p clarity (~500 PPI on mobile displays). This prevents thermal throttling, restores steady 120 FPS, and eliminates VSync judder.
+
+### 3. Unified Diagonal Movement & Wall Sliding
+- **Consolidated Movement Vector** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Refactored `updatePlayer()` to compute forward/backward and strafe displacement into a single combined vector before testing collision, replacing sequential two-pass movement.
+  - Normalized diagonal input magnitude so walking diagonally no longer provides an unnatural $\sqrt{2} \approx 1.41\times$ speed boost.
+  - Improved collision sliding against walls to independently test unblocked axes for smooth sliding without zig-zagging.
+
+---
+
+## [2026-09-21] - Fix Enemy Weapon Drop Discrimination & Ground Texture Overwrite
+
+### 1. Distinct Weapon Ground Pickup Textures & Slicing
+- **Texture Key Collision Resolution** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Fixed standard pickups registration in `initTextures()` where both `e_11_item.png` and `dh_17_item.png` shared the single key `"weapon"`, causing `dh_17_item.png` to silently overwrite `e_11_item.png`.
+  - Registered individual texture keys `"weapon_e11"`, `"weapon_dh17"`, and fallback `"weapon"`.
+- **Discriminative World Rendering** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Updated `getVisibleMapObjects()` to inspect `pickup.weaponType`:
+    - `RaycastWeaponType.DH17` renders with `"weapon_dh17"`.
+    - `RaycastWeaponType.THERMAL_DETONATOR` renders with `"thermal_detonator_pickup"`.
+    - `RaycastWeaponType.E11` renders with `"weapon_e11"`.
+  - Ground pickups now accurately reflect whether the weapon dropped by an enemy was an E-11 rifle or DH-17 pistol.
+- **Pickup Config Asset Paths** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Fixed `raycastDh17PickupConfig.texture` and `dh17Config.itemTexture` pointing to the first-person HUD sprite `assets/raycast/weapons/dh_17_equiped.png` instead of the ground pickup sprite `assets/raycast/pickups/dh_17_item.png`.
+
+### 2. Spawn Parameter Disambiguation & Config Mapping
+- **Loot Drop Parsing & Argument Order Normalization** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Refactored `spawnPickup()` to cleanly disambiguate between ammo counts and weapon enum types regardless of argument ordering.
+  - Resolved `pConfig` directly using the spawned `finalWeapon` type so weapon pickups inherit the correct stats, display names, and pickup sound triggers.
+- **Weapon Config Lookup Fallback Safety** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Updated `getRaycastWeaponConfig()` to avoid unconditionally defaulting unknown or invalid weapon identifiers to `DH-17`. Added explicit keyword matching for `e11`, `rifle`, `thermal`, and `detonator`.
+
+## [2026-09-21] - Level End Debriefing Scene, LocalStorage Progress Persistence, Cinematic Fade Transitions, Button Audio, & Ultra-Sharp Typography
+
+### 1. Level Completion, Progression & Save System
+- **Level Finish Trigger & User Prompt** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added support for `LevelFinish` object layers in Tiled map JSON files (`level1.json`, `test_level.json`), identifying end zones and target level transitions.
+  - Replaced automatic instant transitions with an interactive HUD prompt: `[★] PRESS [E] TO FINISH SECTOR`.
+  - Prioritizes level completion when standing in a finish zone upon pressing the action key `[E]`.
+- **LocalStorage Save Architecture (`RaycastSaveManager`)** ([`src/scenes/raycast/RaycastSaveManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastSaveManager.ts)):
+  - Created modular save manager storing complete game state under `star_wars_raycast_save` in LocalStorage.
+  - Persists operative health, max health, shields, max shields, equipped weapon, ammunition counts, weapon inventory, and sector clear history.
+  - Implemented automatic level advancement: when a level finishes, `currentLevel` promotes to `nextLevel` in storage so launching or restarting the game resumes in the newly unlocked sector.
+  - **Keycard Reset Mechanism**: Keycards secured in the cleared sector are archived into `securedKeycards` for the tactical debriefing report and reset (`player.keycards = []`) so each sector starts with zero security clearance.
+
+### 2. Mission Debriefing & Sector Secured Scene (`LevelEndScene`)
+- **Imperial Command Post UI & Visual Theming** ([`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`assets/common/imperial_base_background.jpg`](file:///D:/Projects/side-scroller/assets/common/imperial_base_background.jpg)):
+  - Created dedicated end-of-level scene backed by `imperial_base_background.jpg` with a glassmorphism terminal panel, glowing cyan accent line, and sector clear headers.
+  - **Tactical Status Report**: Displays live operative diagnostics including health, shields, hostiles neutralized kill ratio (`[⚔] HOSTILES NEUTRALIZED: X / Y (% ELIMINATED)` with dynamic color-coding), preserved weapons & ammo list, and secured clearance keycards (`RESET FOR NEXT SECTOR`).
+  - **Interactive Action Buttons**: Added styled "Main Menu" and "Next Level" buttons with pointer hover states and full keyboard navigation (`Enter` / `Space` / `E` to proceed, `Escape` for Main Menu).
+  - **Pointer Lock Release**: Automatically exits pointer lock (`document.exitPointerLock()`) and restores the default mouse cursor upon entering the debriefing screen.
+- **Victory Audio Theme** ([`assets/sounds/end_level.mp3`](file:///D:/Projects/side-scroller/assets/sounds/end_level.mp3), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Registered `end_level.mp3` in the asset manifest.
+  - Configured `LevelEndScene` to play `end_level` upon reaching the debriefing terminal (leaving `end_theme` reserved for death / game over).
+
+### 3. Cinematic Scene Fade In & Fade Out Transitions
+- **Global Transition Overlay Engine** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Implemented a fullscreen black transition overlay on `app.stage` (`zIndex: 999999`) that smoothly animates across all scene changes.
+  - **Fade Out**: When changing scenes, screen smoothly fades to black over ~280ms while capturing all pointer events (`eventMode = "static"`), preventing accidental clicks or input leakage.
+  - **Seamless Scene Swap**: Old scene is disposed and new scene constructed while the screen is 100% black, completely hiding any texture or geometry pop-in.
+  - **Fade In**: Screen smoothly reveals the new scene over ~280ms and restores normal input processing.
+  - Added smooth initial fade-in on game launch.
+
+### 4. Button Audio Feedback & Blaster Sound Fix
+- **Button Click Sound Effect** ([`assets/sounds/button_click.mp3`](file:///D:/Projects/side-scroller/assets/sounds/button_click.mp3), [`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`src/scenes/MainMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/MainMenu.ts)):
+  - Integrated `button_click.mp3` with resilient fallback loading.
+  - Wired click sounds across `LevelEndScene` buttons ("Main Menu", "Next Level") and `MainMenu` buttons ("Play", "Change Ship", "Raycast 3D").
+- **Resolution of Unintended Blaster Sound on Button Click**:
+  - **Pointer-Lock Capture Isolation** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)): Modified `mouseDownHandler` so clicking on the desktop to capture pointer lock (`!document.pointerLockElement`) acquires lock and returns immediately without firing a weapon shot.
+  - **Controls Detachment (`removeControls`)** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)): Extracted controls removal and executed it immediately upon `finishLevel()` and at line 1 of `dispose()`, preventing zombie window listeners if any downstream resource destruction threw.
+  - **Button Event Normalization** ([`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts), [`src/scenes/MainMenu.ts`](file:///D:/Projects/side-scroller/src/scenes/MainMenu.ts)): Switched buttons to use `pointertap` only with an `isNavigating` guard and `e.stopPropagation()`, stopping double execution and mouse-held-down leaks into newly loaded scenes.
+
+### 5. High-Resolution Text & Typography Overhaul
+- **Supersampled Text Canvas Rendering** ([`src/scenes/LevelEndScene.ts`](file:///D:/Projects/side-scroller/src/scenes/LevelEndScene.ts)):
+  - Created `createSharpText` helper rasterizing text canvases at **3x–4x supersampled resolution** (`Math.max(3, Math.min(Math.round(dpr * 2), 4))`).
+  - Explicitly assigned `SCALE_MODES.LINEAR` to text base textures, eliminating pixelation artifacts caused by the engine's global `NEAREST` scale mode.
+  - Enforced `roundPixels = true` and `Math.round()` coordinates to eliminate subpixel sampling blur.
+  - Switched font family to `"Segoe UI, Arial, sans-serif"`, providing crisp, native typography on Windows PC displays.
+- **Bitmap Font & Button Text Sharpness** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/misc/Button.ts`](file:///D:/Projects/side-scroller/src/misc/Button.ts)):
+  - Upgraded `BitmapFont` resolution to `dpr * 2` and assigned `SCALE_MODES.LINEAR` to font page textures in `registerFonts()`.
+  - Added `roundPixels = true` and integer pixel centering to [`Button.ts`](file:///D:/Projects/side-scroller/src/misc/Button.ts).
+
+## [2026-09-21] - Player Sprint Mechanics, Dynamic Footstep Audio System, HUD Sprint Badge & Mobile Toggle Controls
+
+### 1. Player Sprint System & Enhanced Movement Dynamics
+- **Sprint State & Speed Multiplier** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Added `isSprinting: boolean` to [`RaycastPlayerState`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts).
+  - Implemented `sprintMultiplier` (`1.7x` speed boost) in [`RaycastPlayerController`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts) with getters `isSprinting`, `sprintSpeedMultiplier`, and `currentSpeedMultiplier`.
+  - Added sprint management methods: `setSprinting()`, `toggleSprint()`, `startSprint()`, and `stopSprint()`, keeping state synchronized with HUD and player controllers.
+  - Dynamically amplified weapon bobbing animation intensity from `1.0` to `1.65` during sprint movement for heightened kinetic feedback.
+- **Desktop Hold-to-Sprint & Input Normalization** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Implemented desktop hold-to-sprint mechanics mapped to the `Shift` key (`ShiftLeft`, `ShiftRight`, or `e.shiftKey`).
+  - Sprint activates immediately when Shift is pressed while already moving, or when movement keys (`W`, `A`, `S`, `D`) are initiated while Shift is held.
+  - Automatically deactivates sprint upon releasing Shift or when the player stops moving.
+  - Normalized keyboard event handling (`e.key.toLowerCase()`) across action (`E`), weapon switch/cycle (`Q`), door mode (`V`), and movement keys.
+  - Enhanced window focus loss (`blurHandler`) to clear held keys and immediately disengage sprint.
+
+### 2. Distance-Based Dynamic Footstep Audio
+- **Audio Assets & Manifest Registration** ([`assets/raycast/sfx/step_1.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/step_1.mp3), [`assets/raycast/sfx/step_2.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/step_2.mp3), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added dedicated left/right boot footstep sound effects: `step_1.mp3` and `step_2.mp3`.
+  - Registered sound aliases `step_1` and `step_2` in [`GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) under asset manifest for preloading.
+- **Distance-Accumulated Step Cadence** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Tracked frame-to-frame movement delta distance (`lastFrameDistMoved = Math.hypot(dx, dy)`) in [`RaycastScene`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts).
+  - Implemented distance accumulator in [`RaycastPlayerController`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts) triggering footsteps at `STEP_DISTANCE_THRESHOLD = 0.58` grid units.
+  - Alternates footsteps sequentially between `step_1` and `step_2`.
+  - Dynamic audio modulation: standard walking plays footsteps at `volume: 0.25, speed: 1.0`, while sprinting increases volume and pitch/cadence (`volume: 0.35, speed: 1.05`).
+  - Added lazy-loading fallback with `@pixi/sound` to ensure footsteps play reliably even if manifest preloading has not finished.
+  - Resets step accumulator to an initial responsive offset (`0.28`) on stopping so the first step upon resuming movement sounds without delay.
+
+### 3. High-Tech HUD Sprint Badge
+- **Sprint Indicator & Animated Glyph** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Added sci-fi sprint badge positioned in the bottom-left viewport directly above the player health gauge (`x: 24, y: screenH - 126`).
+  - Styled with dark translucent backing (`0x0a1018`, alpha `0.85`), rounded cyan border (`0x00e5ff`), and bold `"SPRINT"` text.
+  - Rendered a custom vector lightning bolt glyph icon using Pixi Graphics.
+  - Implemented subtle real-time alpha oscillation / pulsing glow effect (`Math.sin(Date.now() * 0.008)`) while active.
+  - Added `setSprinting(sprinting: boolean)` to seamlessly toggle container visibility and alpha state.
+
+### 4. Mobile Toggle Controls & Virtual Button Enhancements
+- **Virtual Button Toggle Mode** ([`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts)):
+  - Extended [`VirtualButton`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts) to support stateful toggle behavior via `setToggleMode(enabled, activeBgColor, activeBorderColor)` and `setToggled(toggled)`.
+  - Added visual styling updates when toggled on: updates fill and border graphics to active colors and shifts label font fill color.
+  - Emits `"toggle"` event on pointer release alongside traditional button press events.
+- **Mobile Sprint ("RUN") Button Integration** ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added `[RUN]` virtual button to the mobile control layout positioned above action/weapon controls (`screenW - 270, screenH - 230`).
+  - Configured as a persistent toggle button with cyan active highlight (`0x005577` background, `0x00e5ff` border/label).
+  - Wired mobile sprint toggle events into [`RaycastScene`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) and synchronized two-way state via `isSprintToggled` and `setSprintToggled()`.
+
+## [2026-09-13] - Imperial Officer & Commando Implementation, 8-Way Directional Animation, and Voiceline Audio System Overhaul
+
+### 1. Imperial Officer Enemy Implementation
+- **Enemy Configuration & Combat Stats** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added full support and configuration for the Imperial Officer (`RaycastEnemyType.IMPERIAL_OFFICER = "imperial_officer"`).
+  - Configured combat attributes: 40 HP, speed `0.02`, sight range `12`, attack range `6.0`, min engagement distance `2.2`, rate of fire `750ms`, damage `10`, accuracy `0.7`, sprite scale `0.7`, and reference height `69`.
+  - Configured DH-17 blaster drops (`RaycastWeaponType.DH17`, 20 ammo, 100% drop chance) upon death.
+  - Wired spritesheet animations (`assets/raycast/enemies/implerial_officer.json`) with 8-directional walking, standing, shooting, and 7-frame death animation sequence.
+  - Updated level tileset metadata in [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx) and [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json) to spawn officers via Tiled map data.
+
+### 2. Imperial Commando Enemy Implementation
+- **Enemy Configuration & Combat Stats** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts), [`assets/raycast/enemies/imperial_commando.json`](file:///D:/Projects/side-scroller/assets/raycast/enemies/imperial_commando.json)):
+  - Added configuration for the Imperial Commando (`RaycastEnemyType.IMPERIAL_COMMANDO = "imperial_commando"`).
+  - Configured combat attributes: 45 HP, reference height `73`, scale `0.7`, DH-17 blaster drop (`20` ammo, 100% chance), and shooting/death animations mapped to `shoot` and `death_1` prefixes.
+  - Linked tileset metadata in `StarWarsTileset.tsx` and `test_level.json` for spawning commando units.
+
+### 3. Audio Consolidation & Expanded Voiceline Library
+- **Shared Audio Assets & Bundle Registration** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Consolidated officer and commando audio files into `assets/raycast/sfx/imperial_officer_commando/`.
+  - Added and registered 6 new audio tracks:
+    - Spotted: `office_commando_stop_now.mp3`, `officer_commando_throw_down_your_weapons.mp3`
+    - Suspicious / Search: `officer_commando_he_must_be_here.mp3`, `officer_commando_no_use_hiding.mp3`, `officer_commando_show_yourself.mp3`
+    - Grenade Reaction: `officer_commando_fall_back.mp3`
+  - Configured shared `defaultImperialOfficerVoicePool` covering `imperial_officer` and `imperial_commando` enemy types with fallback support in `RaycastEnemyManager.ENEMY_SFX_REGISTRY`.
+
+### 4. 8-Way Directional Sprite & Diagonal Animation Jitter Fix
+- **Angle Calculation & Hysteresis Smoothing** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Fixed an issue where enemies walking sideways played mirrored or inverted directional sprites (e.g. facing left while walking right).
+  - Corrected relative view-angle calculation between enemy orientation/movement vector and camera line of sight.
+  - Fixed rapid oscillation and animation jitter when enemies navigate diagonally towards the player, ensuring smooth transitions across 8 directional animation buckets (`towards`, `towards_left`, `towards_right`, `left`, `right`, `away`, `away_left`, `away_right`).
+
+### 5. Grenade Voiceline Validation, Cooldowns & Numeric Enum Refactor
+- **Phantom Voiceline Bug Fix & Range Guard** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Fixed a bug where `"grenade, grenade"` shouted out of thin air when no alive enemies were present or within hearing range.
+  - `onPlayerThrowGrenade()` now strictly verifies alive enemy candidates (`!enemy.isDead && enemy.health > 0`), enforces `grenadeHearingRange` (25 tiles), and ensures the candidate's pool actually contains grenade reaction lines (preventing droids from shouting human lines).
+  - Added distance falloff spatial audio for grenade voicelines so distant shouts sound appropriately positioned in 3D space.
+- **Per-Enemy & Global Grenade Cooldowns** ([`src/configs/interfaces/IEnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IEnemyVoicelineConfig.ts), [`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Added `lastGrenadeTime` to `RaycastEnemy` and configured per-enemy cooldown (`grenadeCooldown = 8000ms`), preventing individual enemies from shouting repeatedly on rapid grenade throws.
+  - Introduced `globalGrenadeCooldown` (`4000ms`) to enforce global pacing between any grenade reactions across all enemies on the map.
+- **Numeric Voiceline Category Enum** ([`src/enums/VoicelineCategory.ts`](file:///D:/Projects/side-scroller/src/enums/VoicelineCategory.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Created numeric enum `VoicelineCategory` (`SUSPICIOUS = 0`, `SPOTTED = 1`, `GRENADE = 2`).
+  - Replaced string union types throughout `EnemyVoicelineManager` for `QueuedVoiceline.category` and `ActiveSoundHandle.category`.
+
+## [2026-09-08] - Viper Probe Droid Integration, Hovering Physics & Depth Sorting Fix
+
+### 1. Viper Probe Droid Enemy Implementation
+- **Configuration & Integration** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added full support and configuration for the Imperial Viper Probe Droid (`RaycastEnemyType.VIPER_PROBE_DROID = "viper_droid"`).
+  - Defined enemy attributes including health, movement speed, sight/attack ranges, fire cadence, vertical offset, and floating physics.
+  - Registered all audio assets for probe droid hovering loop, 6 randomized blaster shot variations, and 8 scanner/vocal transmissions in `GameConfig.ts`.
+  - Updated level tileset metadata in [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx) and [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json) to spawn probe droids correctly based on `enemyType`.
+
+### 2. Hovering Physics, Floating Animation & Death Drop
+- **Vertical Hovering & Ground Fallback** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Implemented configurable vertical elevation offset (`vOffset`) and real-time sinusoidal bobbing (`floatingBob`).
+  - Added dynamic death drop animation: upon dying, hovering units smoothly drop down to ground level (`currentVOffset` interpolates to 0 via `deathDropSpeed`), preventing eliminated probe droids from floating in the air.
+
+### 3. Dynamic Audio Architecture (Hovering, Random Shots & Alert Voicelines)
+- **Positional & State-Driven SFX** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added continuous looping hovering audio for probe droids with distance-based volume attenuation that automatically stops on death.
+  - Added randomized shot audio selection picking from `shotSounds` array on each blaster discharge.
+  - Integrated randomized alert scanner chatter / droid vocal lines on target detection via `EnemyVoicelineManager`.
+
+### 4. Combat AI: Repositioning & Cover Peek Offsets
+- **Line of Sight Recovery & Cover Stepping** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Implemented repositioning AI: when the player breaks line of sight behind walls or cover, the droid maneuvers towards the player's last known position to re-establish combat engagement instead of idling in place.
+  - Added per-enemy configurable cover offset (`coverOffset`) so enemies step out further from wall corners during combat.
+
+### 5. Transparent Thin Wall & Entity Depth Sorting Pipeline
+- **Unified Layering & Z-Buffer Separation** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Separated `zBuffer[i]` to strictly track closest solid opaque walls and closed doors, ensuring transparent thin walls (e.g. wire fences) do not falsely clip billboard sprites via column stencil masks.
+  - Unified thin wall slices, decorative objects, enemies, and animated pickups inside `this.entityContainer` (`sortableChildren = true`, `zIndex: 20`) positioned above solid background walls (`wallContainer`, `zIndex: 10`).
+  - Applied consistent depth-sorting index `Math.floor((maxRenderDistance - distance) * 1000)` across thin wall slices, world props, pickups, and enemy sprites/masks so sprites behind fences are clearly visible through transparent mesh openings while remaining occluded behind solid walls.
+
+### 6. Strict Type Safety
+- Refactored configurations, enemy handlers, and pickup managers to eliminate `any` type assertions and maintain strict TypeScript compliance.
+
+## [2026-09-06] - Transparent Thin Wall Depth Separation & Sprite Visibility Fix
+
+### 1. Opaque Z-Buffer Occlusion Separation
+- **Solid Wall Distance Resolution** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Fixed an issue where `this.zBuffer[i]` recorded the closest hit in the column (which was often a transparent thin wall or door protector barrier, `side === 2`).
+  - Because billboard objects (enemies, pickups, keys, breakable props, laser bolts) compare their view-space depth `transformY < zBuffer[col]` to determine visibility, any sprite standing behind a transparent barrier was falsely occluded and hidden completely.
+  - Updated `renderScene()` to scan ray hits in reverse (from `hitCount - 1` down to `0`) so `zBuffer[i]` correctly captures the closest opaque solid wall or door (`side !== 2`), rather than the farthest hit (since `hitPool` is sorted descending by distance).
+  - Fixed wall slice sprite assignment loop to iterate back-to-front (`j = 0` to `hitCount - 1`) so that closer walls and opening doors properly render on top of farther walls in Pixi's display list instead of being occluded by them.
+  - Implemented progressive door opening uncover for enemies, animated pickups (keycards/shields), and world props: as vertical doors slide upward, `doorBottomBuffer` tracks the rising door panel, allowing `RaycastEnemyManager`, `RaycastPickupManager`, and `renderObjects` to dynamically unmask and reveal sprites from the floor up beneath the rising door panel just like a real door, while remaining occluded above the door panel line.
+
+### 2. Dedicated Thin Wall Layering & Zero-Allocation Sprite Pooling
+- **Layer Sorting & Container Stacking** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added `thinWallContainer` assigned to `zIndex: 45` within `this.worldContainer`.
+  - Display list hierarchy now correctly renders:
+    1. Background ceiling/floor (`zIndex: 0`)
+    2. Solid walls & doors (`wallContainer`, `zIndex: 10`)
+    3. Billboard objects, pickups & breakables (`objectContainer`, `zIndex: 20`)
+    4. Animated pickups (`animatedPickupContainer`, `zIndex: 30`)
+    5. Enemies (`enemyContainer`, `zIndex: 40`)
+    6. Transparent thin walls & door protectors (`thinWallContainer`, `zIndex: 45`)
+  - Added pre-allocated `this.thinWallSpritePool` (4 sprites per column) and `prevThinHitCounts` tracking to maintain zero GC allocations per frame during rendering.
+  - Slices for thin walls (`ray.side === 2`) render into `thinWallContainer` while solid wall slices continue rendering into `wallContainer`, cleanly displaying enemies and pickup items through transparent barrier textures (fences, energy fields) with proper alpha blending.
+  - Added thin wall occlusion checking against closer solid walls and doors in `renderScene()`: thin walls behind closed or opening doors have their upper boundary dynamically clipped to the bottom edge of the descending/ascending door panel (`doorPanelBottom`) using pre-allocated `this.thinWallColumnTextures` for zero-allocation UV cropping, preventing thin walls from being visible through solid door panels while doors open or close.
+  - Added full cleanup for `thinWallContainer`, `thinWallSpritePool`, and `thinWallColumnTextures` in `dispose()`.
+
+## [2026-09-06] - Door Protector Line of Fire & Projectile Collision Fix
+
+### 1. Line of Sight vs. Line of Fire Separation
+- **Enemy Combat AI Decoupling** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Distinguished visual awareness (**Line of Sight / LOS**) from attack capability (**Line of Fire / LOF**).
+  - Added `hasLineOfFire` and `isBlockedByDoorProtector` in `RaycastEnemyManager` using 2D line segment-segment intersection against active door protectors and thin wall barriers (`allThinWalls`).
+  - Passed `lofChecker` to `RaycastEnemy.update()`. Enemies now only transition to `"attack"` state if they have an unobstructed Line of Fire (`dist <= attackRange && los && lof`).
+  - If Line of Fire is obstructed by a door protector or thin wall barrier, enemies remain in `"chase"` mode (moving up to the barrier where they are stopped by collision) and will not enter the shooting state, play firing animations, or emit weapon sounds.
+  - Added a defensive barrier check in `onShootPlayer` to immediately abort any damage or projectile instantiation if blocked by a door protector.
+
+### 2. Line of Sight Voiceline Retention Across Barriers
+- **Stormtrooper Vocal Audio Preservation** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Continued providing `los` (thick wall / closed door check only) to `this.voicelineManager.onEnemyUpdate(enemy, playerX, playerY, los, dist)`.
+  - Stormtroopers can see the player through transparent door protector force fields, allowing ambient spotted lines ("Rebel scum!", "There he is!") to trigger normally even while weapons remain locked.
+
+### 3. In-Flight Laser Projectile Collision Against Thin Walls
+- **Laser Interception & Impact FX** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Updated `RaycastLaserManager.update()` to accept `thinWalls` and passed `allThinWalls` from `RaycastScene`.
+  - Added step-segment intersection checking for moving 3D laser bolts against active thin walls and door protectors.
+  - Any laser bolt (enemy or player) intersecting a door protector spawns impact sparks (`spawnImpact`), terminates immediately, and is removed from the active projectile pool without delivering damage or penetrating the barrier.
+  - Updated `findRayWallDistance` in `RaycastEnemyManager` to include thin wall barriers, properly truncating enemy laser aiming traces at the barrier plane.
+
+### 4. Player Targeting & Damage Blocking Across Door Protectors
+- **Bidirectional Barrier Enforcement** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - **Player Aim Vector & Targeting**: In `RaycastScene.tryShoot()`, traced `aimBarrierDist` along the center screen aim vector using `findRayWallDistance`. If a door protector or thin wall is in front of the player, target distance is clamped to the barrier plane.
+  - **Auto-Aim Filtering**: Prohibited targeting or locking onto enemies across door protectors in `tryShoot()` via `isBlockedByDoorProtector`.
+  - **Muzzle Spawn Position Clamping**: In `RaycastLaserManager.fireLaser()`, checked if the near-camera barrel offset `(startX, startY)` would clip past a barrier when standing up close, clamping the spawn point to the player's side of the barrier.
+  - **In-Flight Laser Path Guarding**: Verified line of fire from laser origin and current flight position to candidate enemies before registering player laser hits, preventing projectile damage through barriers.
+  - **Area of Effect Blast Shielding**: Updated `applyAreaDamage()` in `RaycastEnemyManager` and `RaycastBreakableManager` (and player detonator damage in `RaycastScene`) to pass `allThinWalls` and block blast wave damage through door protectors.
+
+## [2026-09-06] - Destructible Computer Panel Wall & Sequential Explosion Effects
+
+### 1. Destructible Computer Panel Wall & Grid Snapping
+- **Environmental Textures & Tileset Integration** ([`assets/raycast/textures/computer_panel.jpg`](file:///D:/Projects/side-scroller/assets/raycast/textures/computer_panel.jpg), [`assets/raycast/textures/computer_panel_destroyed.jpg`](file:///D:/Projects/side-scroller/assets/raycast/textures/computer_panel_destroyed.jpg), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Added new intact (`computer_panel.jpg`) and destroyed (`computer_panel_destroyed.jpg`) computer terminal wall textures.
+  - Updated `StarWarsTileset.tsx` with tile 20 (`computer_panel_destroyed.jpg`) and tile 21 (`computer_panel.jpg`, type `DestructableWall`), including updated class definitions in [`propertytypes.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/propertytypes.json).
+  - Registered texture entries in [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) and fallback tileset arrays in [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts).
+- **Grid Snapping for Object Layers** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Parsed the new `DestructableWalls` object layer in [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json) (object 22 at `x: 1153, y: 320`).
+  - Implemented automatic coordinate snapping from Tiled object space (bottom-left origin) to the raycasting map grid cell `(gridX: 18, gridY: 4)`.
+  - Populated the snapped cell into `this.map` and `this.mapFlat` with `TILE_WALL` flag so the raycaster renders it as a solid 3D textured wall block and checks standard wall movement collision.
+
+### 2. Interactive Weapon Targeting & Dynamic Texture Replacement
+- **Breakable Manager Solid Wall Architecture** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Created wall breakable entries with `isWallBlock: true`, `gridX`, `gridY`, `intactTextureId: 21`, `destroyedTextureId: 20`, and `health: 50`.
+  - Filtered wall blocks out of `getVisibleMapObjects()` to prevent redundant billboard sprite instantiation, letting raycast column rendering handle 3D visuals.
+  - Implemented Ray-AABB bounding box intersection in `findClosestHit()` and crosshair hit pool lookup in `RaycastScene.tryShoot()` to calculate exact laser impact coordinates on the surface of the wall block.
+- **Dynamic Wall Texture Replacement** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added `handleWallBlockDestroyed()`: upon destruction, updates `this.map[gy][gx]` and `this.mapFlat` to the destroyed texture ID (`computer_panel_destroyed.jpg`), instantly updating raycasted column slices in real time while maintaining movement collision.
+
+### 3. Linked Security Barrier Deactivation (Door Protectors)
+- **Breakable-to-Barrier Binding** ([`src/scenes/raycast/DestructableWallManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWallManager.ts), [`src/scenes/raycast/DestructableWall.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/DestructableWall.ts)):
+  - Filtered `DestructableWallManager` to only parse thin wall barriers (e.g. in `DoorProtectors` layer), leaving solid wall blocks to `RaycastBreakableManager`.
+  - Barrier object 20 in `DoorProtectors` defines `linkIds: ["22"]`, linking it directly to wall block 22.
+  - When wall block 22 is destroyed, `destructableWallManager.onBreakableDestroyed()` deactivates barrier 20, clearing its collision and rendering, playing the deactivation sound (`door_1`), and displaying a toast notification (`[!] Security Barrier Deactivated!`).
+
+### 4. Configurable Sequential Explosions & Screen Shake
+- **Centralized Destructible Wall Configuration** ([`src/configs/DestructableWallConfig.ts`](file:///D:/Projects/side-scroller/src/configs/DestructableWallConfig.ts)):
+  - Created configurable explosion parameters: `count` (4 explosions), `intervalMs` (110ms delay between starts), `scale` (0.42), `spreadX`/`spreadY`/`spreadZ` spatial jitter, `soundVolume` (0.38), and wall `health` (50 HP).
+- **Sequential Explosion Animation** ([`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added `spawnExplosion()` and `spawnExplosionSequence()` to `ThermalDetonatorManager` to trigger staggered 3D explosion sprites from [`assets/common/explosion.json`](file:///D:/Projects/side-scroller/assets/common/explosion.json) with random spatial and scale jitter.
+  - Calculated the wall face normal towards the player to position the explosion sequence directly in front of the wall block without visual clipping.
+  - Triggered camera screen shake (`intensity: 8`, `duration: 0.45s`) on destruction.
+
+## [2026-09-06] - Asset Structure Modularization & Path Resolution Refactor
+
+### 1. Domain-Driven Asset Directory Hierarchy
+- **Modular Directory Organization**:
+  - Reorganized project assets from the flat `assets/` root folder into categorized, domain-driven subdirectories for cleaner maintainability and asset discovery:
+    - `assets/common/`: Shared projectiles and multi-purpose visual effects ([`laser.png`](file:///D:/Projects/side-scroller/assets/common/laser.png), [`green_ball.png`](file:///D:/Projects/side-scroller/assets/common/green_ball.png), [`explosion.json`](file:///D:/Projects/side-scroller/assets/common/explosion.json), [`explosion.png`](file:///D:/Projects/side-scroller/assets/common/explosion.png)).
+    - `assets/raycast/textures/`: Raycaster 3D environment surfaces including walls, floors, ceilings, doors, and fences (`basic_imperial_wall.jpg`, `imperial_grilled_wall.jpg`, `ceiling_1-3.jpg`, `floor.png`, `inside_floor.jpg`, `metal_door.jpg`, `stairs.png`, `fence.png`/`fence.webp`).
+    - `assets/raycast/decorations/`: Interactive and destructible props ([`chair.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/chair.png), [`chair_broken.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/chair_broken.png), [`table.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/table.png), [`table_broken.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/table_broken.png), [`power_cell.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/power_cell.png), [`power_cell_broken.png`](file:///D:/Projects/side-scroller/assets/raycast/decorations/power_cell_broken.png)). Standardized uppercase `.PNG` file extensions to lowercase `.png`.
+    - `assets/raycast/pickups/`: Gameplay pickups and animated prop spritesheets ([`keycards.json`](file:///D:/Projects/side-scroller/assets/raycast/pickups/keycards.json), [`keycards.png`](file:///D:/Projects/side-scroller/assets/raycast/pickups/keycards.png), [`shield_unit.json`](file:///D:/Projects/side-scroller/assets/raycast/pickups/shield_unit.json), [`shield_unit.png`](file:///D:/Projects/side-scroller/assets/raycast/pickups/shield_unit.png), ammo, etc.).
+    - `assets/raycast/sfx/storm_trooper/`: Enemy trooper combat audio and vocal clips (`stormtrooper_death_1.mp3`, `stormtrooper_pain_1.mp3`).
+
+### 2. Dynamic Tileset & Level Texture Resolution
+- **Scene Texture Loader Modernization** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Refactored `loadLevelTextures()`: Replaced rigid filename stripping (`split(/[\\/]/).pop()`) and hardcoded single-file fallback checks with dynamic path preservation, ensuring full relative asset paths from TMX tilesets resolve directly and reliably.
+  - Updated tile definitions for `power_cell.png`.
+- **Tileset Source Path Updates** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Updated tile image source paths to reference the new modular pickup location (`assets/raycast/pickups/shield_unit.png`).
+
+### 3. Engine Managers & Asset Manifest Synchronization
+- **Asset Manifest Alignment** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Synchronized asset bundle manifest entries with their respective new subdirectories (`textures`, `decorations`, `pickups`, `voicelines`, and `common`).
+- **Pickup & Weapon Configurations** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts)):
+  - Updated spritesheet source paths for Blue, Green, and Red keycards to point to [`assets/raycast/pickups/keycards.json`](file:///D:/Projects/side-scroller/assets/raycast/pickups/keycards.json).
+- **Subsystem Managers** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - Updated breakable debris loading paths to `assets/raycast/decorations/`.
+  - Updated laser bolt texture references to `assets/common/laser.png`.
+  - Updated keycard and explosion spritesheet cache checks and async loaders to prioritize the new paths while preserving backward-compatible cache lookups.
+
+## [2026-09-06] - Player Energy Shield System & Animated Shield Pickups
+
+### 1. Dynamic Energy Shield Mechanics & Partial Damage Absorption
+- **Damage Negation & Mitigation** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts)):
+  - Added player shield capability (`shield: 0`, `maxShield: 100`) to the player state.
+  - Implemented 65% damage absorption: when attacked, incoming damage splits so that 65% is absorbed and drained from the energy shield (`shieldAbsorbed = Math.min(shield, Math.ceil(damage * 0.65))`), while the remaining 35% penetrates through to player health.
+  - When the shield is fully depleted to 0, 100% of damage impacts player health directly.
+  - Added emerald-green directional screen deflection flash (`0x00e676`) when shield absorbs damage, matching the green shield generator aesthetic.
+  - Added shield pickup collection method `addShield(amount)` with neon-green HUD toast notification and flash effect.
+
+### 2. Animated Shield Pickup Integration
+- **FreeTexPacker Spritesheet Animation** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/enums/RaycastPickupType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastPickupType.ts)):
+  - Integrated `assets/raycast/pickups/shield_unit.json` and `shield_unit.png` into the asset pipeline and pickup manager.
+  - Automatically loads and parses the spritesheet into a 2-frame loop (`shield_unit_1.png` and `shield_unit_2.png`) with animated pulsation (`animationSpeed = 0.05`).
+  - Added new enum `RaycastPickupType.SHIELD = 9` and config `raycastShieldPickupConfig` granting +25 shield.
+  - Replaced hardcoded reference height (`30px`) in pickup rendering with dynamic reference height based on actual texture dimensions, ensuring pixel-perfect world scaling for both keycards and shield units without distortion.
+  - Added map loader recognition for `shield_unit` in TMX object and tile layers (`tile 19` in `StarWarsTileset.tsx`).
+
+### 3. Tactical HUD Shield Gauge & Centered Alignment
+- **Dual Health & Shield Status Display** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Redesigned and expanded the player status container to 240×72px with symmetric weapon dock alignment.
+  - Aligned the health icon and shield crest emblem to the exact same horizontal centerline (`iconCenterX = 26px`), eliminating prior horizontal offset.
+  - Vertically centered Row 1 (health icon, "100 HP" text, health bar) at `Y = 19px` and Row 2 (shield icon, "XX SHD" text, shield bar) at `Y = 53px`.
+  - Upgraded the shield crest emblem to a neon green theme (`#00ff66` rim, `#00c853` translucent fill, `#69f0ae` deflector chevrons) matching the glowing green dome of the `shield_unit` pickup.
+  - Formatted the readout text (`XX SHD`) and shield gauge fill (`#00e676`) in vibrant matching green.
+  - Converted the health bar from green to vibrant scarlet red (`#ff3344`) with deep crimson (`#cc1111`) at critical HP ($\le 25\%$), creating a sharp visual distinction from the green energy shield.
+  - Dynamically updates whenever shield points are gained or depleted.
+
+## [2026-09-05] - Hardware-Accelerated GPU Floor & Ceiling Raycasting & Modular Shaders
+
+### 1. Hardware-Accelerated GLSL Floor & Ceiling Raycasting
+- **Full GPU Acceleration** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Completely replaced the CPU software rasterizer (`renderFloorAndCeiling()`) which was looping over 921,600 pixels per frame and performing synchronous `putImageData()` + `bgTexture.update()` GPU uploads.
+  - Implemented a hardware-accelerated full-screen quad using PixiJS `Mesh<Shader>` and `MeshGeometry` rendered in the `backgroundContainer` (`zIndex: 0`).
+  - Floor and ceiling perspective raycasting, map sampling, texture atlas decoding, distance shading, fog, and sky gradients are now computed in parallel on the GPU at native 1280×720 resolution.
+  - CPU cost per frame reduced from ~12–18ms to <0.005ms (passing 6 float uniform values `uPlayerPos`, `uDir`, `uPlane`), completely eliminating GPU texture bus stalls (`texSubImage2D`).
+
+### 2. GPU Texture Atlas & Map Lookup Baking
+- **One-Time Map Load Baking** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added `buildFloorCeilingTextures()` to compile all unique floor and ceiling textures into a single 2D texture atlas (`uAtlas`) with `SCALE_MODES.NEAREST` filtering.
+  - Generates a compact 2D map lookup texture (`uMapTexture`) with dimensions matching the map grid (`mapWidth` × `mapHeight`), where the Red channel encodes the floor tile atlas index (+1) and the Green channel encodes the ceiling tile atlas index (+1).
+  - Enables single-pass texture sampling inside the fragment shader without dynamic branching or multidimensional texture arrays.
+
+### 3. Modular Shaders & IDE IntelliSense Support
+- **Extracted Shader Files** ([`src/scenes/raycast/shaders/floorCeiling.vert`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.vert), [`src/scenes/raycast/shaders/floorCeiling.frag`](file:///D:/Projects/side-scroller/src/scenes/raycast/shaders/floorCeiling.frag)):
+  - Extracted GLSL vertex and fragment shaders into standalone `.vert` and `.frag` source files for full IDE syntax highlighting, linting, and IntelliSense.
+  - Added TypeScript module declarations in [`src/shaders.d.ts`](file:///D:/Projects/side-scroller/src/shaders.d.ts) for `*.vert`, `*.frag`, and `*.glsl` files.
+  - Configured Webpack 5 native asset modules (`type: "asset/source"`) in [`webpack.config.ts`](file:///D:/Projects/side-scroller/webpack.config.ts) and [`webpack.dev.ts`](file:///D:/Projects/side-scroller/webpack.dev.ts) for zero-dependency raw string imports.
+
+### 4. Build Configuration & TypeScript Strict Typings Fixes
+- **TypeScript & Webpack Configuration** ([`tsconfig.json`](file:///D:/Projects/side-scroller/tsconfig.json), [`webpack.config.ts`](file:///D:/Projects/side-scroller/webpack.config.ts)):
+  - Added `"types": ["node"]` and `"skipLibCheck": true` to `tsconfig.json` to resolve missing Node.js ambient declarations (`path`, `__dirname`, `module`).
+  - Converted `webpack.config.ts` from CommonJS `require()` to ESM imports (`import * as path from "path"`).
+  - Fixed strict typing in `CopyPlugin` transform option (`absoluteFilename?: string`).
+  - Handled TypeScript 5+ `IArrayBuffer` type variance for PixiJS `MeshGeometry` buffers.
+
+### 5. Enemy 3D Blaster Laser Projectiles & Real-Time Combat Physics
+- **3D Enemy Blaster Simulation** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Upgraded enemy attacks from instantaneous dice-roll hitscan to true physical 3D flying laser projectiles with crimson glowing blaster bolts (`tint: 0xff3322`).
+  - Enemy bolts originate at the enemy's world position at rifle height ($Z = 0.55$) and fly towards the player at high velocity ($28.0\text{ units/sec}$).
+  - Added real-time collision detection against the player cylinder ($r = 0.42$) and breakable furniture cover (tables/chairs), damaging cover or player upon impact.
+  - Implemented cinematic near-miss dispersion: inaccurate shots intentionally deviate slightly to the left/right ($0.35$–$0.80$ units), allowing red blaster bolts to whiz visibly past the camera and crash into walls behind the player with multi-colored plasma sparks.
+  - Enabled reactive player dodging: players can actively strafe out of the line of fire to evade incoming enemy blaster bolts.
+  - Integrated tactical impact feedback: hits trigger player damage, camera screen shake ($5\text{px}$), red screen flash, and HUD warning toast (`[-] Hit by Blaster Fire!`).
+
+### 6. Health Pickup Texture Asset Update
+- **Pixel-Art Health Pickup Integration** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Replaced the legacy 613×569 2D health icon with the dedicated pixel-art medpack sprite [`assets/raycast/pickups/health.png`](file:///D:/Projects/side-scroller/assets/raycast/pickups/health.png) ($28 \times 19\text{px}$).
+  - Updated pickup configuration, pre-slicing texture pipeline, tileset definitions, and scene asset loader to ensure the crisp medpack sprite renders in the 3D world with nearest-neighbor scaling.
+
+## [2026-09-04] - 3D Blaster Laser Projectiles & Weapon Muzzle Integration
+
+### 1. 3D Laser Projectile Physics & Rendering Engine
+- **Raycast Laser Manager** ([`src/scenes/raycast/RaycastLaserManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastLaserManager.ts)):
+  - Built a dedicated 3D laser projectile system using `assets/common/laser.png` with additive blending (`BLEND_MODES.ADD`) for intense sci-fi blaster glow.
+  - Laser bolts are simulated in full 3D world space at high velocity (38.0 units/sec) towards targeted enemies, breakables, or walls.
+  - Implemented 3D perspective foreshortening: near the weapon muzzle, bolt is elongated (4:1) along its firing trajectory; as it travels outward into the distance, perspective along the line of sight naturally compresses it into a compact, symmetrical rounded plasma pulse (1:1), eliminating awkward directional tilts and mid-air rotation.
+  - Implemented 3D perspective scaling: bolt starts large at the weapon barrel tip and scales inversely with camera depth `transformY`.
+  - Full Z-buffer occlusion testing prevents laser bolts from rendering in front of closer walls.
+
+### 2. Weapon Muzzle Projection Integration
+- **Barrel Origin Calculation** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Added `getMuzzlePosition()` to compute the exact screen coordinates `(muzzleX, muzzleY)` of the weapon's barrel, taking recoil displacement and rotation into account.
+  - Inverted camera projection math maps `(muzzleX, muzzleY)` at near-camera depth `d0 = 0.35` to world space `(startX, startY, startZ)`, guaranteeing the laser shoots directly out of the weapon barrel.
+
+### 3. Target Acquisition & Impact VFX
+- **Aim Cone Targeting & Impact Sparks** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Replaced instant hitscan damage with physical 3D flying laser projectiles.
+  - Automatically targets enemies in the aiming cone, props, or distant walls.
+  - On impact with enemies or obstacles, spawns procedural multi-colored plasma sparks and flash circles, applying damage and notifying the HUD upon kill or destruction.
+
+## [2026-09-04] - Mobile Weapon Switching & Touch Controls Fix
+
+### 1. Dedicated Mobile Weapon Switch Virtual Button
+- **On-Screen `[WPN]` Button** ([`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts)):
+  - Added dedicated `btnWeapon: VirtualButton` with `[WPN]` label positioned at `(screenW - 180, screenH - 230)` right beside the action button `[E]` and above quick-turn `[>]`.
+  - Configured tap handler to emit `"switchWeapon"`.
+  - Properly disposed in `MobileControls.dispose()`.
+
+### 2. Multi-Target Touch & Tap Weapon Switching
+- **Interactive Weapon Sprite** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Enabled `weaponSprite.eventMode = "static"` and `cursor = "pointer"`.
+  - Added `pointerdown` and `pointertap` listeners that emit `"switchWeapon"` when the player taps their equipped weapon on-screen.
+- **HUD & Weapon View Tap Proxy** ([`src/ui/TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts), [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts)):
+  - Added tap detection to `TouchLookArea` for short-duration stationary touches (`< 12px` movement, `< 350ms`).
+  - Tapping either the HUD weapon box (bottom-right) or the equipped weapon area forwards to `"switchWeapon"`.
+  - Added `stopPropagation()` to `VirtualButton` so button presses do not conflict with the look area or display objects underneath.
+
+### 3. Comprehensive Weapon Cycling Feedback
+- **Scene & Controller Wiring** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Connected `mobileControls.on("switchWeapon")` and `weaponView.on("switchWeapon")` to `playerController.cycleWeapon(1)`.
+  - Updated `cycleWeapon()` to display informative toast notifications if the player has only 1 weapon in inventory or if alternate weapons are out of ammo, providing instant visual feedback.
+  - Added `hud.adaptForMobile()` to display `[TAP / WPN]` instead of desktop key hints `[1-3 / TAP]`.
+
+## [2026-09-04] - Raycaster Engine Performance Overhaul
+
+### 1. Hierarchical Layer Containers & Scene Isolation
+- **Layered Display Architecture** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Removed 7,680 individual wall slice sprites from the root scene container.
+  - Created a designated container hierarchy with explicit `zIndex` sorting:
+    - `worldContainer`: Root 3D world container (`sortableChildren = true`).
+    - `backgroundContainer` (`zIndex = 0`): Houses floor/ceiling `bgSprite` and fallback `graphics`.
+    - `wallContainer` (`zIndex = 10`): Contains all pooled wall column sprites.
+    - `objectContainer` (`zIndex = 20`): Contains billboard object sprites.
+    - `animatedPickupContainer` (`zIndex = 30`): Contains keycards and interactive pickups.
+    - `enemyContainer` (`zIndex = 40`): Contains 3D animated enemy billboards.
+    - `detonatorContainer` (`zIndex = 50`): Contains in-flight projectiles and explosion VFX.
+  - **Stationary Screen Shake**: Screen shake now transforms `worldContainer` directly instead of the scene root, keeping HUD, weapon view, and mobile controls stationary while eliminating transform invalidation across thousands of DisplayObjects.
+
+### 2. Native 1:1 Crisp Floor & Ceiling Buffer with Row Occlusion Culling
+- **Uncompromised 1:1 Crisp Fidelity** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Maintained full 1280×720 native pixel fidelity for floor and ceiling with zero blurriness and zero resolution scaling.
+  - Implemented `globalMaxWallTop` and `globalMinWallBottom` bounds calculation to completely skip scanline rows that are 100% occluded behind solid walls.
+  - Added direct 32-bit pixel copy (`buf[idx] = rawPix | 0xff000000`) for full-brightness tiles near the player.
+
+### 3. Wall Sprite Visibility Deltas
+- **Delta-Based Visibility Updates** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Replaced the brute-force `for..of` loop across all 7,680 column sprites with `prevHitCounts` tracking.
+  - Only sets `sprite.visible = false` for the delta between the previous frame's hit count and current hit count.
+  - Eliminates 1,280 iterator allocations and thousands of unnecessary DisplayObject visibility toggles per frame.
+
+### 4. Zero-Allocation Tick & Render Loops
+- **Pre-Indexed Door Animations**:
+  - Pre-indexes all map door positions into `doorEntries` during level load.
+  - `updateDoors(delta)` now operates strictly over active animated doors using flat array indices (`doorStatesFlat`), eliminating per-frame string concatenation, string splitting (`split(",")`), and `parseInt()`.
+- **Pre-Allocated Thin Wall Buffers**:
+  - Replaced per-frame `thinWalls.concat()` calls with an in-place reusable `allThinWalls` array.
+  - `cullThinWalls()` now reuses `activeThinWalls` without array reallocation.
+- **Pre-Allocated Object Collection & Static Sort**:
+  - Billboard object collection in `renderScene()` clears and pushes into `this.mapObjects` without `.concat()`.
+  - Sorts with static comparator `RaycastScene.compareObjects`, eliminating closure allocations.
+- **Cached Input Vectors**:
+  - Replaced `{ x: 0, y: 0 }` fallback allocations in `updatePlayer` and `tick` with static `RaycastScene.ZERO_VECTOR`.
+  - Replaced `nearbyOffsets` array and `Set` in `tryOpenDoor` with static lookup tables.
+
+
+## [2026-09-04] - Generic Enemy Voicelines, Concurrency Control & Audio Death Cutoff
+
+### 1. Generic Enemy Voiceline Architecture & Extensibility
+- **Generalized Enemy Architecture** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts), [`src/configs/interfaces/IEnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IEnemyVoicelineConfig.ts), [`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts)):
+  - Refactored and generalized the voice system from Stormtrooper-specific classes to an extensible enemy framework: `EnemyVoicelineManager`, `IEnemyVoicelineConfig`, `IEnemyVoicePool`, and `enemyVoicelineConfig`.
+  - Added backward-compatibility aliases ([`src/scenes/raycast/StormtrooperVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/StormtrooperVoicelineManager.ts), [`src/configs/interfaces/IStormtrooperVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IStormtrooperVoicelineConfig.ts), [`src/configs/StormtrooperVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/StormtrooperVoicelineConfig.ts)) ensuring legacy references remain fully functional.
+- **Dynamic Voice Pool Hierarchy & Registry**:
+  - Implemented 3-tier dynamic voice pool resolution via `getVoicePool(enemy)`:
+    1. **Enemy instance override**: `enemy.config.voicelines` (per-enemy custom pool in `IRaycastEnemyConfig`).
+    2. **Registered enemy type pool**: `voicePools[enemyType]` (e.g. `registerEnemyVoicePool("officer", pool)` or `"droid"`).
+    3. **Default voice pool**: Fallback pool defined in `defaultVoicePool`.
+  - Enables adding new enemy types (Imperial Officers, Battle Droids, Commanders) or individual boss voice sets without modifying manager code.
+
+### 2. Situational Audio Triggers & Asset Integration
+- **Sound Asset Registration** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts)):
+  - Registered authentic Stormtrooper audio assets in the PixiJS sound manifest:
+    - `"stormtrooper_grenade"`: [`assets/raycast/sfx/storm_trooper/grenade_grenade.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/storm_trooper/grenade_grenade.mp3)
+    - `"stormtrooper_hear_something"`: [`assets/raycast/sfx/storm_trooper/i_hear_something.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/storm_trooper/i_hear_something.mp3)
+    - `"stormtrooper_rebel_scum"`: [`assets/raycast/sfx/storm_trooper/rebel_scum.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/storm_trooper/rebel_scum.mp3)
+    - `"stormtrooper_there_he_is"`: [`assets/raycast/sfx/storm_trooper/there_he_is.mp3`](file:///D:/Projects/side-scroller/assets/raycast/sfx/storm_trooper/there_he_is.mp3)
+- **Contextual State Triggers** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - **Player Spotted Callouts**: When an enemy gains line of sight to the player (`hasLOS = true`), randomly selects between `"stormtrooper_rebel_scum"` and `"stormtrooper_there_he_is"`.
+  - **Suspicious Proximity Callouts**: When the player is close ($dist \le hearingRange$, default $7.0$ grid units) but out of sight (`hasLOS = false`, e.g. behind walls or closed doors), triggers `"stormtrooper_hear_something"`.
+  - **Grenade Detection**: When a thermal detonator is thrown, nearby enemies react with `"stormtrooper_grenade"`.
+
+### 3. Concurrency Limiting, Priority Queue & Spacing
+- **Configurable Concurrency & Spacing Controls** ([`src/configs/EnemyVoicelineConfig.ts`](file:///D:/Projects/side-scroller/src/configs/EnemyVoicelineConfig.ts), [`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - `maxConcurrentVoicelines: 1`: Limits how many voice lines can play at once across all enemies, preventing cacophonous speech overlap.
+  - `voicelineSpacing: 2500` ms: Enforces natural conversational spacing between consecutive voice lines.
+  - Runtime setters `setMaxConcurrentVoicelines(count)` and `setVoicelineSpacing(spacingMs)` allow dynamic tuning.
+- **Priority Queue & Cooldowns**:
+  - Implemented priority queue (`QueuedVoiceline`) that prioritizes high-urgency callouts (grenades > spotted > suspicious) and discards stale audio requests (`maxAgeMs`).
+  - Per-category cooldowns to prevent repetitive spam: `spottedCooldown: 7000` ms, `suspiciousCooldown: 10000` ms, `grenadeCooldown: 1200` ms.
+- **Spatial Panning & Volume Attenuation**:
+  - Automatically calculates 3D directional panning based on angle to player camera and distance attenuation with configurable `minSpatialVolume: 0.5`.
+
+### 4. Emergency Priority & Guaranteed Grenade Shouts
+- **Zero-Latency Grenade Windup Trigger** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Triggered immediately when the player initiates a throw in `playThrowAnimation()` rather than waiting for projectile release, ensuring immediate audible feedback.
+- **Emergency Priority Interruption** ([`src/scenes/raycast/EnemyVoicelineManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/EnemyVoicelineManager.ts)):
+  - Grenade alerts bypass normal conversational spacing checks.
+  - If voice channels are full (`activeHandles.size >= maxConcurrentVoicelines`), casual chatter ("i hear something", "rebel scum") is immediately interrupted and stopped to play the grenade shout.
+- **Reliable Fallback Positioning**:
+  - Finds the closest alive enemy to shout; if all enemies on the map are eliminated or out of range, audio falls back to player coordinates at high volume ($0.95$) so the player is guaranteed to hear the reaction every time.
+
+### 5. Instant Sound & Voiceline Cutoff on Enemy Death
+- **Active Sound Instance Tracking** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Added `activeSoundInstances` and `trackSoundInstance(res)` to track all running `@pixi/sound` instances (pain sounds, attack sounds, voice clips).
+  - Added `stopActiveSounds()` which stops every playing audio instance immediately.
+- **Immediate Termination on Fatal Damage**:
+  - In `takeDamage()`, when health reaches 0, `stopActiveSounds()` is executed synchronously alongside `onDeathCallback`.
+  - Invokes `EnemyVoicelineManager.onEnemyDeath(enemyId)`:
+    - Immediately calls `.stop()` on any active voice lines belonging to the slain enemy.
+    - Purges any pending lines for that enemy from the voiceline queue.
+    - Adds enemy ID to `deadEnemyIds` to reject any pending asynchronous playback callbacks.
+    - Protects grenade shouts from cutoff if the enemy is eliminated by the grenade explosion while shouting.
+- **Disposal Safety**:
+  - `dispose()` calls `stopActiveSounds()` to prevent orphaned audio playback when enemies are cleared or scenes unload.
+
+---
+
+## [2026-09-02] - Tiled Custom Types Refactor & Bidirectional Door Sliding
+
+### 1. Tiled Custom Types Schema Architecture
+- **Dedicated Enum Modules** ([`src/enums/DoorOpen.ts`](file:///D:/Projects/side-scroller/src/enums/DoorOpen.ts), [`src/enums/TileType.ts`](file:///D:/Projects/side-scroller/src/enums/TileType.ts), [`src/enums/Align.ts`](file:///D:/Projects/side-scroller/src/enums/Align.ts), [`src/enums/Anchor.ts`](file:///D:/Projects/side-scroller/src/enums/Anchor.ts), [`src/enums/FlatWallRotation.ts`](file:///D:/Projects/side-scroller/src/enums/FlatWallRotation.ts), [`src/enums/Weapons.ts`](file:///D:/Projects/side-scroller/src/enums/Weapons.ts), [`src/enums/PickUpType.ts`](file:///D:/Projects/side-scroller/src/enums/PickUpType.ts)):
+  - Added string enums matching the Tiled custom type definitions:
+    - `DoorOpen`: `"Up"`, `"Left"`, `"Right"`.
+    - `TileType`: `"door"`, `"thinWall"`, `"thickWall"`, `"ceiling"`, `"floor"`, `"stairs"`.
+    - `Align`: `"-"`, `"left"`, `"right"`, `"top"`, `"bottom"`, `"center"`.
+    - `Anchor`: `"ceiling"`, `"floor"`, `"center"`, `"-"`.
+    - `FlatWallRotation`: `"-"`, `"vertical"`, `"horizontal"`.
+    - `Weapons`: `"e_11"`, `"-"`, `"thermal_detonator"`, `"dh_17"`.
+    - `PickupType`: `"weapon"`, `"ammo"`, `"health"`, `"shield"`, `"-"`, `"blue_keycard"`, `"red_keycard"`, `"green_keycard"`.
+- **Tiled Class Interfaces** ([`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Added `ITile`, `IDestructableWall`, `IObject`, `IPickupItem`, and `IWeapon` representing Tiled classes with member properties and typed enum links.
+  - Extended `TileMeta` with `open` and `tileType`.
+  - Updated `DoorSlideMode` to support `DoorOpen` enum (`"Up"`, `"Left"`, `"Right"`).
+
+### 2. TSX Tileset Auto-Loader & Source Resolution
+- **StarWarsTileset.tsx Integration** ([`assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx`](file:///D:/Projects/side-scroller/assets/raycast/levels/StarWarsTileset/StarWarsTileset.tsx)):
+  - Placed external TSX tileset into the project matching `"source": "StarWarsTileset/StarWarsTileset.tsx"` in `test_level.json`.
+- **`loadExternalTileset` Runtime Parser** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - In `setupScene()`, detects if `tileset.source` is defined without embedded `tiles`, asynchronously fetching and parsing the TSX XML via `DOMParser`.
+  - Populates all 19 tiles, extracting image paths, custom properties, and classes.
+  - Maps image names (`basic_imperial_wall.jpg`, `fence.png`, `metal_door.jpg`, etc.) directly to assets inside `assets/`.
+- **`Tile` Class Defaults**:
+  - In `parseTiledMap()`, tiles with `type="Tile"` automatically inherit class defaults (`tileType = "door"`, `open = "Up"`).
+  - Explicit properties `"tileType"` and `"open"` override defaults accordingly.
+
+### 3. Bidirectional Horizontal Sliding & Vertical Ceiling Doors
+- **Door Sliding Raycasting** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - **`DoorOpen.UP` (`"Up"`)**: Slides vertically into the ceiling recess with uncompressed UV scrolling.
+  - **`DoorOpen.LEFT` (`"Left"`)**: Horizontal slide to the left ($offset \le 1.0 - open$). Door UV translates with `texX = offset + open`, opening a gap on the right.
+  - **`DoorOpen.RIGHT` (`"Right"`)**: Horizontal slide to the right ($offset \ge open$). Door UV translates with `texX = offset - open`, opening a gap on the left.
+- **In-Game Toggle Hotkey**:
+  - Pressing <kbd>V</kbd> cycles between `UP (Ceiling)` $\to$ `LEFT` $\to$ `RIGHT` with instant HUD toast feedback.
+
+---
+
+## [2026-09-01] - Thermal Detonator Weapon, Throwable 3D Physics, AOE Explosions & Enemy Fixes
+
+### 1. Thermal Detonator Throwable Weapon & Multi-Weapon Inventory
+- **Weapon Definition & Configuration** ([`src/enums/RaycastWeaponType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastWeaponType.ts), [`src/configs/interfaces/IRaycastWeaponConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastWeaponConfig.ts), [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Added `RaycastWeaponType.THERMAL_DETONATOR`.
+  - Configured `thermalDetonatorConfig` with high explosive damage (`damage: 150`), `isThrowable: true`, configurable fuse timer (`fuseTime: 2.0`), and blast radius (`explosionRadius: 3.5`).
+- **Configurable Screen Positioning & Scale** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Extended `IRaycastWeaponConfig` and `RaycastWeaponView` with per-weapon `viewPosX`, `viewPosY`, `viewScale`, `anchorX`, and `anchorY` settings.
+  - Allows full customization of where throwable and firearm weapons rest on the screen and their display scale.
+- **First-Person Throw Animation** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Implemented `playThrowAnimation(onRelease, onComplete)`:
+    - **Windup phase**: Weapon pulls back and slightly up.
+    - **Toss phase**: Swings forward and down offscreen, releasing the 3D projectile into the world at peak toss (`progress = 0.45`).
+    - **Recovery/Draw phase**: Draws the next detonator from below the screen (or switches back to primary weapon if ammo depleted).
+- **DH-17 Blaster Pistol as Default Starting Weapon** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Added `RaycastWeaponType.DH17` enum and `dh17Config` using [`assets/raycast/weapons/dh_17_equiped.png`](file:///D:/Projects/side-scroller/assets/raycast/weapons/dh_17_equiped.png) and authentic firing sound [`assets/sounds/dh_17_blaster.mp3`](file:///D:/Projects/side-scroller/assets/sounds/dh_17_blaster.mp3).
+  - Player now begins the game equipped with the **DH-17 Blaster Pistol** with 30 starting ammo instead of the E-11.
+  - The E-11 Blaster Rifle can still be acquired as a weapon drop from defeated Stormtroopers or map pickups.
+- **E-11 Blaster Rifle Right-Click Automatic Fire Mode** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Added full-auto firing mode when holding the right mouse button with the E-11 Blaster Rifle equipped.
+  - Supported `autoFireRate: 140` ms (~7.1 shots/sec) in `IRaycastWeaponConfig` and `e11Config` for rapid blaster fire.
+  - Registered `contextmenu`, `mouseup`, and `blur` window listeners to prevent browser context menu interruptions and ensure smooth button release detection.
+  - Auto-switches to E-11 when right-clicking if the player owns the rifle in their inventory, with immediate first shot execution and a clear HUD hint if the weapon is not yet owned.
+- **Multi-Weapon Inventory & Switching Controls** ([`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Player inventory now tracks separate ammo counters for all owned weapons (`DH-17`, `E-11`, `Thermal Detonator`).
+  - Added weapon switching support:
+    - Key `1`: Equip DH-17 Blaster Pistol.
+    - Key `2`: Equip E-11 Blaster Rifle.
+    - Key `3`: Equip Thermal Detonator.
+    - Key `Q`: Cycle previous weapon.
+    - Mouse Wheel: Cycle next/previous weapon.
+    - HUD Weapon Box Click/Tap: Interactive weapon switcher with `[1-3 / TAP]` switch hint.
+- **Door Opening Audio Effect (`assets/sounds/door_1.mp3`)** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Registered `door_1` in the manifest `sounds` bundle pointing to [`assets/sounds/door_1.mp3`](file:///D:/Projects/side-scroller/assets/sounds/door_1.mp3).
+  - Integrated audio playback into `tryOpenDoor()` so the sound plays whenever a door slides open or closed upon interaction.
+- **Configurable Vertical (Up / Down) & Horizontal Sliding Doors** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts), [`assets/raycast/levels/test_level.json`](file:///D:/Projects/side-scroller/assets/raycast/levels/test_level.json)):
+  - Added full support for three door slide modes:
+    - `"slide_up"`: Door rises smoothly into the ceiling recess to open, drops down to close.
+    - `"slide_down"`: Door sinks smoothly into the floor recess to open, rises up to close.
+    - `"slide_sideways"`: Classic horizontal sliding door (left/right).
+  - **Zero-Distortion Texture Projection**: Implemented dynamic zero-allocation UV cropping pool (`doorColumnTextures`) so vertical doors realistically slide into the ceiling or floor without stretching, squashing, or accordion distortion.
+  - **Ceiling & Floor Occlusion**: Accurately occludes ceiling pixels above rising doors and floor pixels below sinking doors while rendering the rooms and floors behind open door apertures.
+  - **Configurable via 4 Methods**:
+    1. Global default in `GameConfig.ts` (`gameConfig.defaultDoorSlide = "slide_up"`).
+    2. Per-tile / per-door property in Tiled level JSON (`"slide": "up" | "down" | "sideways"`).
+    3. Programmatically via `scene.setDefaultDoorSlideMode(mode)` or `scene.setDoorSlideMode(x, y, mode)`.
+  - **Eliminated Phantom Cell-Entrance Wall**: Removed legacy fallback that drew a flat door texture across the grid cube's outer entry boundary (`distance = dist`) when rays missed the center door plane. Freestanding doors and angled doorway views no longer display flickering partial textures or spurious solid door faces on cube boundaries.
+  - **Door Edge & Jamb Raycasting**: Resolved door side-cutting where diagonal screen columns crossing the perpendicular grid axis were prematurely flagged as solid jambs. All rays intersecting the door plane between `[0, 1]` now uniformly slide up across the entire doorway width.
+  - **Aperture Floor/Ceiling Occlusion**: Open/opening doors (`open >= 0.05`) no longer set ceiling occlusion bounds (`wTop = 0`), which previously caused the background buffer to skip ceiling rendering and leave stale ceiling pixels from previous camera angles when turning quickly.
+  - **Pool Reference Safety**: Replaced array reference shifting in hit deduplication with in-place rotation to maintain distinct object instances across frames.
+
+---
+
+### 2. Pickups System (Thermal Detonator Belt & Single)
+- **Pickup Types & Amounts** ([`src/enums/RaycastPickupType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastPickupType.ts), [`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts)):
+  - Added `RaycastPickupType.THERMAL_DETONATOR_SINGLE` (awards 1 detonator) and `RaycastPickupType.THERMAL_DETONATOR_BELT` (awards 5 detonators).
+  - Preloaded textures in `GameConfig.ts` (`assets/raycast/pickups/thermal_detonator_pickup.png` and `assets/raycast/pickups/thermal_detonator_belt.png`).
+- **3D World Billboard Rendering & Map Parsing** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Slices pickup textures into 1px vertical column textures for zero-allocation billboard rendering with Z-buffer depth testing.
+  - Automatically parses tile layers and object layers with `type="thermal_detonator"`, `type="thermal_detonator_belt"`, or matching image filenames.
+
+---
+
+### 3. 3D Projectile Physics, Ground Landing & Configurable Bounciness
+- **Detonator Manager** ([`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - Created `ThermalDetonatorManager` handling 3D flight physics, bouncing, floor friction, wall collisions, fuse countdown, LED indicator blinking, and explosion animation.
+- **Configurable Bounciness & Physics Damping** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts), [`src/configs/interfaces/IRaycastWeaponConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastWeaponConfig.ts), [`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - `throwSpeed`: Initial horizontal throwing velocity (`8.5`).
+  - `bounciness`: Floor bounce restitution (`0.28`). Lower values produce a realistic, heavy grenade thud with 1–2 low hops rather than bouncing wildly.
+  - `wallBounciness`: Wall bounce restitution (`0.30`). Rebounds realistically off walls, doors, and security barriers.
+  - `friction`: Ground rolling friction (`0.80`). Rolls smoothly to a stop on the floor.
+  - `maxBounces`: Maximum bounce limit (`2`) before settling into ground rolling mode.
+- **Z-Buffer Occlusion**:
+  - Active detonator in-flight and on the ground is converted to 3D billboard objects and rendered column-by-column against the camera Z-buffer.
+
+---
+
+### 4. Animated 3D Explosion & AOE Damage System
+- **Explosion Animation (`assets/explosion.json`)** ([`src/scenes/raycast/ThermalDetonatorManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/ThermalDetonatorManager.ts)):
+  - Loads 17 frames (`explosion_00.png` through `explosion_16.png`) from `assets/explosion.json`.
+  - Spawns at 3D detonation coordinates with perspective scaling and per-column run-length Graphics occlusion masks matching raycast walls.
+  - Plays explosion audio effect (`explosion_sound`).
+- **Screen Shake & Proximity Feedback** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Added camera screen shake decaying over time with intensity scaled inversely to the player's distance from the blast.
+- **Area-of-Effect (AOE) Damage** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Implemented `applyAreaDamage()` in `RaycastEnemyManager` with distance falloff damage for all enemies inside `explosionRadius`.
+  - Implemented `applyAreaDamage()` in `RaycastBreakableManager` to destroy chairs, tables, and power cells within the blast radius (triggering security barrier deactivation).
+  - Player takes splash damage if caught within the blast radius, complete with screen flash and HUD warning toast.
+
+---
+
+### 5. Stormtrooper Spritesheet & Visibility Fixes
+- **Asset Path Correction** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Updated `stormtrooperConfig.spritesheet` and `initSpritesheets()` to load `assets/raycast/enemies/storm_trooper.json` (resolving 404 error caused by earlier asset restructuring).
+  - Added multi-path fallback resolver supporting alias `"storm_trooper"` and registered sheets under all key formats.
+- **Recursive Group Layer Support** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Added `collectLayers()` to recursively unpack any group layers (e.g. elevation groups) when scanning for enemy spawn layers.
+- **Starting Area Proximity Spawn** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Automatically spawns a Stormtrooper at `(5.5, 5.0)` in the starting corridor if no map enemies exist within range 8 of the player spawn `(2, 5)`, ensuring immediate visibility and testing.
+- **Occlusion Mask Refinement** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Enhanced run-length occlusion masking and offscreen bounds culling to prevent false full-occlusion when sprites are partially visible.
+
+---
+
+## [2026-08-24] - Breakable Furniture System (Chairs & Tables)
+
+### 1. Dynamic Breakable Furniture & Destruction Physics
+- **Manager & Types** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Implemented `RaycastBreakableManager` to detect, render, collide with, and break interactive furniture objects (`chair` and `table`).
+  - Added `RaycastBreakable` interface tracking `health`, `maxHealth`, `isBroken`, `hitRadius`, `blocksMovement`, and intact/broken textures.
+- **Broken State Textures & 1px Column Slicing** ([`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Pre-loads and slices `assets/chair_broken.png` and `assets/table_broken.png` with `SCALE_MODES.NEAREST` into 1px vertical column textures.
+  - Seamlessly swaps the sprite's texture and column slices to broken rubble upon destruction, maintaining floor anchoring.
+- **Raycast Shooting & Ballistics Integration** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Crosshair hit testing now performs ray-cylinder intersection against unbroken furniture in front of walls.
+  - If a bullet hits a chair or table before an enemy or wall, it deals damage, destroys the furniture with an impact sound effect (`explosion_sound`), and notifies the player with a HUD toast (`[!] Smashed Chair/Table`).
+  - Once broken, bullets pass straight through the rubble to hit enemies and walls behind them.
+- **Player Movement Collision & Obstacle Clearing** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Unbroken tables and chairs block player movement (`checkCollision`).
+  - Destroying furniture removes its movement collision, allowing the player to walk freely over the broken debris.
+
+---
+
+### 2. Global Nearest-Neighbor Texture Sampling (`SCALE_MODES.NEAREST`)
+- **Global Application Settings** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Configured `BaseTexture.defaultOptions.scaleMode = SCALE_MODES.NEAREST`.
+  - Ensures every texture, sprite, spritesheet, wall slice, pickup, furniture prop, and UI asset throughout the application defaults to crisp nearest-neighbor point sampling.
+
+---
+
+### 3. Object Layer Positioning, Animated Keycards & Locked Doors System
+- **Sub-Tile Object Positioning** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastBreakableManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastBreakableManager.ts)):
+  - Extended map parser to extract fractional $(x, y)$ world coordinates from Tiled object layers (`PositionedObjects`, `Pickups`) using `(obj.x + obj.width/2)/tileW` and `(obj.y - obj.height/2)/tileH`.
+  - Enables placing items directly on tables, precise chair alignments, and custom `scale`, `vOffset`, `z`, and `anchor` overrides.
+- **Native `AnimatedSprite` Keycards (`keycards.json`)** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`assets/keycards.json`](file:///D:/Projects/side-scroller/assets/keycards.json)):
+  - Implemented PixiJS native `AnimatedSprite` for keycards, correctly handling FreeTexPacker `"rotated": true` atlas UV transformations and frame orientations.
+  - Features smooth 6-frame spinning animation, per-column `Graphics` stencil masking for partial wall occlusion, distance shading, and dynamic depth sorting.
+- **Keycard Inventory & HUD Display** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts), [`src/scenes/raycast/RaycastPlayerController.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPlayerController.ts)):
+  - Player inventory tracks collected keycards (`blue`, `green`, `red`).
+  - Upon pickup, the static first frame (`key_card_<color>_1.png`) is added to the top-left HUD `KEYS` badge with a sleek border and audio-visual feedback.
+- **Locked Doors & Security Access** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Parses the `Keys` tile layer to associate doors with specific required keycards.
+  - Interacting (`E` / Action button) with a locked door verifies the player's inventory:
+    - **Keycard present**: Unlocks and opens the door with an `[!] Access Granted` notification.
+    - **Keycard missing**: Blocks door opening with an `[X] Access Denied! Requires <Color> Keycard` notification and red alert flash.
+- **Table Surface Attachment & Zero-Parallax Drift Fix** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Implemented `bindBreakables()` to attach items placed on furniture directly to their host object's world $(X, Y)$ coordinate and table top surface height.
+  - Guarantees 1:1 identical raycast camera projection between the keycard and the table, completely eliminating perspective parallax drift when the player walks or strafes sideways.
+  - Automatically drops resting items to floor debris level if the supporting table is smashed.
+- **Extended Pickup Enum** ([`src/enums/RaycastPickupType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastPickupType.ts), [`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts)):
+  - Added `BLUE_KEYCARD`, `GREEN_KEYCARD`, `RED_KEYCARD`, and `KEYCARD` to `RaycastPickupType`.
+- **Enemy Loot Drop Texture & Ammo Fix** ([`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Fixed argument ordering in `spawnPickup()` and added overload guards so dropped weapons correctly award ammo (+20) and equip the E-11 blaster.
+  - Pre-loads and pre-slices standard pickup textures (`assets/raycast/pickups/e_11_item.png`, `assets/health.png`, `assets/ammo.png`) in `initTextures()`, ensuring dynamically spawned weapon drops render visibly on the floor.
+- **Configurable Pickup Radius** ([`src/configs/RaycastPickupConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastPickupConfigs.ts), [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts)):
+  - Added `pickupRadius` support to `IRaycastPickupConfig`, item instances, and Tiled custom properties.
+  - Increased default keycard pickup radius to `0.9` (up from `0.55`), allowing effortless card collection while standing near furniture or across tables.
+- **Centered Recessed Doors & Configurable Slide Modes (`slide_up` vs `slide_sideways`)** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Re-engineered DDA door raycasting to place doors at $0.5$ tile depth (in the exact middle of the wall depth), with realistic interior doorframe jamb geometry.
+  - Added configurable slide animation modes:
+    - `"slide_up"`: Sci-fi blast door lifts up vertically into the ceiling recess, with multi-hit raycasting allowing full visual transparency to the room behind/underneath the rising panel.
+    - `"slide_sideways"`: Classic sliding door retracts horizontally into the adjacent doorframe.
+  - Configurable globally via `defaultDoorSlide`, in Tiled tileset/tile custom property (`"slide": "up" | "sideways"`), or programmatically via `setDoorSlideMode(x, y, mode)`.
+
+---
+
+## [2026-08-23] - Configurable Enemy AI, 8-Directional Sprites, Combat System & Weapon Drops
+
+### 1. Extensible Enemy Configuration System
+- **Interface & Types** ([`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Created `IRaycastEnemyConfig` interface and `RaycastEnemyType` enum.
+  - Supported configurable parameters:
+    - `maxHealth`, `speed`, `sightRange`, `attackRange`, `minDistance`, `rateOfFire`, `damage`, `accuracy`, `scale`, `spritesheet`.
+    - `dropWeapon`, `dropAmmo`, `dropChance`.
+    - `painSounds`, `deathSounds`, `attackSounds`.
+- **Global Registry** ([`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Configured `stormtrooperConfig` for the Imperial Stormtrooper with `assets/storm_trooper.json` animations, sound effects, and 100% E-11 blaster rifle drop upon death.
+  - Implemented `getRaycastEnemyConfig()` helper for flexible enemy retrieval and easy addition of new enemy types.
+
+---
+
+### 2. Stormtrooper Enemy AI & Combat Engine
+- **Finite State Machine & Navigation** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - **`idle`**: Stands and scans for the player within `sightRange`.
+  - **`chase`**: Pursues the player across the map, navigating around solid walls, closed doors, and thin walls with collision checking. Plays 6-frame walking animations matching direction.
+  - **`attack`**: Halts at configurable `attackRange` (maintaining `minDistance`), faces player, enters shooting pose (`storm_trooper/shooting.png`), plays blaster firing sound, and deals damage to the player based on distance-adjusted accuracy.
+  - **`dead`**: Plays 6-stage death animation sequence (`death_1_1` -> `death_1_6`) and remains as a corpse on the floor.
+- **Line-of-Sight (LOS) Traversal** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Implemented DDA raycasting traversal to check clear visibility between enemies and the player across solid walls and open/closed doors.
+- **Player Hit Detection & Damage** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Integrated ray-cylinder intersection to hit test living enemies along the player's crosshair aiming vector.
+  - Deals weapon damage, triggers pain sound effect (`stormtrooper_pain_1.mp3`), red flash visual effect, and alerts idle enemies.
+  - When neutralized: triggers death sound effect (`stormtrooper_death_1.mp3`), spawns an `E-11` weapon pickup on the ground, and notifies the player via HUD toast.
+
+---
+
+### 3. 8-Directional PixiJS `AnimatedSprite` & Atlas Rotation Support
+- **Directional Sprite Math** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Evaluates relative viewing angle $\Delta = \theta_{\text{toPlayer}} - \theta_{\text{facing}}$ into 8 orientations (`towards`, `towards_left_diagonal`, `left`, `away_left_diagonal`, `away` with horizontal mirroring for right sides).
+- **Native `AnimatedSprite` Integration** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Upgraded enemy rendering to PixiJS `AnimatedSprite`, leveraging Pixi's built-in UV rotation matrices for spritesheets with `"rotated": true` packed frames.
+  - Fixes sideways/corrupted sprite rendering on rotated atlas frames.
+  - Smooth hardware-accelerated 6-frame walk animations, shooting pose, and death sequence.
+
+---
+
+### 4. Proportional Frame Height Scaling (`referenceHeight`)
+- **Config & Rendering** ([`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts)):
+  - Added `referenceHeight` config property (default `67`) — the pixel height of the enemy's standard standing frame.
+  - Sprite width and height are now scaled as `baseHeight × scale × (texDim / referenceHeight)`, so death/falling frames (which shrink from 67px to ~20px) render at their natural proportional size instead of being stretched to full standing height.
+
+---
+
+### 5. Display Layer Ordering Fix
+- **Container Hierarchy** ([`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts)):
+  - Fixed enemy sprites rendering on top of the weapon view and crosshair HUD.
+  - Reordered `addChild` calls so `enemyContainer` is added before `weaponView` and `hud`, ensuring correct front-to-back layering: `bgSprite` → wall columns → `objectContainer` (pickups) → `enemyContainer` → `weaponView` → `hud` → mobile controls.
+
+---
+
+### 6. Per-Column Partial Wall Occlusion
+- **Graphics Mask System** ([`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts), [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Replaced all-or-nothing 3-point occlusion test with per-column `Graphics` mask per enemy.
+  - Each frame, iterates across the sprite's screen columns and checks `transformY < zBuffer[col]`. Consecutive visible columns are coalesced into rectangular mask runs for efficiency.
+  - Enemies now smoothly emerge from behind wall edges column-by-column instead of popping in/out as a whole sprite.
+
+---
+
+### 7. Crisp Pixel-Art Texture Filtering (`SCALE_MODES.NEAREST`)
+- **Nearest-Neighbor Filtering** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts), [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts)):
+  - Configured `SCALE_MODES.NEAREST` on the stormtrooper spritesheet base texture (`baseTexture.scaleMode = SCALE_MODES.NEAREST`), replacing bilinear smoothing with pixel-crisp nearest-neighbor texture sampling.
+  - Enabled `roundPixels = true` on `AnimatedSprite` to avoid subpixel antialiasing blur.
+
+---
+
+### 8. Enemy Death Pain Tint Fix
+- **Pain Timer Countdown on Death** ([`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts)):
+  - Moved `this.painTimer` decrement above the `if (this.state === "dead") return;` early return in `update()`.
+  - Fixes the bug where defeated enemies remained tinted red indefinitely because their pain timers never counted down after transitioning to the `"dead"` state.
+
+---
+
+## [2026-08-23] - Mobile High-DPI Text Sharpness & Configurable Muzzle Flash System
+
+### 1. High-DPI (Retina) Resolution & Mobile Text Sharpness
+- **Canvas Backing Store & Auto-Density** ([`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts)):
+  - Configured `autoDensity: true`, `antialias: true`, and `resolution: Math.max(1, Math.min(window.devicePixelRatio || 1, 3))` on the PixiJS `Application`.
+  - Fixes blurry rendering on mobile phones and Retina screens by matching the canvas backing store to the device's physical pixel grid 1:1 instead of upscaling a low-resolution buffer.
+- **High-Density Vector Text in HUD** ([`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts)):
+  - Replaced downscaled `BitmapText` with high-density vector `Text` for Health (`100 HP`), Weapon name (`UNARMED` / weapon title), Ammo counter (`--` / `XX AMMO`), and Toast notifications.
+  - Set explicit `resolution` matching device pixel density with bold typography, crisp letter spacing, and clean drop shadows.
+- **Sharp Mobile Virtual Buttons** ([`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts)):
+  - Upgraded on-screen touch control labels (`FIRE`, `E`, `<`, `>`, `FS`) to high-resolution vector `Text`.
+- **High-Density BitmapFont Atlas** ([`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)):
+  - Updated `registerFonts()` to bake the bitmap font texture atlas at `resolution: dpr` on a `1024x1024` sheet, ensuring crispness for any legacy bitmap text across all menus and scoreboards.
+- **CSS & Mobile Viewport Enhancements** ([`src/style.css`](file:///D:/Projects/side-scroller/src/style.css), [`webpack.config.ts`](file:///D:/Projects/side-scroller/webpack.config.ts)):
+  - Added `-webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;` to `html, body`.
+  - Configured `HtmlWebpackPlugin` with mobile viewport meta tag (`viewport-fit=cover`, `user-scalable=no`).
+
+---
+
+### 2. Per-Weapon Configurable Muzzle Flash System
+- **Muzzle Flash Interface & Config Options** ([`src/configs/interfaces/IRaycastWeaponConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastWeaponConfig.ts), [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts)):
+  - Added `IMuzzleFlashConfig`, `IMuzzleFlashLayer`, and `IMuzzleFlashSparks` interfaces and attached `muzzleFlash?: IMuzzleFlashConfig` to `IRaycastWeaponConfig`.
+  - Supported parameters:
+    - `enabled`: Toggle flash per weapon.
+    - `offsetX`, `offsetY`: Position offsets relative to weapon sprite.
+    - `followRotation`: Whether flash offset rotates with weapon recoil and tilt (defaults to `true`).
+    - `duration`: Visible duration in frames / ticks.
+    - `scale`: Overall scale multiplier.
+    - `outerColor`, `outerRadius`, `outerAlpha`: Outer plasma glow properties.
+    - `innerColor`, `innerRadius`, `innerAlpha`: Mid-layer blaster flash properties.
+    - `coreColor`, `coreRadius`, `coreAlpha`: Core spark properties.
+    - `layers`: Optional array of custom multi-layer circles (`IMuzzleFlashLayer[]`) for complete visual flexibility.
+    - `sparks`: Optional spark / burst ray configuration (`IMuzzleFlashSparks`).
+    - `texture`: Optional sprite texture for image-based muzzle flashes.
+- **Weapon Configuration Registry** ([`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts)):
+  - Configured explicit `muzzleFlash` offsets and color layers for the E-11 Blaster Rifle.
+- **Dynamic View Rendering** ([`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts)):
+  - Replaced hardcoded constants and manual math in `drawMuzzleFlash()` with dynamic reads from the equipped weapon's `muzzleFlash` config.
+  - Added `flashSprite` support for sprite-based muzzle flash assets.
+
+---
+
+## [2026-08-18] - 2.5D Billboard Objects & Items System
+
+### 1. `Objects` Layer Parsing
+- Added `MapObject` interface (`x`, `y`, `texture`, `distance`) and `private mapObjects: MapObject[]` to [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts).
+- Updated `parseTiledMap()` to dynamically parse the `Objects` layer (supporting tilelayers and object layers) from Tiled maps (e.g. `level2.json`).
+- Automatically places objects at cell centers (`x + 0.5`, `y + 0.5`) with 0-indexed tileset texture IDs (`tileGid - firstgid`).
+
+### 2. Camera-Space 3D Sprite Projection & Custom Scaling
+- Implemented standard camera-space matrix transformation:
+  - $\text{invDet} = \frac{1}{\text{player.planeX} \cdot \text{player.dirY} - \text{player.dirX} \cdot \text{player.planeY}}$
+  - $\text{transformX} = \text{invDet} \cdot (\text{player.dirY} \cdot dx - \text{player.dirX} \cdot dy)$
+  - $\text{transformY} = \text{invDet} \cdot (-\text{player.planeY} \cdot dx + \text{player.planeX} \cdot dy)$
+- **Per-Tile & Per-Object Scaling and Elevation from Tiled**:
+  - Supports `scale`, `scaleX`, `scaleY`, `z` / `elevation`, `vOffset` / `yOffset`, and `anchor` (`"ceiling"`, `"floor"`, `"center"`) defined in Tiled custom properties or object instances.
+- **Automatic Image Size Scaling**:
+  - When no explicit scale is provided, automatically scales sprite height relative to standard 512px wall units.
+- **Natural Aspect Ratio Preservation**:
+  - Calculates horizontal width $\text{spriteWidth} = \text{spriteHeight} \times (\text{texture.width} / \text{texture.height})$.
+
+### 3. Z-Buffer Wall Occlusion & Painter's Algorithm Sorting
+- **1D Depth Buffer (`zBuffer`)**: Stored per-column closest wall distance during raycasting.
+- **Farthest-to-Closest Sorting**: Sorted all visible map objects by distance every frame.
+- **Per-Stripe Occlusion**: For every vertical stripe of the billboard sprite, compared sprite depth $\text{transformY} < \text{zBuffer}[\text{stripe}]$ so objects naturally hide behind walls and thin partitions.
+
+### 4. Zero-Allocation Pooled Sprite Rendering & Depth Shading
+- Pre-allocated `objectSpritePool` inside a dedicated `objectContainer` layered on top of walls.
+- Reuses pre-sliced column textures (`columnTextures`) with zero runtime texture allocations.
+- Applied atmospheric distance dimming and depth tinting matching the scene's lighting model.
+
+---
+
+## [2026-08-18] - Deep CPU Optimization Pass (Flat Arrays, Zero-Allocation Hot Paths)
+
+### Root Cause of FPS Drops (87 FPS in Certain Views)
+When standing in specific positions looking down long corridors or into open rooms, the vast majority of screen pixels are **not** occluded by walls, forcing the CPU to:
+1. Process up to **921,600 floor/ceiling pixels** per frame with per-pixel hash-map lookups and jagged array double-dereferences.
+2. Allocate thousands of **template literal strings** (`\`${mapX},${mapY}\``) per frame inside the DDA raycasting loop for door state lookups, causing GC pressure.
+3. Perform **string comparison** tile type checks (`=== "door"`) in the hottest inner loops.
+
+### Optimizations Implemented:
+1. **Flat Typed Array Maps** (`Int32Array`):
+   - Replaced jagged `number[][]` maps (`this.map`, `floorMap`, `ceilingMap`) with flat `Int32Array` (`mapFlat`, `floorMapFlat`, `ceilingMapFlat`) using `y * mapWidth + x` indexing.
+   - Eliminates double pointer dereference and improves CPU cache locality for sequential access.
+2. **Numeric Tile Type Flags** (`Uint8Array`):
+   - Replaced `Record<number, string>` tile type lookups (`this.tileTypes[tile]`) with pre-computed `Uint8Array` flags (`TILE_EMPTY=0`, `TILE_WALL=1`, `TILE_DOOR=2`, `TILE_THIN=3`).
+   - Eliminates string hash lookups and string comparisons in the DDA loop and renderScene.
+3. **Flat Door State Array** (`Float64Array`):
+   - Replaced `Record<string, number>` door state lookups (`this.doorStates[\`${x},${y}\`]`) with `Float64Array` indexed by `y * mapWidth + x`.
+   - **Eliminates all template literal string allocations** in the per-ray DDA loop (~thousands per frame).
+4. **Flat Texture Data Array** (`rawTexArray`):
+   - Replaced `Record<number, RawTextureData>` hash-map lookups with a flat `Array` indexed by tileId for O(1) access.
+   - Eliminates object property hash lookups for every floor/ceiling pixel.
+5. **Hoisted Field Accesses in Floor/Ceiling Renderer**:
+   - All `this.*` property accesses hoisted to local variables at function entry.
+   - Pre-computed `invScreenW`, `invMaxDist`, ray direction deltas (`drdx`, `drdy`), and player position as locals.
+   - Reduces property chain lookups from ~921,600/frame to 1/frame.
+6. **Row-Level Early Termination**:
+   - Ceiling rows beyond `MAX_RENDER_DISTANCE` are bulk-filled with sky via `buf.set()`.
+   - Floor rows beyond `MAX_RENDER_DISTANCE` are bulk-filled with fog via `buf.fill()`.
+   - Skips all per-pixel computation for distant rows.
+7. **Global Row-Skip Bounds**:
+   - Computes `globalMinWallTop` and `globalMaxWallBottom` across all columns after wall raycasting.
+   - Enables future row-level skip optimization in floor/ceiling rendering.
+
+---
+
+## [2026-08-14] - Multi-Surface Floor & Ceiling Raycasting System
+
+### 1. Multi-Surface Textured Floor Raycasting
+- **Added `Floor` Layer Parsing**:
+  - Added `private floorMap: number[][]` to [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts).
+  - Updated `parseTiledMap()` to parse tile IDs from the `Floor` layer in `level2.json` and convert global tile GIDs to 0-indexed tileset IDs (`tileGid - firstgid`).
+- **Scanline Floor Raycaster (`renderFloorAndCeiling`)**:
+  - Implemented perspective floor raycasting for all rows below the horizon ($y = 360 \dots 719$).
+  - For each pixel, computes world coordinates $(floorX, floorY)$, looks up `floorMap[cellY][cellX]`, samples the corresponding tile texture with fractional UV wrapping, and applies distance-based depth dimming.
+
+---
+
+### 2. Multi-Surface Textured Ceiling Raycasting & Sky Fallback
+- **Added `Ceiling` Layer Parsing**:
+  - Added `private ceilingMap: number[][]` to [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts).
+  - Updated `parseTiledMap()` to parse tile IDs from the `Ceiling` layer in `level2.json`.
+- **Scanline Ceiling Raycaster**:
+  - Implemented perspective ceiling raycasting for all rows above the horizon ($y = 0 \dots 359$).
+  - Looks up `ceilingMap[cellY][cellX]` to render room-specific ceiling textures (`ceiling_1.jpg`, `ceiling_2.jpg`, `ceiling_3.jpg`).
+  - If a cell has no ceiling tile (`tileId = -1` or `0`), it seamlessly falls back to the precalculated atmospheric sky gradient (`skyBuffer`).
+
+---
+
+### 3. High-Performance 32-Bit Direct Memory Pixel Sampling
+- **Added `extractTexturePixels()`**:
+  - Converts loaded `pixi.js` `Texture` instances into raw `Uint32Array` buffers (`0xAABBGGRR`) once during `loadLevel()`.
+  - Stored in `this.rawTextureData`, allowing single-cycle pixel lookups during rendering without GPU readbacks or canvas overhead.
+
+---
+
+### 4. Background Render Target & Optimization
+- **Unified Background Target**:
+  - Added an offscreen canvas (`bgCanvas`), 2D context (`bgCtx`), `ImageData` (`bgImageData`), and 32-bit pixel buffer (`bgBuffer32`).
+  - Wrapped in a single `pixi.js` `Texture` and `Sprite` (`bgSprite`) placed at the base of the scene graph.
+- **Removed 2,560 `Graphics.drawRect` Calls Per Frame**:
+  - Eliminated the previous per-column solid sky and floor draw calls, dramatically reducing draw calls and GPU driver overhead.
+
+---
+
+### 5. Asset Pipeline & Map Updates
+- **[`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts)**:
+  - Added `ceiling_1`, `ceiling_2`, and `ceiling_3` to the asset manifest environment bundle.
+- **[`assets/level2.json`](file:///D:/Projects/side-scroller/assets/level2.json)**:
+  - Configured multi-surface `Floor` and `Ceiling` layers with distinct textures for indoor rooms, hallways, and outdoor courtyards.
+- **Dynamic Tileset Parsing**:
+  - Updated `RaycastScene.loadLevel()` to iterate over all tilesets and tiles dynamically, loading all ceiling and floor assets automatically.
+
+---
+
+---
+
+## [2026-08-14] - Performance & Memory Optimizations (Zero-Allocation Pipeline)
+
+### Root Cause of FPS Degradation
+When facing away from close walls and looking into open rooms/corridors, multiple surfaces (doors, thin walls, back walls) are hit per column. Previously:
+1. `new Texture(texture.baseTexture, new Rectangle(...))` was being instantiated up to **3,840 times per frame** inside `renderScene()`. In PixiJS, creating sub-textures without destruction leaks event listeners and internal caches on `baseTexture`, causing memory bloat and severe Garbage Collection (GC) frame drops.
+2. `castRay()` was allocating 1,280 new arrays and thousands of hit object literals per frame.
+3. The background floor/ceiling canvas was computing and uploading 921,600 pixels (1280x720) every frame on CPU.
+
+### Optimizations Implemented:
+1. **Pre-Sliced Column Textures (`columnTextures`)**:
+   - Pre-sliced all textures into 1px width slices once during `loadLevel()`.
+   - `renderScene()` now looks up `sprite.texture = this.columnTextures[ray.wallType][clampedTexX]`.
+   - **0 Texture/Rectangle allocations per frame**.
+2. **Zero-Allocation Ray Hit Pooling (`hitPool`)**:
+   - Pre-allocated reusable `RayHit` object pools for all 1,280 columns.
+   - Replaced dynamic array allocations and `Array.sort` with in-place insertion sort on the pool.
+3. **4x Background Compute Optimization (`640 x 360`)**:
+   - The background floor & ceiling is now rendered to a `640 x 360` buffer (230,400 pixels instead of 921,600) and scaled up seamlessly by GPU hardware filtering on `bgSprite`.
+4. **Fast Bitwise Power-of-Two Sampling**:
+   - Precomputed `isPow2`, `maskX`, and `maskY` for textures to replace slow floating-point modulo `%` with bitwise `&` operations.
+5. **Capped Render Distance**:
+   - Reduced `MAX_RENDER_DISTANCE` from 50 to 30 units (matching the 20x20 map boundaries) to cull unnecessary DDA steps.
+
+---
+
+## [2026-08-14] - Crisp Native 1280x720 Resolution with Wall Occlusion Culling
+
+### Solution to Blurriness & Rendering Overhead:
+1. **Restored Full 1:1 Native Resolution ($1280 \times 720$)**:
+   - Upgraded the background render buffer back to native $1280 \times 720$.
+   - Eliminates all scaling blur, ensuring pixel-perfect sharpness across all textures.
+2. **Span-Based Wall Occlusion Culling**:
+   - During the column raycasting pass, calculated per-column vertical occlusion bounds (`wallTop[x]` and `wallBottom[x]`) corresponding to opaque walls and closed doors.
+   - **Ceiling Culling**: Any ceiling pixel with $y \ge \text{wallTop}[x]$ is occluded by the front wall and completely skipped.
+   - **Floor Culling**: Any floor pixel with $y < \text{wallBottom}[x]$ is occluded by the front wall and completely skipped.
+   - Eliminates redundant texture sampling, perspective math, and memory writes for all occluded background areas behind walls.
+
+---
+
+## [2026-08-14] - Multi-Stage Wall Culling (Frustum, Occlusion, and Viewport)
+
+### Wall Culling Features Added:
+1. **Thin Wall Frustum Culling (`cullThinWalls`)**:
+   - Before firing raycasts for the frame, thin wall endpoints are projected into camera space.
+   - Walls behind the player plane ($ty \le 0$) or outside the horizontal field of view ($|tx/ty| > 1.2$) are culled once per frame.
+   - The 1,280 screen raycasts only test the subset of visible thin walls (`activeThinWalls`).
+2. **Solid Wall Occlusion Culling (Behind Wall Culling)**:
+   - When a DDA grid ray hits a solid opaque wall or closed door, it stores `solidWallDist`.
+   - Any thin walls situated behind the solid wall ($u \ge \text{solidWallDist}$) in that ray's path are culled immediately without computing intersections or sprite allocations.
+3. **Viewport Vertical Culling**:
+   - Wall column slices whose projection is completely outside the screen top/bottom (`drawEnd <= 0` or `drawStart >= screenH`) are skipped and kept hidden.
+
+---
+
+## [2026-08-14] - Mobile Touch Controls (Thumbstick, Swipe Look & Action Buttons)
+
+### Mobile UI Components Created:
+1. **[`VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts)**:
+   - Analog virtual thumbstick with base boundary and draggable knob.
+   - Outputs normalized 2D movement vector (`x`, `y` from `-1` to `+1`) for walking and strafing.
+2. **[`VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts)**:
+   - Multi-touch responsive button component supporting press holding (`isPressed`) and tap events.
+3. **[`TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts)**:
+   - Full-height touch surface covering the right half of the screen for fluid swipe-to-look camera rotation.
+4. **[`MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts)**:
+   - Composite overlay container housing:
+     - **Left Thumbstick**: Forward/Backward and Strafe Left/Right movement.
+     - **Right Swipe Area**: Fluid camera rotation by dragging anywhere on the right screen half.
+     - **`<` & `>` Buttons**: Quick turn left / turn right buttons for fine-tuning orientation.
+     - **`[E]` Action Button**: Tap to open/close doors.
+
+---
+
+## [2026-08-14] - Android Fullscreen & Dedicated UI Button
+
+### Mobile Fullscreen & Orientation Fixes:
+1. **Dedicated Fullscreen Button (`[FS]`)**:
+   - Added a visible `[FS]` touch button to the top-right corner of [`MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts).
+   - Directly toggles fullscreen using the browser's User Activation token upon tap.
+2. **Direct First-Touch Activation**:
+   - Switched from `touchstart` to `touchend` and `click` on the canvas/document in [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts) to satisfy Chromium's transient user activation policy on Android Chrome and Brave.
+3. **Cross-Browser Fullscreen Helper (`toggleFullscreen`)**:
+   - Added `toggleFullscreen()` in [`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts) supporting `document.documentElement`, `document.body`, and vendor-prefixed APIs.
+4. **Pointer Lock Desktop Separation**:
+   - Prevented mobile touch events from erroneously trying to request desktop pointer locks.
+
+---
+
+## File Modification Summary
+
+| File | Changes Made |
+| :--- | :--- |
+| [`src/enums/RaycastEnemyType.ts`](file:///D:/Projects/side-scroller/src/enums/RaycastEnemyType.ts) | Created `RaycastEnemyType` enum. |
+| [`src/configs/interfaces/IRaycastEnemyConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastEnemyConfig.ts) | Created `IRaycastEnemyConfig` interface with full combat, AI, audio, and loot drop options. |
+| [`src/configs/RaycastEnemyConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastEnemyConfigs.ts) | Created `stormtrooperConfig` and global `raycastEnemyConfigs` registry. |
+| [`src/scenes/raycast/RaycastEnemy.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemy.ts) | Created `RaycastEnemy` entity with 8-direction sprite calculation, state machine, and death animation. |
+| [`src/scenes/raycast/RaycastEnemyManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastEnemyManager.ts) | Created `RaycastEnemyManager` for spritesheet pre-slicing, LOS checks, hit testing, AI updates, and loot spawning. |
+| [`src/scenes/raycast/RaycastPickupManager.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastPickupManager.ts) | Added `spawnPickup()` method for runtime item and weapon drops. |
+| [`src/scenes/RaycastScene.ts`](file:///D:/Projects/side-scroller/src/scenes/RaycastScene.ts) | Integrated enemy manager into raycast loop, player hit detection, and billboard rendering pipeline. |
+| [`src/configs/GameConfig.ts`](file:///D:/Projects/side-scroller/src/configs/GameConfig.ts) | Added `stormtrooper_pain_1`, `stormtrooper_death_1`, and `storm_trooper` spritesheet to manifest. |
+| [`src/scenes/raycast/types.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/types.ts) | Exported enemy types and extended `MapObject` with custom textures, slices, tint, and flipX. |
+| [`src/index.ts`](file:///D:/Projects/side-scroller/src/index.ts) | Added `autoDensity`, `antialias`, and `resolution: devicePixelRatio` to Pixi `Application`. |
+| [`src/scenes/raycast/RaycastHUD.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastHUD.ts) | Migrated HUD labels to high-resolution vector `Text` with device pixel density and crisp styling. |
+| [`src/ui/VirtualButton.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualButton.ts) | Migrated touch button labels to high-resolution vector `Text`. |
+| [`src/style.css`](file:///D:/Projects/side-scroller/src/style.css) | Added font-smoothing rules and full-viewport touch styling. |
+| [`webpack.config.ts`](file:///D:/Projects/side-scroller/webpack.config.ts) | Added viewport metadata to `HtmlWebpackPlugin`. |
+| [`src/configs/interfaces/IRaycastWeaponConfig.ts`](file:///D:/Projects/side-scroller/src/configs/interfaces/IRaycastWeaponConfig.ts) | Added `IMuzzleFlashConfig`, `IMuzzleFlashLayer`, and `IMuzzleFlashSparks` interfaces. |
+| [`src/configs/RaycastWeaponConfigs.ts`](file:///D:/Projects/side-scroller/src/configs/RaycastWeaponConfigs.ts) | Added explicit `muzzleFlash` configuration to `e11Config`. |
+| [`src/scenes/raycast/RaycastWeaponView.ts`](file:///D:/Projects/side-scroller/src/scenes/raycast/RaycastWeaponView.ts) | Made muzzle flash offsets, colors, layers, durations, and sprite textures dynamic from weapon config. |
+| [`src/ui/MobileControls.ts`](file:///D:/Projects/side-scroller/src/ui/MobileControls.ts) | Added dedicated `[FS]` button for reliable mobile fullscreen triggering. |
+| [`src/Utils.ts`](file:///D:/Projects/side-scroller/src/Utils.ts) | Implemented cross-browser `toggleFullscreen()` utility. |
+| [`src/ui/VirtualJoystick.ts`](file:///D:/Projects/side-scroller/src/ui/VirtualJoystick.ts) | Created touch virtual thumbstick component with clamped knob motion. |
+| [`src/ui/TouchLookArea.ts`](file:///D:/Projects/side-scroller/src/ui/TouchLookArea.ts) | Created right-side touch look swipe area for camera rotation. |
+| [`assets/level2.json`](file:///D:/Projects/side-scroller/assets/level2.json) | Configured `Floor`, `Ceiling`, and `Enemies` tile layers. |
+| [`RAYCAST_ENGINE.md`](file:///D:/Projects/side-scroller/RAYCAST_ENGINE.md) | Comprehensive system and architecture documentation. |
+| [`CHANGELOG.md`](file:///D:/Projects/side-scroller/CHANGELOG.md) | Log of all recent changes and implementation details. |

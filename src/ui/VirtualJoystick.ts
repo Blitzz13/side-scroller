@@ -1,0 +1,134 @@
+import { Container, Graphics, FederatedPointerEvent } from "pixi.js";
+import { IDisposable } from "../characters/interfaces/IDisposable";
+
+export interface JoystickVector {
+  x: number;
+  y: number;
+}
+
+export class VirtualJoystick extends Container implements IDisposable {
+  private baseGraphic: Graphics;
+  private knobGraphic: Graphics;
+  private baseRadius: number;
+  private knobRadius: number;
+  private activePointerId: number | null = null;
+  private _vector: JoystickVector = { x: 0, y: 0 };
+
+  constructor(baseRadius: number = 65, knobRadius: number = 30) {
+    super();
+
+    this.baseRadius = baseRadius;
+    this.knobRadius = knobRadius;
+
+    // Outer base circle (sci-fi blue theme)
+    this.baseGraphic = new Graphics();
+    this.baseGraphic.beginFill(0x091929, 0.55);
+    this.baseGraphic.lineStyle({ width: 2.5, color: 0x00e5ff, alpha: 0.75 });
+    this.baseGraphic.drawCircle(0, 0, this.baseRadius);
+    this.baseGraphic.endFill();
+
+    // Directional cross markers
+    this.baseGraphic.lineStyle({ width: 2, color: 0x00e5ff, alpha: 0.35 });
+    this.baseGraphic.moveTo(0, -this.baseRadius + 10);
+    this.baseGraphic.lineTo(0, this.baseRadius - 10);
+    this.baseGraphic.moveTo(-this.baseRadius + 10, 0);
+    this.baseGraphic.lineTo(this.baseRadius - 10, 0);
+
+    // Inner knob circle
+    this.knobGraphic = new Graphics();
+    this.knobGraphic.beginFill(0x00e5ff, 0.55);
+    this.knobGraphic.lineStyle({ width: 2, color: 0x7be5ff, alpha: 0.95 });
+    this.knobGraphic.drawCircle(0, 0, this.knobRadius);
+    this.knobGraphic.endFill();
+
+    this.addChild(this.baseGraphic);
+    this.addChild(this.knobGraphic);
+
+    this.eventMode = "static";
+    this.cursor = "pointer";
+
+    this.on("pointerdown", this.onPointerDown, this);
+    this.on("globalpointermove", this.onPointerMove, this);
+    this.on("pointerup", this.onPointerUp, this);
+    this.on("pointerupoutside", this.onPointerUp, this);
+    this.on("pointercancel", this.onPointerUp, this);
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("pointerup", this.onWindowPointerEnd);
+      window.addEventListener("pointercancel", this.onWindowPointerEnd);
+      window.addEventListener("blur", this.onWindowBlur);
+    }
+  }
+
+  public get vector(): JoystickVector {
+    return this._vector;
+  }
+
+  private resetJoystick(): void {
+    this.activePointerId = null;
+    this.knobGraphic.position.set(0, 0);
+    this._vector.x = 0;
+    this._vector.y = 0;
+  }
+
+  private onWindowPointerEnd = (e: PointerEvent): void => {
+    if (this.activePointerId === e.pointerId) {
+      this.resetJoystick();
+    }
+  };
+
+  private onWindowBlur = (): void => {
+    if (this.activePointerId !== null) {
+      this.resetJoystick();
+    }
+  };
+
+  private onPointerDown(e: FederatedPointerEvent): void {
+    if (this.activePointerId !== null) return;
+    if (e && typeof e.stopPropagation === "function") {
+      e.stopPropagation();
+    }
+    this.activePointerId = e.pointerId;
+    this.updatePosition(e);
+  }
+
+  private onPointerMove(e: FederatedPointerEvent): void {
+    if (this.activePointerId !== e.pointerId) return;
+    this.updatePosition(e);
+  }
+
+  private onPointerUp(e: FederatedPointerEvent): void {
+    if (this.activePointerId === e.pointerId) {
+      this.resetJoystick();
+    }
+  }
+
+  private updatePosition(e: FederatedPointerEvent): void {
+    const local = this.toLocal(e.global);
+    const dist = Math.hypot(local.x, local.y);
+    const angle = Math.atan2(local.y, local.x);
+
+    const clampedDist = Math.min(dist, this.baseRadius);
+    const knobX = Math.cos(angle) * clampedDist;
+    const knobY = Math.sin(angle) * clampedDist;
+
+    this.knobGraphic.position.set(knobX, knobY);
+
+    this._vector.x = knobX / this.baseRadius;
+    this._vector.y = knobY / this.baseRadius;
+  }
+
+  public dispose(): void {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pointerup", this.onWindowPointerEnd);
+      window.removeEventListener("pointercancel", this.onWindowPointerEnd);
+      window.removeEventListener("blur", this.onWindowBlur);
+    }
+    this.off("pointerdown", this.onPointerDown, this);
+    this.off("globalpointermove", this.onPointerMove, this);
+    this.off("pointerup", this.onPointerUp, this);
+    this.off("pointerupoutside", this.onPointerUp, this);
+    this.off("pointercancel", this.onPointerUp, this);
+    this.destroy({ children: true });
+  }
+}

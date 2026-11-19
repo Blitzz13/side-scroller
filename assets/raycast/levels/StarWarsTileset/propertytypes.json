@@ -1,0 +1,630 @@
+[
+    {
+        "id": 10,
+        "name": "Align",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "-",
+            "left",
+            "right",
+            "top",
+            "bottom",
+            "center"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "id": 4,
+        "name": "Anchor",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "ceiling",
+            "floor",
+            "center",
+            "-"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 8,
+        "members": [
+            {
+                "name": "align",
+                "propertyType": "Align",
+                "type": "string",
+                "value": "-"
+            },
+            {
+                "name": "isEnabling",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "linkIds",
+                "type": "list",
+                "value": [
+                ]
+            },
+            {
+                "name": "objective",
+                "propertyType": "Objective",
+                "type": "class",
+                "value": {
+                }
+            },
+            {
+                "name": "offset",
+                "type": "float",
+                "value": 0
+            },
+            {
+                "name": "rotation",
+                "propertyType": "FlatWallRotation",
+                "type": "string",
+                "value": "-"
+            },
+            {
+                "name": "wall",
+                "propertyType": "Tile",
+                "type": "class",
+                "value": {
+                    "open": "-",
+                    "tileType": "thickWall"
+                }
+            }
+        ],
+        "name": "DestructableWall",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 12,
+        "name": "DoorOpen",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "Up",
+            "Left",
+            "Right",
+            "-"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 15,
+        "members": [
+            {
+                "name": "itemDrop",
+                "propertyType": "PickupItem",
+                "type": "class",
+                "value": {
+                    "amount": 0,
+                    "type": "-"
+                }
+            },
+            {
+                "name": "triggerAlert",
+                "type": "bool",
+                "value": false
+            }
+        ],
+        "name": "Enemy",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 9,
+        "name": "FlatWallRotation",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "-",
+            "vertical",
+            "horizontal"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 19,
+        "members": [
+            {
+                "name": "action",
+                "propertyType": "LinkAction",
+                "type": "string",
+                "value": "-"
+            },
+            {
+                "name": "linkIds",
+                "type": "list",
+                "value": [
+                ]
+            }
+        ],
+        "name": "Linkable",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 21,
+        "name": "LinkAction",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "-",
+            "enable",
+            "disable"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 3,
+        "members": [
+            {
+                "name": "anchor",
+                "propertyType": "Anchor",
+                "type": "string",
+                "value": "ceiling"
+            },
+            {
+                "name": "isDestructible",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "linkIds",
+                "type": "list",
+                "value": [
+                ]
+            },
+            {
+                "name": "scale",
+                "type": "float",
+                "value": 1
+            },
+            {
+                "name": "vOffset",
+                "type": "float",
+                "value": 0
+            }
+        ],
+        "name": "Object",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 18,
+        "members": [
+            {
+                "name": "displayMessage",
+                "type": "string",
+                "value": ""
+            },
+            {
+                "name": "isObjective",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "objectiveKey",
+                "type": "string",
+                "value": ""
+            }
+        ],
+        "name": "Objective",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 1,
+        "members": [
+            {
+                "name": "amount",
+                "type": "int",
+                "value": 0
+            },
+            {
+                "name": "itemId",
+                "type": "string",
+                "value": ""
+            },
+            {
+                "name": "object",
+                "propertyType": "Object",
+                "type": "class",
+                "value": {
+                    "anchor": "floor"
+                }
+            },
+            {
+                "name": "sprite",
+                "type": "string",
+                "value": ""
+            },
+            {
+                "name": "type",
+                "propertyType": "PickupType",
+                "type": "string",
+                "value": "-"
+            },
+            {
+                "name": "weaponType",
+                "propertyType": "Weapons",
+                "type": "string",
+                "value": "-"
+            }
+        ],
+        "name": "PickupItem",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 2,
+        "name": "PickupType",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "weapon",
+            "ammo",
+            "health",
+            "shield",
+            "-",
+            "blue_keycard",
+            "red_keycard",
+            "green_keycard"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 24,
+        "members": [
+            {
+                "name": "action",
+                "propertyType": "SoundAction",
+                "type": "string",
+                "value": "stop"
+            },
+            {
+                "name": "delay",
+                "type": "float",
+                "value": 0
+            },
+            {
+                "name": "overrideBackgroundMusic",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "shouldLoop",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "soundName",
+                "type": "string",
+                "value": ""
+            }
+        ],
+        "name": "Sound",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 23,
+        "name": "SoundAction",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "stop",
+            "start"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 13,
+        "members": [
+            {
+                "name": "align",
+                "propertyType": "Align",
+                "type": "string",
+                "value": "-"
+            },
+            {
+                "name": "open",
+                "propertyType": "DoorOpen",
+                "type": "string",
+                "value": "Up"
+            },
+            {
+                "name": "tileType",
+                "propertyType": "TileType",
+                "type": "string",
+                "value": "thinWall"
+            }
+        ],
+        "name": "Tile",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 14,
+        "name": "TileType",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "door",
+            "thinWall",
+            "thickWall",
+            "ceiling",
+            "floor",
+            "stairs"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ff00ffff",
+        "drawFill": true,
+        "id": 16,
+        "members": [
+            {
+                "name": "link",
+                "propertyType": "Linkable",
+                "type": "class",
+                "value": {
+                }
+            },
+            {
+                "name": "loopSoundOnTrigger",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "objective",
+                "propertyType": "Objective",
+                "type": "class",
+                "value": {
+                }
+            },
+            {
+                "name": "shouldBePressed",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "sound",
+                "propertyType": "Sound",
+                "type": "class",
+                "value": {
+                }
+            },
+            {
+                "name": "trigerEvent",
+                "propertyType": "TrigerEnum",
+                "type": "string",
+                "value": "onEnter"
+            },
+            {
+                "name": "triggerAlarm",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "voicelinesOnTrigger",
+                "type": "list",
+                "value": [
+                    {
+                        "type": "string",
+                        "value": ""
+                    }
+                ]
+            },
+            {
+                "name": "wait",
+                "propertyType": "Wait",
+                "type": "class",
+                "value": {
+                    "shouldWait": false,
+                    "waitTimeInSeconds": 0
+                }
+            }
+        ],
+        "name": "Triger",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 17,
+        "name": "TrigerEnum",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "onEnter",
+            "onExit"
+        ],
+        "valuesAsFlags": false
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 22,
+        "members": [
+            {
+                "name": "shouldWait",
+                "type": "bool",
+                "value": false
+            },
+            {
+                "name": "waitTimeInSeconds",
+                "type": "float",
+                "value": 0
+            }
+        ],
+        "name": "Wait",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "color": "#ffa0a0a4",
+        "drawFill": true,
+        "id": 5,
+        "members": [
+            {
+                "name": "pickup",
+                "propertyType": "PickupItem",
+                "type": "class",
+                "value": {
+                    "type": "weapon"
+                }
+            },
+            {
+                "name": "type",
+                "propertyType": "Weapons",
+                "type": "string",
+                "value": "-"
+            }
+        ],
+        "name": "Weapon",
+        "type": "class",
+        "useAs": [
+            "property",
+            "map",
+            "layer",
+            "object",
+            "tile",
+            "tileset",
+            "wangcolor",
+            "wangset",
+            "project"
+        ]
+    },
+    {
+        "id": 7,
+        "name": "Weapons",
+        "storageType": "string",
+        "type": "enum",
+        "values": [
+            "e_11",
+            "-",
+            "thermal_detonator",
+            "dh_17"
+        ],
+        "valuesAsFlags": false
+    }
+]

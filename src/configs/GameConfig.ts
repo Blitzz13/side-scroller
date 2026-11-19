@@ -1,19 +1,43 @@
-import { AssetsManifest, BitmapFont, RoundedRectangle } from "pixi.js";
+import { AssetsManifest, BitmapFont, RoundedRectangle, SCALE_MODES } from "pixi.js";
+import { DoorOpen, DoorSlideMode } from "../scenes/raycast/types";
+import { enemyVoicelineConfig, stormtrooperVoicelineConfig } from "./EnemyVoicelineConfig";
+
+export { DoorOpen, DoorSlideMode, enemyVoicelineConfig, stormtrooperVoicelineConfig };
 
 export const gameConfig = {
   width: 1280,
-  height: 720
-}
+  height: 720,
+  defaultDoorSlide: DoorOpen.UP,
+  enemyVoicelines: enemyVoicelineConfig,
+  stormtrooperVoicelines: enemyVoicelineConfig,
+  musicVolume: 0.45,
+};
 
 export function registerFonts(): void {
-  BitmapFont.from("arial32", {
-    fontFamily: "Arial",
-    fontSize: 32,
-    lineHeight: 33,
-    fill: 0xffffff,
-  },{
-    chars: BitmapFont.ASCII,
-  });
+  const dpr = Math.max(2, Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 3));
+  const font = BitmapFont.from(
+    "arial32",
+    {
+      fontFamily: "Segoe UI, Arial, sans-serif",
+      fontSize: 32,
+      lineHeight: 34,
+      fill: 0xffffff,
+    },
+    {
+      chars: BitmapFont.ASCII,
+      resolution: dpr * 2,
+      textureWidth: 1024,
+      textureHeight: 1024,
+    }
+  );
+  if (font && font.pageTextures) {
+    for (const key of Object.keys(font.pageTextures)) {
+      const page = font.pageTextures[key];
+      if (page && page.baseTexture) {
+        page.baseTexture.scaleMode = SCALE_MODES.NEAREST;
+      }
+    }
+  }
 }
 
 export const manifest: AssetsManifest = {
@@ -26,8 +50,40 @@ export const manifest: AssetsManifest = {
             src: "./assets/sounds/menu_theme.mp3"
           },
           {
+            alias: "prologue_dialog",
+            src: "./assets/cutscenes/cutscene1/prologue_dialog.mp3"
+          },
+          {
+            alias: "intro_theme",
+            src: "./assets/cutscenes/intro/intro_theme.mp3"
+          },
+          {
+            alias: "base_alarm",
+            src: "./assets/sounds/base_alarm.mp3"
+          },
+          {
             alias: "repair_sound",
             src: "./assets/sounds/repair_sound.mp3"
+          },
+          {
+            alias: "use_bacta",
+            src: "./assets/raycast/sfx/use_bacta.wav"
+          },
+          {
+            alias: "pickup_item",
+            src: "./assets/raycast/sfx/pickup_item.mp3"
+          },
+          {
+            alias: "pickup_shield",
+            src: "./assets/raycast/sfx/pickup_shield.mp3"
+          },
+          {
+            alias: "elevator",
+            src: "./assets/raycast/sfx/elevator.wav"
+          },
+          {
+            alias: "button_click",
+            src: "./assets/sounds/button_click.mp3"
           },
           {
             alias: "reload_sound",
@@ -54,6 +110,14 @@ export const manifest: AssetsManifest = {
             src: "./assets/sounds/end_theme.mp3"
           },
           {
+            alias: "end_level",
+            src: "./assets/sounds/end_level.mp3"
+          },
+          {
+            alias: "end_credits_theme",
+            src: "./assets/sounds/end_credits_theme.mp3"
+          },
+          {
             alias: "blaster_1",
             src: "./assets/sounds/blaster_1.mp3"
           },
@@ -69,6 +133,210 @@ export const manifest: AssetsManifest = {
             alias: "blaster_4",
             src: "./assets/sounds/blaster_4.mp3"
           },
+          {
+            alias: "e_11_blaster",
+            src: "./assets/sounds/e_11_blaster.mp3"
+          },
+          {
+            alias: "dh_17_blaster",
+            src: "./assets/sounds/dh_17_blaster.mp3"
+          },
+          {
+            alias: "door_1",
+            src: "./assets/sounds/door_1.mp3"
+          },
+          {
+            alias: "calm_loop",
+            src: "./assets/sounds/calm_loop.mp3"
+          },
+          {
+            alias: "step_1",
+            src: "./assets/raycast/sfx/step_1.mp3"
+          },
+          {
+            alias: "step_2",
+            src: "./assets/raycast/sfx/step_2.mp3"
+          },
+          {
+            alias: "wet_step_1",
+            src: "./assets/raycast/sfx/wet_step_1.mp3"
+          },
+          {
+            alias: "wet_step_2",
+            src: "./assets/raycast/sfx/wet_step_2.mp3"
+          },
+          {
+            alias: "stormtrooper_pain_1",
+            src: "./assets/raycast/sfx/storm_trooper/stormtrooper_pain_1.mp3"
+          },
+          {
+            alias: "stormtrooper_death_1",
+            src: "./assets/raycast/sfx/storm_trooper/stormtrooper_death_1.mp3"
+          },
+          {
+            alias: "stormtrooper_grenade",
+            src: "./assets/raycast/sfx/storm_trooper/grenade_grenade.mp3"
+          },
+          {
+            alias: "stormtrooper_hear_something",
+            src: "./assets/raycast/sfx/storm_trooper/i_hear_something.mp3"
+          },
+          {
+            alias: "stormtrooper_rebel_scum",
+            src: "./assets/raycast/sfx/storm_trooper/rebel_scum.mp3"
+          },
+          {
+            alias: "stormtrooper_there_he_is",
+            src: "./assets/raycast/sfx/storm_trooper/there_he_is.mp3"
+          },
+          {
+            alias: "probe_droid_hovering",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_hovering.mp3"
+          },
+          {
+            alias: "probe_droid_shot_1",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_1.mp3"
+          },
+          {
+            alias: "probe_droid_shot_2",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_2.mp3"
+          },
+          {
+            alias: "probe_droid_shot_3",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_3.mp3"
+          },
+          {
+            alias: "probe_droid_shot_4",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_4.mp3"
+          },
+          {
+            alias: "probe_droid_shot_5",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_5.mp3"
+          },
+          {
+            alias: "probe_droid_shot_6",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_shot_6.mp3"
+          },
+          {
+            alias: "probe_droid_voice_1",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_1.mp3"
+          },
+          {
+            alias: "probe_droid_voice_2",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_2.mp3"
+          },
+          {
+            alias: "probe_droid_voice_3",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_3.mp3"
+          },
+          {
+            alias: "probe_droid_voice_4",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_4.mp3"
+          },
+          {
+            alias: "probe_droid_voice_5",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_5.mp3"
+          },
+          {
+            alias: "probe_droid_voice_6",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_6.mp3"
+          },
+          {
+            alias: "probe_droid_voice_7",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_7.mp3"
+          },
+          {
+            alias: "probe_droid_voice_8",
+            src: "./assets/raycast/sfx/viper_droid/probe_droid_voice_8.mp3"
+          },
+          {
+            alias: "imperial_officer_death",
+            src: "./assets/raycast/sfx/imperial_officer_commando/imperial_officer_death.mp3"
+          },
+          {
+            alias: "officer_commando_damage",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_damage.mp3"
+          },
+          {
+            alias: "stop_right_there_scum",
+            src: "./assets/raycast/sfx/imperial_officer_commando/stop_right_there_scum.mp3"
+          },
+          {
+            alias: "troopers_blast_him",
+            src: "./assets/raycast/sfx/imperial_officer_commando/troopers_blast_him.mp3"
+          },
+          {
+            alias: "office_commando_stop_now",
+            src: "./assets/raycast/sfx/imperial_officer_commando/office_commando_stop_now.mp3"
+          },
+          {
+            alias: "officer_commando_fall_back",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_fall_back.mp3"
+          },
+          {
+            alias: "officer_commando_he_must_be_here",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_he_must_be_here.mp3"
+          },
+          {
+            alias: "officer_commando_no_use_hiding",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_no_use_hiding.mp3"
+          },
+          {
+            alias: "officer_commando_show_yourself",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_show_yourself.mp3"
+          },
+          {
+            alias: "officer_commando_throw_down_your_weapons",
+            src: "./assets/raycast/sfx/imperial_officer_commando/officer_commando_throw_down_your_weapons.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_damage_1",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/damage_1.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_death",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/death.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_hit_flesh",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/hit_flesh.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_step_1",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/robot_step_1.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_step_2",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/robot_step_2.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_slashing_1",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/slashing_1.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_slashing_2",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/slashing_2.mp3"
+          },
+          {
+            alias: "phase1_dark_trooper_spoted_enemy",
+            src: "./assets/raycast/sfx/phase1_dark_trooper/spoted_enemy.mp3"
+          },
+          {
+            alias: "diagona_coming_out",
+            src: "./assets/raycast/sfx/diagona/coming_out.mp3"
+          },
+          {
+            alias: "diagona_attack",
+            src: "./assets/raycast/sfx/diagona/attack.mp3"
+          },
+          {
+            alias: "diagona_damage_1",
+            src: "./assets/raycast/sfx/diagona/damage_1.mp3"
+          },
+          {
+            alias: "diagona_die",
+            src: "./assets/raycast/sfx/diagona/die.mp3"
+          }
         ]
       },
       {
@@ -81,7 +349,203 @@ export const manifest: AssetsManifest = {
           {
             name: "menu_background",
             src: "./assets/menu_background.png",
-          }
+          },
+          {
+            name: "ship_holodeck",
+            src: "./assets/cutscenes/ship_holodeck.png",
+          },
+          {
+            name: "mon_hologram",
+            src: "./assets/cutscenes/mon_hologram.png",
+          },
+          {
+            name: "imperial_grilled_wall",
+            src: "./assets/raycast/textures/imperial_grilled_wall.jpg",
+          },
+          {
+            name: "basic_imperial_wall",
+            src: "./assets/raycast/textures/basic_imperial_wall.jpg",
+          },
+          {
+            name: "inside_floor",
+            src: "./assets/raycast/textures/inside_floor.jpg",
+          },
+          {
+            name: "metal_door",
+            src: "./assets/raycast/textures/metal_door.jpg",
+          },
+          {
+            name: "fence",
+            src: "./assets/raycast/textures/fence.png",
+          },
+          {
+            name: "floor",
+            src: "./assets/raycast/textures/floor.png",
+          },
+          {
+            name: "ceiling_1",
+            src: "./assets/raycast/textures/ceiling_1.jpg",
+          },
+          {
+            name: "ceiling_2",
+            src: "./assets/raycast/textures/ceiling_2.jpg",
+          },
+          {
+            name: "ceiling_3",
+            src: "./assets/raycast/textures/ceiling_3.jpg",
+          },
+          {
+            name: "computer_panel",
+            src: "./assets/raycast/textures/computer_panel.jpg",
+          },
+          {
+            name: "computer_panel_destroyed",
+            src: "./assets/raycast/textures/computer_panel_destroyed.jpg",
+          },
+          {
+            name: "grilled_wall",
+            src: "./assets/raycast/textures/grilled_wall.jpg",
+          },
+          {
+            name: "grilled_wall_destroyed",
+            src: "./assets/raycast/textures/grilled_wall_destroyed.jpg",
+          },
+          {
+            name: "dirty_water",
+            src: "./assets/raycast/textures/dirty_water.jpg",
+          },
+          {
+            name: "computer_wall",
+            src: "./assets/raycast/textures/computer_wall.png",
+          },
+          {
+            name: "electronic_wall",
+            src: "./assets/raycast/textures/electronic_wall.png",
+          },
+          {
+            name: "lever_off",
+            src: "./assets/raycast/textures/lever_off.png",
+          },
+          {
+            name: "lever_on",
+            src: "./assets/raycast/textures/lever_on.jpg",
+          },
+          {
+            name: "piped_wall",
+            src: "./assets/raycast/textures/piped_wall.png",
+          },
+          {
+            name: "sprite_1_1",
+            src: "./assets/raycast/textures/sprite-1-1.png",
+          },
+          {
+            name: "level1",
+            src: "./assets/raycast/levels/level1.json",
+          },
+          {
+            name: "level2",
+            src: "./assets/raycast/levels/level2.json",
+          },
+          {
+            name: "level3",
+            src: "./assets/raycast/levels/level3.json",
+          },
+          {
+            name: "level1_objectives",
+            src: "./assets/raycast/levels/objectives/level1.json",
+          },
+          {
+            name: "level2_objectives",
+            src: "./assets/raycast/levels/objectives/level2.json",
+          },
+          {
+            name: "test_level",
+            src: "./assets/raycast/levels/test_level.json",
+          },
+          {
+            name: "sewer_door",
+            src: "./assets/raycast/textures/sewer_door.jpg",
+          },
+          {
+            name: "sewer_wall",
+            src: "./assets/raycast/textures/sewer_wall.jpg",
+          },
+          {
+            name: "sewer_ceiling",
+            src: "./assets/raycast/textures/sewer_ceiling.jpg",
+          },
+          {
+            name: "worn_piped_wall",
+            src: "./assets/raycast/textures/worn_piped_wall.jpg",
+          },
+          {
+            name: "worn_sewer_wall",
+            src: "./assets/raycast/textures/worn_sewer_wall.jpg",
+          },
+          {
+            name: "worn_grilled_wall",
+            src: "./assets/raycast/textures/worn_grilled_wall.jpg",
+          },
+          {
+            name: "worn_sewer_ceiling",
+            src: "./assets/raycast/textures/worn_sewer_ceiling.jpg",
+          },
+          {
+            name: "worn_stairs_up",
+            src: "./assets/raycast/textures/worn_stairs_up.jpg",
+          },
+          {
+            name: "worn_stairs_down",
+            src: "./assets/raycast/textures/worn_stairs_down.jpg",
+          },
+          {
+            name: "stairs_up",
+            src: "./assets/raycast/textures/stairs_up.jpg",
+          },
+          {
+            name: "stairs_down",
+            src: "./assets/raycast/textures/stairs_down.png",
+          },
+          {
+            name: "sewer_waterfall",
+            src: "./assets/raycast/textures/sewer_waterfall.json",
+          },
+          {
+            name: "imperial_base_background",
+            src: "./assets/common/imperial_base_background.jpg",
+          },
+          {
+            name: "map_icon",
+            src: "./assets/common/map_icon.png",
+          },
+          {
+            name: "change_icon",
+            src: "./assets/common/change.png",
+          },
+          {
+            name: "fullscreen_icon",
+            src: "./assets/common/fullscreen.png",
+          },
+          {
+            name: "exit_fullscreen_icon",
+            src: "./assets/common/exit_fullscreen.png",
+          },
+          {
+            name: "interact_icon",
+            src: "./assets/common/interact.png",
+          },
+          {
+            name: "run_icon",
+            src: "./assets/common/run.png",
+          },
+          {
+            name: "fire_icon",
+            src: "./assets/common/fire.png",
+          },
+          {
+            name: "alt_fire_icon",
+            src: "./assets/common/alt_fire.png",
+          },
         ],
       },
       {
@@ -97,7 +561,7 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "laser",
-            src: "./assets/laser.png",
+            src: "./assets/common/laser.png",
           },
           {
             name: "at_st",
@@ -110,6 +574,34 @@ export const manifest: AssetsManifest = {
           {
             name: "viper_droid",
             src: "./assets/viper_droid.json",
+          },
+          {
+            name: "storm_trooper",
+            src: "./assets/raycast/enemies/storm_trooper.json",
+          },
+          {
+            name: "viper_droid_raycast",
+            src: "./assets/raycast/enemies/viper_droid.json",
+          },
+          {
+            name: "imperial_officer",
+            src: "./assets/raycast/enemies/implerial_officer.json",
+          },
+          {
+            name: "imperial_commando",
+            src: "./assets/raycast/enemies/imperial_commando.json",
+          },
+          {
+            name: "phase1_dark_trooper",
+            src: "./assets/raycast/enemies/phase1_dark_trooper.json",
+          },
+          {
+            name: "diagona",
+            src: "./assets/raycast/enemies/diagona.json",
+          },
+          {
+            name: "prisoner",
+            src: "./assets/raycast/enemies/prisoner.json",
           }
         ],
       },
@@ -122,7 +614,7 @@ export const manifest: AssetsManifest = {
           },
           {
             name: "green_ball",
-            src: "./assets/green_ball.png",
+            src: "./assets/common/green_ball.png",
           },
           {
             name: "ammo",
@@ -133,8 +625,84 @@ export const manifest: AssetsManifest = {
             src: "./assets/health.png",
           },
           {
+            name: "health_pickup",
+            src: "./assets/raycast/pickups/health.png",
+          },
+          {
+            name: "e_11_item",
+            src: "./assets/raycast/pickups/e_11_item.png",
+          },
+          {
+            name: "e_11_equiped",
+            src: "./assets/raycast/weapons/e_11_equiped.png",
+          },
+          {
+            name: "chair",
+            src: "./assets/raycast/decorations/chair.png",
+          },
+          {
+            name: "chair_broken",
+            src: "./assets/raycast/decorations/chair_broken.png",
+          },
+          {
+            name: "table",
+            src: "./assets/raycast/decorations/table.png",
+          },
+          {
+            name: "table_broken",
+            src: "./assets/raycast/decorations/table_broken.png",
+          },
+          {
+            name: "power_cell",
+            src: "./assets/raycast/decorations/power_cell.png",
+          },
+          {
+            name: "power_cell_broken",
+            src: "./assets/raycast/decorations/power_cell_broken.png",
+          },
+          {
+            name: "isb_holotable",
+            src: "./assets/raycast/decorations/isb_holotable.json",
+          },
+          {
+            name: "at_st_decoration",
+            src: "./assets/raycast/decorations/at_st.json",
+          },
+          {
+            name: "tie_fighter",
+            src: "./assets/raycast/decorations/tie_fighter.json",
+          },
+          {
+            name: "tie_bomber",
+            src: "./assets/raycast/decorations/tie_bomber.json",
+          },
+          {
+            name: "keycards",
+            src: "./assets/raycast/pickups/keycards.json",
+          },
+          {
             name: "explosion",
-            src: "./assets/explosion.json"
+            src: "./assets/common/explosion.json"
+          },
+          {
+            name: "thermal_detonator",
+            src: "./assets/raycast/weapons/thermal_detonator.png"
+          },
+          {
+            name: "thermal_detonator_belt",
+            src: "./assets/raycast/pickups/thermal_detonator_belt.png"
+          },
+          {
+            name: "thermal_detonator_pickup",
+            src: "./assets/raycast/pickups/thermal_detonator_pickup.png"
+          },
+          {
+            name: "dh_17",
+            src: "./assets/raycast/weapons/dh_17_equiped.png"
+          },
+          {
+            name: "shield_unit",
+            src: "./assets/raycast/pickups/shield_unit.json"
           }
         ],
       },

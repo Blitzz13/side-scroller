@@ -6,7 +6,7 @@ import { gameConfig } from "../configs/GameConfig";
 import { IDisposable } from "./interfaces/IDisposable";
 import { EnemyType } from "../enums/EnemyType";
 import { ISpawnRange } from "../configs/interfaces/ISpawnRange";
-import { sound } from "@pixi/sound";
+import { sound, IMediaInstance } from "@pixi/sound";
 import { getRandomInt, getTextureArrayFromStrings, setTintToSprite } from "../Utils";
 
 export class Enemy extends Container implements IDisposable {
@@ -26,6 +26,7 @@ export class Enemy extends Container implements IDisposable {
     private _type: EnemyType;
     private _health: number;
     private _damageTimeout!: NodeJS.Timeout;
+    private _idleSoundInstance?: IMediaInstance | Promise<IMediaInstance>;
 
     constructor(target: Container, stage: Container, config: IEnemyConfig) {
         super();
@@ -66,6 +67,16 @@ export class Enemy extends Container implements IDisposable {
         if (config.projectile) {
             Ticker.shared.add(this.shoot, this);
         }
+
+        const idleSound = config.soundConfig.idleSound;
+        if (idleSound) {
+            try {
+                this._idleSoundInstance = sound.play(idleSound.src, {
+                    loop: idleSound.loop ?? true,
+                    volume: idleSound.volume ?? 1,
+                });
+            } catch {}
+        }
     }
 
     public get spawnRange(): ISpawnRange {
@@ -101,6 +112,7 @@ export class Enemy extends Container implements IDisposable {
         this._damageTimeout = setTintToSprite(this._sprite, 0xff0000, 200);
 
         if (this._health <= 0) {
+            this.stopIdleSound();
 
             const deathSound = this._config.soundConfig.deathSound;
             sound.play(deathSound.src, {
@@ -137,7 +149,23 @@ export class Enemy extends Container implements IDisposable {
             clearTimeout(this._damageTimeout);
         }
 
+        this.stopIdleSound();
+
         this.destroy({ children: true });
+    }
+
+    private stopIdleSound(): void {
+        if (!this._idleSoundInstance) return;
+        if (this._idleSoundInstance instanceof Promise) {
+            this._idleSoundInstance
+                .then((inst: IMediaInstance) => {
+                    inst?.stop?.();
+                })
+                .catch(() => {});
+        } else {
+            this._idleSoundInstance.stop();
+        }
+        this._idleSoundInstance = undefined;
     }
 
     private move(dt: number): void {

@@ -15,10 +15,11 @@
     "dependencies": {
         "@pixi/sound": "5.2.3",
         "core-js": "^3.34.0",
-        "pixi.js": "^7.4.2"
+        "pixi-stats": "^4.2.0",
+        "pixi.js": "7.4.2"
     },
     "devDependencies": {
-        "@types/node": "^20.10.5",
+        "@types/node": "^20.19.43",
         "browserslist": "^4.22.2",
         "copy-webpack-plugin": "^11.0.0",
         "css-loader": "^6.8.1",
