@@ -1,6 +1,6 @@
 import { AnimatedSprite, MIPMAP_MODES, SCALE_MODES, Spritesheet, Texture } from "pixi.js";
 import { RaycastDirectionalObject } from "./RaycastDirectionalObject";
-import { AStarPathfinder, AStarPathFollower } from "../../plugins/pathfinding";
+import { AStarPathfinder, AStarPathFollower } from "@game/ai-system";
 
 export interface AllyOptions {
   name?: string;

@@ -1,10 +1,10 @@
 import { AnimatedSprite, Graphics, MIPMAP_MODES, SCALE_MODES, Spritesheet, Texture } from "pixi.js";
 import { sound, IMediaInstance } from "@pixi/sound";
-import { IRaycastEnemyConfig } from "../../configs/interfaces/IRaycastEnemyConfig";
-import { RaycastEnemyType } from "../../enums/RaycastEnemyType";
+import { IRaycastEnemyConfig } from "@game/core-types";
+import { RaycastEnemyType } from "@game/core-types";
 import { RaycastDirectionalObject } from "./RaycastDirectionalObject";
 import { IEnemyItemDrop } from "./types";
-import { AStarPathFollower } from "../../plugins/pathfinding";
+import { AStarPathFollower } from "@game/ai-system";
 import { SettingsManager } from "../../managers/SettingsManager";
 
 export type EnemyAIState = "idle" | "chase" | "attack" | "dead";

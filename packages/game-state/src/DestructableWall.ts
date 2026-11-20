@@ -1,4 +1,4 @@
-import { DestructableWallConfig, RaycastBreakable } from "./types";
+import { DestructableWallConfig, RaycastBreakable } from "@game/core-types";
 
 /**
  * Extracts list of ID strings from any format (arrays, Tiled property lists, objects, strings, numbers).

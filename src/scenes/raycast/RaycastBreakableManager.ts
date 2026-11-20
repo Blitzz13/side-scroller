@@ -1,9 +1,9 @@
 import { Assets, MIPMAP_MODES, Rectangle, SCALE_MODES, Texture } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { MapObject, RaycastBreakable, TileMeta } from "./types";
-import { defaultDestructibleWallConfig } from "../../configs/DestructableWallConfig";
-import { forEachTileInLayer } from "./tiledUtils";
-import { extractLinkIds } from "./DestructableWall";
+import { defaultDestructibleWallConfig } from "@game/core-types";
+import { forEachTileInLayer } from "@game/map-builder";
+import { extractLinkIds } from "@game/game-state";
 
 export class RaycastBreakableManager {
   private breakables: RaycastBreakable[] = [];

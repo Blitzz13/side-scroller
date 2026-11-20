@@ -1,4 +1,4 @@
-import { ISubtitleCue, ISubtitleFileData } from "./SubtitleTypes";
+import { ISubtitleCue, ISubtitleFileData } from "@game/core-types";
 
 /**
  * Loads per-level `dialog.json` files and turns a dialogue (keyed by audio name)

@@ -1,5 +1,5 @@
 import { DestructableWall } from "./DestructableWall";
-import { RaycastBreakable, ThinWallDescriptor } from "./types";
+import { RaycastBreakable, ThinWallDescriptor } from "@game/core-types";
 
 export class DestructableWallManager {
   private walls: DestructableWall[] = [];

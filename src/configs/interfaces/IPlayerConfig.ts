@@ -1,6 +1,6 @@
 import { Point } from "pixi.js";
 import { IAnimationConfig } from "./IAnimationConfig";
-import { IEntitySoundConfig } from "./IEntitySoundConfig";
+import { IEntitySoundConfig } from "@game/core-types";
 
 export interface IPlayerConfig {
     damage: number;

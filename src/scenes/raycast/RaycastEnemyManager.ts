@@ -16,8 +16,8 @@ import { RaycastPlayerController } from "./RaycastPlayerController";
 import { gameConfig } from "../../configs/GameConfig";
 import { EnemyVoicelineManager } from "./EnemyVoicelineManager";
 import { RaycastLaserManager } from "./RaycastLaserManager";
-import { extractTiledGidAndRotation, forEachTileInLayer } from "./tiledUtils";
-import { AStarPathfinder, AStarPathFollower, IAStarGrid } from "../../plugins/pathfinding";
+import { extractTiledGidAndRotation, forEachTileInLayer } from "@game/map-builder";
+import { AStarPathfinder, AStarPathFollower, IAStarGrid } from "@game/ai-system";
 
 export interface IEnemyWaveConfig {
   maxWaves?: number;

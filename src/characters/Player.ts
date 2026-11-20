@@ -1,8 +1,8 @@
 import { AnimatedSprite, Container, Sprite, Ticker } from "pixi.js";
 import { IBullet } from "./interfaces/IBullet";
-import { IDisposable } from "./interfaces/IDisposable";
+import { IDisposable } from "@game/core-types";
 import { gameConfig } from "../configs/GameConfig";
-import { GameEvent } from "../enums/GameEvent";
+import { GameEvent } from "@game/core-types";
 import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
 import { getTextureArrayFromStrings, setTintToSprite } from "../Utils";
 import { sound } from "@pixi/sound";

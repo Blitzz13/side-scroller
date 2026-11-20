@@ -1,13 +1,13 @@
 import { Container } from "pixi.js";
-import { IDisposable } from "../../characters/interfaces/IDisposable";
+import { IDisposable } from "@game/core-types";
 import { gameConfig } from "../../configs/GameConfig";
-import { MinimapDiscovery } from "./MinimapDiscovery";
+import { MinimapDiscovery } from "@game/game-state";
 import { MinimapRenderer } from "./MinimapRenderer";
 import {
   IMinimapDataSource,
   IMinimapViewportMetrics,
   IRaycastMinimapOptions,
-} from "./MinimapTypes";
+} from "@game/game-state";
 import { MinimapUI } from "./MinimapUI";
 
 /**

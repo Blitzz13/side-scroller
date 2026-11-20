@@ -1,6 +1,6 @@
 import { Graphics } from "pixi.js";
-import { MinimapDiscovery } from "./MinimapDiscovery";
-import { IMinimapDataSource, IMinimapViewportMetrics, MinimapTileType } from "./MinimapTypes";
+import { MinimapDiscovery } from "@game/game-state";
+import { IMinimapDataSource, IMinimapViewportMetrics, MinimapTileType } from "@game/game-state";
 
 /**
  * Handles the rendering of both static geometry (walls, floors, stairs, thin walls)

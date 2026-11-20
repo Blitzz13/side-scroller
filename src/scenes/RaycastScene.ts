@@ -19,13 +19,13 @@ import {
 } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
-import { Scene } from "../enums/Scene";
+import { Scene } from "@game/core-types";
 import { gameConfig } from "../configs/GameConfig";
-import { DEFAULT_SFX_VOLUME, getSoundBaseVolume } from "../configs/SoundConfig";
+import { DEFAULT_SFX_VOLUME, getSoundBaseVolume } from "@game/core-types";
 import { MobileControls } from "../ui/MobileControls";
 import { MapObject, RaycastBreakable, TileMeta } from "./raycast/types";
 import { RaycastSaveManager } from "./raycast/RaycastSaveManager";
-import { defaultDestructibleWallConfig } from "../configs/DestructableWallConfig";
+import { defaultDestructibleWallConfig } from "@game/core-types";
 import { RaycastPickupManager } from "./raycast/RaycastPickupManager";
 import { RaycastBreakableManager } from "./raycast/RaycastBreakableManager";
 import { RaycastWeaponView } from "./raycast/RaycastWeaponView";
@@ -33,19 +33,19 @@ import { RaycastHUD } from "./raycast/RaycastHUD";
 import { RaycastPlayerController } from "./raycast/RaycastPlayerController";
 import { RaycastEnemy } from "./raycast/RaycastEnemy";
 import { RaycastEnemyManager } from "./raycast/RaycastEnemyManager";
-import { DestructableWallManager } from "./raycast/DestructableWallManager";
+import { DestructableWallManager } from "@game/game-state";
 import { ThermalDetonatorManager } from "./raycast/ThermalDetonatorManager";
 import { RaycastLaserManager } from "./raycast/RaycastLaserManager";
 import { RaycastStairsManager } from "./raycast/RaycastStairsManager";
 import { RaycastStationaryObjectManager } from "./raycast/RaycastStationaryObjectManager";
 import { RaycastAllyManager } from "./raycast/RaycastAllyManager";
 import { RaycastDebugMenu } from "./raycast/RaycastDebugMenu";
-import { RaycastWeaponType } from "../enums/RaycastWeaponType";
-import { RaycastPickupType } from "../enums/RaycastPickupType";
+import { RaycastWeaponType } from "@game/core-types";
+import { RaycastPickupType } from "@game/core-types";
 import {
   getSkyboxConfig,
   RaycastSkyboxConfig,
-} from "../configs/SkyboxConfig";
+} from "@game/core-types";
 import { DoorSlideMode, DoorOpen, TileType } from "./raycast/types";
 import floorCeilingVert from "./raycast/shaders/floorCeiling.vert";
 import floorCeilingFrag from "./raycast/shaders/floorCeiling.frag";
@@ -57,13 +57,13 @@ import { SubtitleManager, RaycastSubtitles } from "./raycast/subtitles";
 import { InGameMenu } from "../ui/InGameMenu";
 import { RaycastLoadingOverlay } from "../ui/RaycastLoadingOverlay";
 import { SettingsManager, IGameSettings } from "../managers/SettingsManager";
-import { GameEvent } from "../enums/GameEvent";
+import { GameEvent } from "@game/core-types";
 import { isDebugEnabled } from "../Utils";
 import {
   calculateMapBounds,
   extractTiledGidAndRotation,
   forEachTileInLayer,
-} from "./raycast/tiledUtils";
+} from "@game/map-builder";
 
 export interface LevelFinishZone {
   id?: number;

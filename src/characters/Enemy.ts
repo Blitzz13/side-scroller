@@ -1,10 +1,10 @@
 import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
-import { GameEvent } from "../enums/GameEvent";
+import { GameEvent } from "@game/core-types";
 import { IEnemyConfig } from "../configs/interfaces/IEnemyConfig";
 import { IBullet } from "./interfaces/IBullet";
 import { gameConfig } from "../configs/GameConfig";
-import { IDisposable } from "./interfaces/IDisposable";
-import { EnemyType } from "../enums/EnemyType";
+import { IDisposable } from "@game/core-types";
+import { EnemyType } from "@game/core-types";
 import { ISpawnRange } from "../configs/interfaces/ISpawnRange";
 import { sound, IMediaInstance } from "@pixi/sound";
 import { getRandomInt, getTextureArrayFromStrings, setTintToSprite } from "../Utils";

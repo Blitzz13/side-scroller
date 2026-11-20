@@ -2,8 +2,8 @@ import { Container, Graphics, Text } from "pixi.js";
 import { gameConfig } from "../../../configs/GameConfig";
 import { getRaycastUIConfig, IRaycastUIConfig } from "../../../configs/RaycastUIConfig";
 import { SettingsManager } from "../../../managers/SettingsManager";
-import { IDisposable } from "../../../characters/interfaces/IDisposable";
-import { ISubtitleCue } from "./SubtitleTypes";
+import { IDisposable } from "@game/core-types";
+import { ISubtitleCue } from "@game/core-types";
 
 /**
  * Bottom-centre subtitle bar. Driven by audio progress (0..1), so it stays in sync

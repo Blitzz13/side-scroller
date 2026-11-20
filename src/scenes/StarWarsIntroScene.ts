@@ -17,7 +17,7 @@ import {
 } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
-import { Scene } from "../enums/Scene";
+import { Scene } from "@game/core-types";
 import { gameConfig } from "../configs/GameConfig";
 import { introConfig, IStarWarsIntroConfig } from "../../assets/cutscenes/intro/config";
 import introJsonData from "../../assets/cutscenes/intro/intro.json";

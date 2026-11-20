@@ -1,7 +1,7 @@
 import { Container, Graphics, RoundedRectangle, Text } from "pixi.js";
 import { sound } from "@pixi/sound";
-import { IDisposable } from "../characters/interfaces/IDisposable";
-import { GameEvent } from "../enums/GameEvent";
+import { IDisposable } from "@game/core-types";
+import { GameEvent } from "@game/core-types";
 import { gameConfig } from "../configs/GameConfig";
 import { SettingsManager, SUBTITLE_SCALE_STEP } from "../managers/SettingsManager";
 

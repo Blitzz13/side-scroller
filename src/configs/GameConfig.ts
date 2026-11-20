@@ -1,6 +1,6 @@
 import { AssetsManifest, BitmapFont, RoundedRectangle, SCALE_MODES } from "pixi.js";
 import { DoorOpen, DoorSlideMode } from "../scenes/raycast/types";
-import { enemyVoicelineConfig, stormtrooperVoicelineConfig } from "./EnemyVoicelineConfig";
+import { enemyVoicelineConfig, stormtrooperVoicelineConfig } from "@game/core-types";
 
 export { DoorOpen, DoorSlideMode, enemyVoicelineConfig, stormtrooperVoicelineConfig };
 

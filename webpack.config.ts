@@ -10,6 +10,14 @@ module.exports = () => {
 
         resolve: {
             extensions: [".ts", ".tsx", ".js", ".json", ".vert", ".frag", ".glsl"],
+            // Workspace packages are consumed straight from source (no build step).
+            alias: {
+                "@game/core-types": path.resolve(__dirname, "packages/core-types/src"),
+                "@game/core-math": path.resolve(__dirname, "packages/core-math/src"),
+                "@game/map-builder": path.resolve(__dirname, "packages/map-builder/src"),
+                "@game/ai-system": path.resolve(__dirname, "packages/ai-system/src"),
+                "@game/game-state": path.resolve(__dirname, "packages/game-state/src"),
+            },
         },
 
         module: {

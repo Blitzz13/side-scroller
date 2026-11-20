@@ -1,7 +1,7 @@
 import { Point } from "pixi.js";
 import { IEnemyConfig } from "./interfaces/IEnemyConfig";
-import { EnemyType } from "../enums/EnemyType";
-import { IEntitySoundConfig } from "./interfaces/IEntitySoundConfig";
+import { EnemyType } from "@game/core-types";
+import { IEntitySoundConfig } from "@game/core-types";
 import { IAnimationConfig } from "./interfaces/IAnimationConfig";
 
 const walkersSoundConfig: IEntitySoundConfig = {
@@ -189,6 +189,6 @@ export {
     stormtrooperConfig,
     raycastEnemyConfigs,
     getRaycastEnemyConfig,
-} from "./RaycastEnemyConfigs";
-export { IRaycastEnemyConfig, IRaycastEnemyAnimationConfig, IRaycastEnemyAnimationSequence } from "./interfaces/IRaycastEnemyConfig";
+} from "@game/core-types";
+export { IRaycastEnemyConfig, IRaycastEnemyAnimationConfig, IRaycastEnemyAnimationSequence } from "@game/core-types";
 

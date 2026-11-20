@@ -1,5 +1,5 @@
 import { AnimatedSprite, Container, Sprite, Texture, Ticker } from "pixi.js";
-import { IDisposable } from "../characters/interfaces/IDisposable";
+import { IDisposable } from "@game/core-types";
 
 export class Environment extends Container implements IDisposable {
     // private bg!: AnimatedSprite;

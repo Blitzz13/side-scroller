@@ -1,7 +1,7 @@
 import { Point } from "pixi.js";
 import { IPlayerConfig } from "../configs/interfaces/IPlayerConfig";
 import { gameConfig } from "./GameConfig";
-import { IEntitySoundConfig } from "./interfaces/IEntitySoundConfig";
+import { IEntitySoundConfig } from "@game/core-types";
 import { IAnimationConfig } from "./interfaces/IAnimationConfig";
 
 const commonSoundConfig: IEntitySoundConfig = {

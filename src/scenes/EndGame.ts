@@ -1,10 +1,10 @@
 import { Container, Sprite } from "pixi.js";
 import { defaultButtonSize, gameConfig } from "../configs/GameConfig";
 import { BaseScene } from "./BaseScene";
-import { Scene } from "../enums/Scene";
+import { Scene } from "@game/core-types";
 import { Button } from "../misc/Button";
 import { retrieveScore } from "../Utils";
-import { EnemyType } from "../enums/EnemyType";
+import { EnemyType } from "@game/core-types";
 import { Scoreboard } from "../misc/Scoreboard";
 import { commonScoreboardConfig } from "../configs/ScoreboardConfig";
 import { sound } from "@pixi/sound";

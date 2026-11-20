@@ -1,8 +1,8 @@
 import { utils } from "pixi.js";
 import { sound } from "@pixi/sound";
-import { ITriggerZone, ITriggerSoundConfig, IMissionManagerCallbacks } from "./ObjectiveTypes";
+import { ITriggerZone, ITriggerSoundConfig, IMissionManagerCallbacks } from "@game/core-types";
 import { RaycastObjectiveManager } from "./RaycastObjectiveManager";
-import { extractLinkIds } from "../DestructableWall";
+import { extractLinkIds } from "@game/game-state";
 import { SettingsManager } from "../../../managers/SettingsManager";
 
 export class RaycastTriggerManager extends utils.EventEmitter {

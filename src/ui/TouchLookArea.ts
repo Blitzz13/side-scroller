@@ -1,5 +1,5 @@
 import { Container, Graphics, FederatedPointerEvent } from "pixi.js";
-import { IDisposable } from "../characters/interfaces/IDisposable";
+import { IDisposable } from "@game/core-types";
 
 export class TouchLookArea extends Container implements IDisposable {
   private hitAreaGraphic: Graphics;

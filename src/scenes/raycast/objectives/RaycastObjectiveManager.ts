@@ -1,5 +1,5 @@
 import { Assets, utils } from "pixi.js";
-import { ILevelObjective, IMissionManagerCallbacks } from "./ObjectiveTypes";
+import { ILevelObjective, IMissionManagerCallbacks } from "@game/core-types";
 
 export class RaycastObjectiveManager extends utils.EventEmitter {
   private objectives: ILevelObjective[] = [];
