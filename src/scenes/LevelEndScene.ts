@@ -1,11 +1,11 @@
 import { Assets, Container, Graphics, ITextStyle, RoundedRectangle, SCALE_MODES, Sprite, Text, TextStyle, Texture } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
-import { Scene } from "../enums/Scene";
+import { Scene } from "@game/core-types";
 import { Button, IButtonOptions } from "../misc/Button";
 import { defaultButtonSize, gameConfig } from "../configs/GameConfig";
 import { RaycastSaveManager } from "./raycast/RaycastSaveManager";
-import { RaycastWeaponType } from "../enums/RaycastWeaponType";
+import { RaycastWeaponType } from "@game/core-types";
 import { SettingsManager } from "../managers/SettingsManager";
 
 export interface ILevelEndOptions {

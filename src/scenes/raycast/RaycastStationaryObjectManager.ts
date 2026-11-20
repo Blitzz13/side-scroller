@@ -1,7 +1,7 @@
 import { Assets, Container, Graphics, MIPMAP_MODES, SCALE_MODES, Spritesheet } from "pixi.js";
 import { RaycastStationaryObject, StationaryObjectOptions } from "./RaycastStationaryObject";
 import { TileMeta } from "./types";
-import { extractTiledGidAndRotation, forEachTileInLayer } from "./tiledUtils";
+import { extractTiledGidAndRotation, forEachTileInLayer } from "@game/map-builder";
 
 export interface StationaryObjectConfig {
   name: string;

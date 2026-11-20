@@ -2,10 +2,10 @@ import { sound, IMediaInstance, webaudio } from "@pixi/sound";
 import {
   IEnemyVoicePool,
   IEnemyVoicelineConfig,
-} from "../../configs/interfaces/IEnemyVoicelineConfig";
-import { enemyVoicelineConfig } from "../../configs/EnemyVoicelineConfig";
+} from "@game/core-types";
+import { enemyVoicelineConfig } from "@game/core-types";
 import { RaycastEnemy } from "./RaycastEnemy";
-import { VoicelineCategory } from "../../enums/VoicelineCategory";
+import { VoicelineCategory } from "@game/core-types";
 import { SettingsManager } from "../../managers/SettingsManager";
 
 export { VoicelineCategory };

@@ -1,4 +1,4 @@
-import { RaycastWeaponType } from "../../enums/RaycastWeaponType";
+import { RaycastWeaponType } from "@game/core-types";
 import { RaycastPlayerController } from "./RaycastPlayerController";
 
 export interface IRaycastPlayerSave {

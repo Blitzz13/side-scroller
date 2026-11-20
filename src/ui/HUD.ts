@@ -1,7 +1,7 @@
 import { BitmapText, Container, Graphics, Sprite } from "pixi.js";
-import { IDisposable } from "../characters/interfaces/IDisposable";
+import { IDisposable } from "@game/core-types";
 import { Scoreboard } from "../misc/Scoreboard";
-import { EnemyType } from "../enums/EnemyType";
+import { EnemyType } from "@game/core-types";
 import { commonScoreboardConfig } from "../configs/ScoreboardConfig";
 import { IHUDConfig } from "../configs/interfaces/IHUDConfig";
 

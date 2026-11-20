@@ -1,5 +1,5 @@
 import { Container } from "pixi.js";
-import { IMissionManagerCallbacks, ITriggerZone } from "./ObjectiveTypes";
+import { IMissionManagerCallbacks, ITriggerZone } from "@game/core-types";
 import { RaycastObjectiveManager } from "./RaycastObjectiveManager";
 import { RaycastTriggerManager } from "./RaycastTriggerManager";
 import { ObjectivesUI } from "./ObjectivesUI";

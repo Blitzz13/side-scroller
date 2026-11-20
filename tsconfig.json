@@ -1,22 +1,20 @@
 {
+    "extends": "./tsconfig.base.json",
     "compilerOptions": {
-        "target": "ES2022",
-        "module": "CommonJS",
-        "strict": true,
-        "sourceMap": true,
-        "esModuleInterop": true,
-        "allowSyntheticDefaultImports": true,
-        "forceConsistentCasingInFileNames": true,
         "paths": {
-            "mini-signals": ["./node_modules/resource-loader/typings/mini-signals.d.ts"]
+            "mini-signals": ["./node_modules/resource-loader/typings/mini-signals.d.ts"],
+            "@game/core-types": ["./packages/core-types/src/index.ts"],
+            "@game/core-math": ["./packages/core-math/src/index.ts"],
+            "@game/map-builder": ["./packages/map-builder/src/index.ts"],
+            "@game/ai-system": ["./packages/ai-system/src/index.ts"],
+            "@game/game-state": ["./packages/game-state/src/index.ts"]
         },
         "lib": ["ES2022", "DOM"],
-        "types": ["node"],
-        "skipLibCheck": true,
-        "resolveJsonModule": true
+        "types": ["node"]
     },
     "include": [
         "./src",
+        "./packages",
         "webpack.config.ts",
         "webpack.dev.ts",
         "assets/cutscenes/**/*.ts"

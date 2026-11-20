@@ -2,8 +2,8 @@ import { Assets, Container, Graphics, MIPMAP_MODES, SCALE_MODES, Spritesheet } f
 import { sound } from "@pixi/sound";
 import { RaycastAlly } from "./RaycastAlly";
 import { TileMeta } from "./types";
-import { extractTiledGidAndRotation, forEachTileInLayer } from "./tiledUtils";
-import { AStarPathfinder, IAStarGrid } from "../../plugins/pathfinding";
+import { extractTiledGidAndRotation, forEachTileInLayer } from "@game/map-builder";
+import { AStarPathfinder, IAStarGrid } from "@game/ai-system";
 
 export class RaycastAllyManager {
   private container: Container;

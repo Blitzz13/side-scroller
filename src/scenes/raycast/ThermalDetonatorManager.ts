@@ -11,8 +11,8 @@ import {
 } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { gameConfig } from "../../configs/GameConfig";
-import { raycastThermalDetonatorPickupConfig } from "../../configs/RaycastPickupConfigs";
-import { IDestructibleWallExplosionConfig } from "../../configs/DestructableWallConfig";
+import { raycastThermalDetonatorPickupConfig } from "@game/core-types";
+import { IDestructibleWallExplosionConfig } from "@game/core-types";
 import { MapObject } from "./types";
 
 export interface ActiveDetonator {

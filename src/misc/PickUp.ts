@@ -1,9 +1,9 @@
 import { Container, Sprite, Ticker } from "pixi.js";
-import { IDisposable } from "../characters/interfaces/IDisposable";
+import { IDisposable } from "@game/core-types";
 import { IPickUpConfig } from "../configs/interfaces/IPickUpConfig";
 import { ISpawnRange } from "../configs/interfaces/ISpawnRange";
-import { PickUpType } from "../enums/PickUpType";
-import { ISoundConfig } from "../configs/interfaces/ISoundConfig";
+import { PickUpType } from "@game/core-types";
+import { ISoundConfig } from "@game/core-types";
 
 export class PickUp extends Container implements IDisposable {
     private _config: IPickUpConfig;

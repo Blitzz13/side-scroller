@@ -1,8 +1,8 @@
 import { Assets, Container, Graphics, Sprite, Text, Texture, RoundedRectangle } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
-import { Scene } from "../enums/Scene";
-import { GameEvent } from "../enums/GameEvent";
+import { Scene } from "@game/core-types";
+import { GameEvent } from "@game/core-types";
 import { gameConfig } from "../configs/GameConfig";
 import { Button } from "../misc/Button";
 import { RaycastSaveManager } from "./raycast/RaycastSaveManager";

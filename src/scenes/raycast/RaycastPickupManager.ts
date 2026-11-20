@@ -20,7 +20,7 @@ import {
   getRaycastWeaponConfig,
 } from "./types";
 import { gameConfig } from "../../configs/GameConfig";
-import { forEachTileInLayer } from "./tiledUtils";
+import { forEachTileInLayer } from "@game/map-builder";
 
 export class RaycastPickupManager {
   private container: Container | null = null;

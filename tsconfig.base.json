@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "CommonJS",
+        "strict": true,
+        "sourceMap": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true,
+        "lib": ["ES2022"],
+        "types": [],
+        "skipLibCheck": true,
+        "resolveJsonModule": true,
+        "paths": {
+            "@game/core-types": ["./packages/core-types/src/index.ts"],
+            "@game/core-math": ["./packages/core-math/src/index.ts"],
+            "@game/map-builder": ["./packages/map-builder/src/index.ts"],
+            "@game/ai-system": ["./packages/ai-system/src/index.ts"],
+            "@game/game-state": ["./packages/game-state/src/index.ts"]
+        }
+    }
+}

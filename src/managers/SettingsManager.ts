@@ -1,11 +1,11 @@
 import { sound } from "@pixi/sound";
-import { enemyVoicelineConfig } from "../configs/EnemyVoicelineConfig";
+import { enemyVoicelineConfig } from "@game/core-types";
 import { gameConfig } from "../configs/GameConfig";
 import {
   DEFAULT_MUSIC_VOLUME,
   DEFAULT_VOICES_VOLUME,
   MUSIC_VOLUME_MULTIPLIER,
-} from "../configs/SoundConfig";
+} from "@game/core-types";
 
 export const SUBTITLE_SCALE_MIN = 0.7;
 export const SUBTITLE_SCALE_MAX = 1.8;

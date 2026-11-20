@@ -1,7 +1,7 @@
 import { Point } from "pixi.js";
-import { PickUpType } from "../../enums/PickUpType";
+import { PickUpType } from "@game/core-types";
 import { ISpawnRange } from "./ISpawnRange";
-import { ISoundConfig } from "./ISoundConfig";
+import { ISoundConfig } from "@game/core-types";
 
 export interface IPickUpConfig {
     scale: Point;

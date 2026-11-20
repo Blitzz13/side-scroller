@@ -1,5 +1,5 @@
 import { BitmapText, Container, Graphics, Sprite } from "pixi.js";
-import { EnemyType } from "../enums/EnemyType";
+import { EnemyType } from "@game/core-types";
 import { IScoreBoardConfig } from "../configs/interfaces/IScoreboardConfig";
 
 export class Scoreboard extends Container {

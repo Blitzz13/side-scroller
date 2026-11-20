@@ -1,7 +1,7 @@
 import { Point } from "pixi.js";
-import { EnemyType } from "../../enums/EnemyType";
+import { EnemyType } from "@game/core-types";
 import { ISpawnRange } from "./ISpawnRange";
-import { IEntitySoundConfig } from "./IEntitySoundConfig";
+import { IEntitySoundConfig } from "@game/core-types";
 import { IAnimationConfig } from "./IAnimationConfig";
 
 export interface IEnemyConfig {

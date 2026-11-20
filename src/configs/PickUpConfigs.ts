@@ -1,5 +1,5 @@
 import { Point } from "pixi.js";
-import { PickUpType } from "../enums/PickUpType";
+import { PickUpType } from "@game/core-types";
 import { IPickUpConfig } from "./interfaces/IPickUpConfig";
 
 const ammo: IPickUpConfig = {

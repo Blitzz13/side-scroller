@@ -13,7 +13,7 @@ import {
 } from "pixi.js";
 import { sound } from "@pixi/sound";
 import { BaseScene } from "./BaseScene";
-import { Scene } from "../enums/Scene";
+import { Scene } from "@game/core-types";
 import { gameConfig } from "../configs/GameConfig";
 import { creditsConfig, getCreditsLocale } from "../configs/CreditsConfig";
 import { SettingsManager } from "../managers/SettingsManager";

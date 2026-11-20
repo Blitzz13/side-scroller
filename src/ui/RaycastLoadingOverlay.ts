@@ -1,7 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { gameConfig } from "../configs/GameConfig";
 import { getRaycastUIConfig } from "../configs/RaycastUIConfig";
-import { IDisposable } from "../characters/interfaces/IDisposable";
+import { IDisposable } from "@game/core-types";
 
 export class RaycastLoadingOverlay extends Container implements IDisposable {
   private backdrop: Graphics;

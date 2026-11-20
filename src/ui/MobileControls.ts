@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite, Text, Circle } from "pixi.js";
-import { IDisposable } from "../characters/interfaces/IDisposable";
+import { IDisposable } from "@game/core-types";
 import { VirtualJoystick, JoystickVector } from "./VirtualJoystick";
 import { VirtualButton, IVirtualButtonTheme } from "./VirtualButton";
 import { TouchLookArea } from "./TouchLookArea";

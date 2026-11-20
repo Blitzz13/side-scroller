@@ -1,5 +1,5 @@
 import { AssetsManifest, Assets, Texture, Sprite, AnimatedSprite } from "pixi.js";
-import { EnemyType } from "./enums/EnemyType";
+import { EnemyType } from "@game/core-types";
 
 export function saveScore(key: string, score: Map<EnemyType, number>) {
   const scoreObject = Object.fromEntries(score);

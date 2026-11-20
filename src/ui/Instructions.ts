@@ -3,7 +3,7 @@ import { sound } from "@pixi/sound";
 import { Button } from "../misc/Button";
 import { defaultButtonSize } from "../configs/GameConfig";
 import { instructionsConfig } from "../configs/InstructionsConfig";
-import { IDisposable } from "../characters/interfaces/IDisposable";
+import { IDisposable } from "@game/core-types";
 
 export class Instructions extends Container implements IDisposable {
     constructor() {
